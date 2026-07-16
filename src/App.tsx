@@ -170,9 +170,7 @@ export default function App() {
                     （用户名 <code>{getMasterUsername()}</code>，密码见部署 .env）。
                   </>
                 ) : (
-                  <>
-                    （本地 Mock：<code>admin / admin123</code>）。
-                  </>
+                  <>。</>
                 )}
               </p>
               <div className="btn-row" style={{ marginTop: 14 }}>

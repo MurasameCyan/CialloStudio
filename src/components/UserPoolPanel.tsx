@@ -151,9 +151,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         </div>
         <div className="status err" role="status">
           请先在「大厅」登录站长账号
-          {isMasterConfigured()
-            ? `（.env：${getMasterUsername()}）`
-            : "（Mock：admin / admin123）"}
+          {isMasterConfigured() ? `（.env：${getMasterUsername()}）` : ""}
           。
         </div>
         {onNeedLogin ? (
@@ -185,12 +183,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
               {" "}
               <code>{getMasterUsername()}</code>
             </>
-          ) : (
-            <>
-              {" "}
-              <code>admin / admin123</code>
-            </>
-          )}
+          ) : null}
           。
         </div>
         {onNeedLogin ? (

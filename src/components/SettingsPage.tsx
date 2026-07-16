@@ -289,8 +289,7 @@ export function SettingsPage({
         ) : (
           <p className="panel-desc admin-users-hint">
             管理社区账号池。站长账号由部署 <code>.env</code> 配置（
-            <code>CIALLO_MASTER_USERNAME</code> / <code>CIALLO_MASTER_PASSWORD</code>
-            ）；本地未配置时可用 mock <code>admin / admin123</code>。
+            <code>CIALLO_MASTER_USERNAME</code> / <code>CIALLO_MASTER_PASSWORD</code>）。
           </p>
         )}
       </section>

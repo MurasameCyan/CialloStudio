@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { getCommunityMode, setCommunityMode } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
-import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 
 type Props = {
   user: CommunityUser | null;
@@ -116,20 +115,7 @@ export function HallAuthPanel({
         <div>
           <div className="section-card-title">Account</div>
           <h3 className="admin-section-title">登录 / 注册</h3>
-          <p className="panel-desc hall-auth-desc">
-            登录后可点赞、点评、分享到大厅。
-            {isMasterConfigured() ? (
-              <>
-                {" "}
-                站长 <code>{getMasterUsername()}</code>（密码见 .env）。
-              </>
-            ) : (
-              <>
-                {" "}
-                Mock：站长 <code>admin / admin123</code>，演示 <code>demo / demo123</code>。
-              </>
-            )}
-          </p>
+          <p className="panel-desc hall-auth-desc">登录后可点赞、点评、分享到大厅。</p>
         </div>
         <button
           type="button"

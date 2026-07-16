@@ -69,7 +69,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   settingsRef.current = settings;
 
   const prompts = useMemo(() => splitPrompts(draft.promptText), [draft.promptText]);
-  const plannedJobs = planJobCount(prompts, draft.variants);
+  // 总张数 = Prompt 条数 × 生图数量 × 并发数
+  const plannedJobs = planJobCount(prompts, draft.variants, draft.concurrency);
 
   const stats = useMemo(() => {
     const total = jobs.length;
@@ -161,7 +162,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     setRunning(true);
     setInFlight(0);
 
-    const batch = expandJobs(currentPrompts, variants, {
+    // 总张数 = 生图数量 × 并发数（× prompt 条数）
+    const batch = expandJobs(currentPrompts, variants, concurrency, {
       resolution,
       aspectRatio,
     });
@@ -176,15 +178,17 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       saveJobs(batch);
     }
 
-    // 有效 worker 数不会超过任务数（1 张图时并发 3 也只能跑 1 路）
+    // 并发既决定总张数，也是 worker 上限；总张数已含 concurrency，通常 effectiveWorkers === concurrency
     const effectiveWorkers = Math.max(1, Math.min(concurrency, batch.length));
+    const perPrompt = variants * concurrency;
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 张/条 · 有效并发 ${effectiveWorkers}/${concurrency} · ${appendResults ? "追加" : "替换"}模式`,
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式`,
       {
         concurrency,
         effectiveWorkers,
         variants,
+        perPrompt,
         promptCount: currentPrompts.length,
         batchLength: batch.length,
         appendResults,
@@ -193,16 +197,11 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         model: currentSettings.model,
       },
     );
-    if (batch.length > 0 && concurrency > batch.length) {
-      log(
-        "warn",
-        `设定并发 ${concurrency} > 总张数 ${batch.length}，有效并发被限制为 ${effectiveWorkers}。想并行请增加「每条张数」或多行 prompt。`,
-      );
-    }
 
-    if (batch.length !== currentPrompts.length * variants) {
+    const expected = currentPrompts.length * variants * concurrency;
+    if (batch.length !== expected) {
       log("warn", "batch 长度与预期不符", {
-        expected: currentPrompts.length * variants,
+        expected,
         actual: batch.length,
       });
     }

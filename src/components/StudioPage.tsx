@@ -57,11 +57,12 @@ export function StudioPage({
     [jobs],
   );
   const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
-  /** 真实会启动的 worker 数 = min(设定并发, 总任务)；总张数=1 时永远是 1 */
+  /** 总张数 = Prompt × 生图数量 × 并发，故 worker 上限通常等于设定并发 */
   const effectiveConcurrency = useMemo(() => {
     if (plannedJobs <= 0) return 0;
     return Math.max(1, Math.min(draft.concurrency, plannedJobs));
   }, [draft.concurrency, plannedJobs]);
+  const perPromptImages = draft.variants * draft.concurrency;
 
   // 清理已不存在或不可下载的勾选
   useEffect(() => {
@@ -165,20 +166,17 @@ export function StudioPage({
             <span className="stat-pill">
               Prompt <strong>{prompts.length}</strong>
             </span>
-            <span className="stat-pill">
-              每条 <strong>{draft.variants}</strong> 张
+            <span className="stat-pill" title="生图数量（variants）">
+              生图 <strong>{draft.variants}</strong>
             </span>
-            <span className="stat-pill" title="总张数 = Prompt 条数 × 每条张数">
-              总张数 <strong>{plannedJobs}</strong>
+            <span className="stat-pill" title="同时请求数，也会乘进总张数">
+              并发 <strong>{draft.concurrency}</strong>
             </span>
             <span
               className="stat-pill"
-              title="有效并发 = min(设定并发, 总张数)。只有 1 张任务时无法并行。"
+              title="总张数 = Prompt 条数 × 生图数量 × 并发数"
             >
-              有效并发 <strong>{effectiveConcurrency}</strong>
-              {effectiveConcurrency < draft.concurrency ? (
-                <span className="stat-pill-muted"> / 设 {draft.concurrency}</span>
-              ) : null}
+              总张数 <strong>{plannedJobs}</strong>
             </span>
             {running ? (
               <span className="stat-pill">
@@ -187,25 +185,24 @@ export function StudioPage({
             ) : null}
           </div>
           <div className="field-hint formula-hint">
-            公式：{prompts.length || 0} 条 prompt × {draft.variants} 张/条 = <strong>{plannedJobs}</strong>{" "}
-            张。宽高比「1:1」只控制构图，不会改张数。
-            {plannedJobs > 0 && draft.concurrency > plannedJobs ? (
+            公式：{prompts.length || 0} 条 prompt × {draft.variants} 生图 × {draft.concurrency}{" "}
+            并发 = <strong>{plannedJobs}</strong> 张
+            {prompts.length > 0 ? (
               <>
                 {" "}
-                <strong className="hint-warn">
-                  当前只有 {plannedJobs} 张，设定并发 {draft.concurrency} 用不上——有效并发是{" "}
-                  {effectiveConcurrency}。
-                </strong>
-                想看并行：把「每条」调到 ≥{draft.concurrency}，或多写几行 prompt。
+                （每条 prompt 展开 {perPromptImages} 张）。
               </>
-            ) : null}
+            ) : (
+              "。"
+            )}
+            宽高比「1:1」只控制构图。生成中同时最多 {effectiveConcurrency} 路请求。
           </div>
         </div>
 
         <div className="studio-options">
           <div className="option-block">
             <div className="field">
-              <label>每条 prompt 出几张</label>
+              <label>生图数量</label>
               <div className="segmented">
                 {VARIANT_OPTIONS.map((n) => (
                   <button
@@ -219,14 +216,14 @@ export function StudioPage({
                 ))}
               </div>
               <div className="field-hint">
-                只影响「每条」数量。1 条 prompt × 选 1 = 1 张；多行 prompt 会再相乘。
+                与并发相乘决定总张数。例：生图 2 × 并发 3 = 每条 prompt 出 6 张。
               </div>
             </div>
           </div>
 
           <div className="option-block">
             <div className="field">
-              <label>同时请求数（并发）</label>
+              <label>并发数（同时请求）</label>
               <div className="segmented">
                 {CONCURRENCY_OPTIONS.map((n) => (
                   <button
@@ -240,8 +237,9 @@ export function StudioPage({
                 ))}
               </div>
               <div className="field-hint">
-                同时最多几路请求，但<strong>不会超过总张数</strong>。例：总张数 1 + 并发 3 → 实际只发 1
-                路；总张数 6 + 并发 3 → 同时 3 路。生成中看「在飞 x/{effectiveConcurrency}」。
+                <strong>总张数 = 生图数量 × 并发数</strong>
+                （再 × Prompt 条数）。同时最多跑这么多路；例：生图 1 × 并发 3 = 共 3
+                张、同时 3 路。
               </div>
             </div>
           </div>
@@ -324,8 +322,8 @@ export function StudioPage({
         </div>
         {!draft.appendResults ? (
           <p className="footer-note">
-            默认<strong>替换</strong>结果墙：只保留本次 {plannedJobs} 张（{prompts.length}×{draft.variants}
-            ），不会和历史混在一起。
+            默认<strong>替换</strong>结果墙：只保留本次 {plannedJobs} 张（{prompts.length}×
+            {draft.variants}×{draft.concurrency}），不会和历史混在一起。
           </p>
         ) : (
           <p className="footer-note">

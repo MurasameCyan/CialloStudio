@@ -51,7 +51,7 @@ export function clampVariants(value: number): number {
 
 /**
  * 每行一条 prompt；空行忽略。
- * 注意：多行文本 = 多条 prompt，总张数 = 行数 × 每条张数。
+ * 总张数 = 行数 × 生图数量 × 并发数。
  */
 export function splitPrompts(raw: string): string[] {
   return raw
@@ -60,18 +60,39 @@ export function splitPrompts(raw: string): string[] {
     .filter(Boolean);
 }
 
-/** 本次将生成的张数 = prompt 条数 × 每条 variants */
-export function planJobCount(prompts: string[] | string, variants: number): number {
-  const list = Array.isArray(prompts) ? prompts : splitPrompts(prompts);
-  return list.length * clampVariants(variants);
+/**
+ * 每条 prompt 最终展开几张：
+ * 生图数量(variants) × 并发数(concurrency)
+ */
+export function imagesPerPrompt(variants: number, concurrency: number): number {
+  return clampVariants(variants) * clampConcurrency(concurrency);
 }
 
+/**
+ * 本次将生成的总张数：
+ * Prompt 条数 × 生图数量 × 并发数
+ */
+export function planJobCount(
+  prompts: string[] | string,
+  variants: number,
+  concurrency: number,
+): number {
+  const list = Array.isArray(prompts) ? prompts : splitPrompts(prompts);
+  return list.length * imagesPerPrompt(variants, concurrency);
+}
+
+/**
+ * 展开任务队列。
+ * 每条 prompt 生成 imagesPerPrompt = variants × concurrency 张；
+ * 并发池 worker 数仍用 concurrency（同时跑几路）。
+ */
 export function expandJobs(
   prompts: string[],
   variants: number,
+  concurrency: number,
   meta?: { resolution?: string; aspectRatio?: string },
 ): StudioJob[] {
-  const count = clampVariants(variants);
+  const count = imagesPerPrompt(variants, concurrency);
   const now = Date.now();
   const jobs: StudioJob[] = [];
   for (const prompt of prompts) {

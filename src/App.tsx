@@ -72,7 +72,7 @@ export default function App() {
           <div className="connection-chip" title={ready ? "API Key 已配置" : "尚未配置 API Key"}>
             <span className={`live-dot ${ready ? "" : "off"}`} />
             {queue.running
-              ? `在飞 ${queue.inFlight}/${Math.max(1, Math.min(queue.draft.concurrency, queue.stats.total || queue.plannedJobs || 1))}`
+              ? "生成中"
               : community.user
                 ? community.user.displayName
                 : ready

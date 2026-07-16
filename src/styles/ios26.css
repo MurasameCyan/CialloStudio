@@ -747,25 +747,74 @@ a {
 
 .empty {
   border: 1px dashed rgba(15, 23, 42, 0.12);
-  border-radius: 26px;
-  padding: 48px 22px;
+  border-radius: 20px;
+  padding: 28px 18px;
   text-align: center;
   color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.55;
+  font-size: 13.5px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.28);
+}
+
+@media (prefers-color-scheme: dark) {
+  .empty {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.empty-compact {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  text-align: left;
+  padding: 18px 16px;
+  min-height: 0;
+}
+
+.empty-icon {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 auto;
+  border-radius: 14px;
   background:
-    radial-gradient(circle at 50% 0%, rgba(122, 162, 255, 0.16), transparent 55%),
-    radial-gradient(circle at 80% 100%, rgba(199, 160, 255, 0.12), transparent 45%),
-    var(--bg-soft-2);
+    linear-gradient(180deg, rgba(122, 162, 255, 0.22), rgba(199, 160, 255, 0.14)),
+    var(--bg-soft);
+  border: 1px solid var(--separator);
+  position: relative;
+}
+
+.empty-icon::after {
+  content: "";
+  position: absolute;
+  inset: 13px;
+  border-radius: 8px;
+  border: 1.5px dashed rgba(0, 113, 227, 0.35);
 }
 
 .empty-title {
   display: block;
-  margin-bottom: 8px;
-  font-size: 18px;
-  font-weight: 760;
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 740;
   color: var(--text);
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
+}
+
+.empty-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.results-panel {
+  min-height: 0;
+}
+
+.results-panel .results-toolbar {
+  margin-bottom: 14px;
 }
 
 .mono {

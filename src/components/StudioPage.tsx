@@ -333,7 +333,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
         </div>
       </section>
 
-      <section className="panel">
+      <section className="panel results-panel">
         <div className="results-toolbar">
           <div>
             <div className="panel-kicker">Gallery</div>
@@ -345,77 +345,78 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           </div>
         </div>
 
-        <div className="kpi-row">
-          <div className="kpi">
-            <div className="kpi-label">子任务</div>
-            <div className="kpi-value">{stats.total}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">完成</div>
-            <div className="kpi-value">{stats.done}</div>
-          </div>
-          <div className="kpi">
-            <div className="kpi-label">失败 / 进行中</div>
-            <div className="kpi-value">
-              {stats.failed}/{stats.active}
+        {jobs.length === 0 ? (
+          <div className="empty empty-compact">
+            <div className="empty-icon" aria-hidden />
+            <div>
+              <span className="empty-title">还没有画面</span>
+              <p className="empty-text">写好提示词后点「开始生成」，结果会出现在这里。</p>
             </div>
           </div>
-        </div>
-
-        {stats.total > 0 ? (
-          <div className="progress-track" aria-hidden>
-            <div className="progress-fill" style={{ width: `${progress}%` }} />
-          </div>
-        ) : null}
-
-        {jobs.length === 0 ? (
-          <div className="empty">
-            <span className="empty-title">还没有画面</span>
-            输入提示词，选好张数，点「开始生成」。
-            <br />
-            同一提示词会拆成多个并发子任务，像 sub-agent 一样同时出图。
-          </div>
         ) : (
-          <div className="gallery">
-            {jobs.map((job) => (
-              <article key={job.id} className="card">
-                <span
-                  className={`badge ${
-                    job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
-                  }`}
-                >
-                  #{job.variant}/{job.variants}
-                </span>
-                <div className="card-media">
-                  {job.status === "done" && job.imageUrl ? (
-                    <>
-                      <img src={job.imageUrl} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
-                      <div className="card-overlay">
-                        <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
-                          打开原图
-                        </a>
+          <>
+            <div className="kpi-row">
+              <div className="kpi">
+                <div className="kpi-label">子任务</div>
+                <div className="kpi-value">{stats.total}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">完成</div>
+                <div className="kpi-value">{stats.done}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">失败 / 进行中</div>
+                <div className="kpi-value">
+                  {stats.failed}/{stats.active}
+                </div>
+              </div>
+            </div>
+
+            <div className="progress-track" aria-hidden>
+              <div className="progress-fill" style={{ width: `${progress}%` }} />
+            </div>
+
+            <div className="gallery">
+              {jobs.map((job) => (
+                <article key={job.id} className="card">
+                  <span
+                    className={`badge ${
+                      job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
+                    }`}
+                  >
+                    #{job.variant}/{job.variants}
+                  </span>
+                  <div className="card-media">
+                    {job.status === "done" && job.imageUrl ? (
+                      <>
+                        <img src={job.imageUrl} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
+                        <div className="card-overlay">
+                          <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
+                            打开原图
+                          </a>
+                        </div>
+                      </>
+                    ) : job.status === "failed" ? (
+                      <div
+                        className="skeleton"
+                        style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+                      >
+                        <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
                       </div>
-                    </>
-                  ) : job.status === "failed" ? (
-                    <div
-                      className="skeleton"
-                      style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
-                    >
-                      <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
-                    </div>
-                  ) : (
-                    <div className="skeleton" />
-                  )}
-                </div>
-                <div className="card-body">
-                  <div className="card-meta">
-                    <strong>#{job.variant}</strong>
-                    {job.prompt}
+                    ) : (
+                      <div className="skeleton" />
+                    )}
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                  <div className="card-body">
+                    <div className="card-meta">
+                      <strong>#{job.variant}</strong>
+                      {job.prompt}
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
       </section>
     </div>

@@ -243,7 +243,7 @@ export function StudioPage({
                 disabled={running}
                 onChange={(e) => setDraft({ appendResults: e.target.checked })}
               />
-              <span>追加到结果墙</span>
+              <span>追加到图片墙</span>
             </label>
           </div>
 
@@ -364,7 +364,7 @@ export function StudioPage({
         <div className="results-toolbar">
           <div>
             <div className="panel-kicker">Gallery</div>
-            <h2 className="panel-title">结果墙 · {stats.total} 张</h2>
+            <h2 className="panel-title">图片墙 · {stats.total} 张</h2>
           </div>
           <div className="results-toolbar-actions">
             <div className="connection-chip">

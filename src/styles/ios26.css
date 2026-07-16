@@ -1147,28 +1147,25 @@ a {
   letter-spacing: -0.03em;
 }
 
+/* 管理页两列：中间对半分 */
 .admin-fields-2 {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-  align-items: start;
-}
-
-/* Base URL | API Key 同一行，Key 在右侧，省纵向空间 */
-.admin-fields-url-key {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
   gap: 12px 14px;
   align-items: start;
 }
 
-.admin-fields-url-key > .field {
+.admin-fields-2 > .field {
   margin-bottom: 0;
   min-width: 0;
 }
 
+.admin-fields-2 .segmented {
+  flex-wrap: wrap;
+}
+
 @media (max-width: 720px) {
-  .admin-fields-url-key {
+  .admin-fields-2 {
     grid-template-columns: 1fr;
   }
 }

@@ -197,7 +197,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           </div>
 
           <div className="admin-stack">
-            <div className="admin-fields-url-key">
+            <div className="admin-fields-2">
               <div className="field">
                 <label htmlFor="baseUrl">API Base URL</label>
                 <input
@@ -245,76 +245,78 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           </div>
 
           <div className="admin-stack">
-            <div className="field">
-              <label htmlFor="model">模型</label>
-              <input
-                id="model"
-                className="control mono"
-                list="model-options"
-                value={draft.model}
-                onChange={(e) => update("model", e.target.value)}
-                placeholder="grok-imagine-image"
-                spellCheck={false}
-              />
-              <datalist id="model-options">
-                {imageModels.map((id) => (
-                  <option key={id} value={id} />
-                ))}
-              </datalist>
-              <div className="field-hint">生图默认模型，可从下方列表点选。</div>
-            </div>
-
-            <div className="field">
-              <label htmlFor="concurrency">全局并发槽</label>
-              <input
-                id="concurrency"
-                className="control"
-                type="number"
-                min={1}
-                max={8}
-                value={draft.concurrency}
-                onChange={(e) => update("concurrency", Number(e.target.value))}
-              />
-              <div className="field-hint">1–8，同时最多多少个子任务请求上游。</div>
-            </div>
-
-            <div className="field">
-              <label>默认宽高比</label>
-              <div className="segmented">
-                {ASPECT_RATIOS.map((ratio) => (
-                  <button
-                    key={ratio}
-                    type="button"
-                    className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                    onClick={() => update("aspectRatio", ratio)}
-                  >
-                    {ratio}
-                  </button>
-                ))}
+            <div className="admin-fields-2">
+              <div className="field">
+                <label htmlFor="model">模型</label>
+                <input
+                  id="model"
+                  className="control mono"
+                  list="model-options"
+                  value={draft.model}
+                  onChange={(e) => update("model", e.target.value)}
+                  placeholder="grok-imagine-image"
+                  spellCheck={false}
+                />
+                <datalist id="model-options">
+                  {imageModels.map((id) => (
+                    <option key={id} value={id} />
+                  ))}
+                </datalist>
+              </div>
+              <div className="field">
+                <label htmlFor="concurrency">全局并发槽</label>
+                <input
+                  id="concurrency"
+                  className="control"
+                  type="number"
+                  min={1}
+                  max={8}
+                  value={draft.concurrency}
+                  onChange={(e) => update("concurrency", Number(e.target.value))}
+                />
               </div>
             </div>
 
-            <div className="field">
-              <label>默认分辨率</label>
-              <div className="segmented">
-                {RESOLUTIONS.map((item) => {
-                  const allowed = modelCap.allowedResolutions.includes(item);
-                  return (
+            <div className="admin-fields-2">
+              <div className="field">
+                <label>默认宽高比</label>
+                <div className="segmented">
+                  {ASPECT_RATIOS.map((ratio) => (
                     <button
-                      key={item}
+                      key={ratio}
                       type="button"
-                      className={`chip ${draft.resolution === item ? "active" : ""}`}
-                      disabled={!allowed}
-                      onClick={() => {
-                        if (allowed) update("resolution", item);
-                      }}
+                      className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                      onClick={() => update("aspectRatio", ratio)}
                     >
-                      {item}
+                      {ratio}
                     </button>
-                  );
-                })}
+                  ))}
+                </div>
               </div>
-              <div className="field-hint">{modelCap.note}</div>
+              <div className="field">
+                <label>默认分辨率</label>
+                <div className="segmented">
+                  {RESOLUTIONS.map((item) => {
+                    const allowed = modelCap.allowedResolutions.includes(item);
+                    return (
+                      <button
+                        key={item}
+                        type="button"
+                        className={`chip ${draft.resolution === item ? "active" : ""}`}
+                        disabled={!allowed}
+                        onClick={() => {
+                          if (allowed) update("resolution", item);
+                        }}
+                      >
+                        {item}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+            <div className="field-hint">
+              并发 1–8。{modelCap.note}
             </div>
           </div>
         </div>

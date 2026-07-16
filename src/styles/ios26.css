@@ -96,31 +96,42 @@ a {
 }
 
 .app-shell {
+  /* 统一左右边距，避免滚动条/ gutter 让右侧看起来更贴边 */
+  --page-inline: 24px;
   position: relative;
   min-height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  /* 左右内边距对称，避免右侧贴边比左侧更紧 */
-  padding:
-    calc(18px + var(--safe-top))
-    20px
-    calc(20px + var(--safe-bottom))
-    20px;
+  padding-top: calc(18px + var(--safe-top));
+  padding-bottom: calc(20px + var(--safe-bottom));
+  padding-left: var(--page-inline);
+  padding-right: var(--page-inline);
   gap: 18px;
   max-width: 1400px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
   width: 100%;
   box-sizing: border-box;
 }
 
 .app-main {
   min-height: 0;
-  overflow: auto;
+  /* 整页滚动交给 body，避免 main 出纵向滚动条挤占右侧空间 */
+  overflow-x: hidden;
+  overflow-y: visible;
   display: grid;
   align-content: start;
-  /* 不用 stable gutter，否则右侧多出一条空白导致贴边不对称 */
-  scrollbar-gutter: auto;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  justify-items: stretch;
+}
+
+.page {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -254,6 +265,10 @@ a {
   min-height: 0;
   display: grid;
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .panel {
@@ -1061,17 +1076,21 @@ a {
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  justify-items: stretch;
 }
 
-/* 管理页各卡片与日志：宽度与左右边距一致 */
+/* 管理页各卡片与日志：强制同宽、贴齐父级左右（与外壳 padding 对称） */
 .admin-layout > .panel,
 .admin-layout > .admin-log-panel,
-.admin-layout > .log-panel {
+.admin-layout > .log-panel,
+.admin-layout > .admin-form-panel {
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  margin-inline: 0;
+  margin-left: 0;
+  margin-right: 0;
+  justify-self: stretch;
 }
 
 .admin-hero {

@@ -24,24 +24,27 @@ GET  /healthz
 
 ---
 
-## 方式 0：Dashboard 上传预构建 zip（网页无法接受 wrangler 项目时）
+## 方式 0：Cloudflare Pages 直传（推荐，网页上传）
 
 使用仓库产物：
 
 ```text
-releases/ciallo-telegram-media-dashboard.zip
+releases/ciallo-telegram-media-pages.zip
 ```
 
-- 内含：`worker.js` + `README.txt`（**无 wrangler.toml**）
-- Cloudflare 网页上传不会再提示「请用 wrangler deploy」
-- 上传后在 **Settings → Variables and Secrets** 配置下表变量并 Deploy
+- 内含：`index.html` + `_worker.js` + `README.txt`（**无 wrangler.toml**）
+- Dashboard → **Pages** → **Upload assets** 上传即可
+- **Settings → Environment variables** 配置全部密钥（见下表）
+- 地址示例：`https://ciallo-media.pages.dev`
 
 本地重新生成：
 
 ```bash
 # 在仓库根目录
-npm run pack:media-worker:dashboard
+npm run pack:media-worker:pages
 ```
+
+> Workers 控制台对「含 JS 的 zip」常仍要求 wrangler；**请改用 Pages Upload**。
 
 ---
 

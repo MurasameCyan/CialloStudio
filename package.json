@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
     "pack:media-worker": "node scripts/pack-media-worker.mjs",
-    "pack:media-worker:dashboard": "node scripts/pack-media-worker-dashboard.mjs"
+    "pack:media-worker:dashboard": "node scripts/pack-media-worker-dashboard.mjs",
+    "pack:media-worker:pages": "node scripts/pack-media-worker-pages.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

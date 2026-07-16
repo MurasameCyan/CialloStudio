@@ -14,6 +14,7 @@ workers/**/.dev.vars
 workers/**/.wrangler/
 releases/_pack_*/
 releases/_cf_dashboard_worker/
+releases/_cf_pages_build/
 
 # Editor / OS
 .DS_Store

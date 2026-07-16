@@ -231,10 +231,6 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 />
               </div>
             </div>
-            <div className="field-hint">
-              上游与 Key 仅保存在本机浏览器。填完整 Base（如 <code>https://your-gateway/v1</code>
-              ），请求经同源 <code>/v1</code> 代理转发。
-            </div>
           </div>
         </div>
 

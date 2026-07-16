@@ -61,6 +61,8 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   const [listLoading, setListLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [q, setQ] = useState("");
+  /** 已提交搜索词：仅点搜索 / Enter 时更新，避免输入框每个字都打 listPosts */
+  const [appliedQ, setAppliedQ] = useState("");
   const [error, setError] = useState("");
   const [active, setActive] = useState<GalleryPost | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
@@ -79,7 +81,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     try {
       const res = await communityApi.listPosts({
         limit: PAGE_SIZE,
-        q: q.trim() || undefined,
+        q: appliedQ.trim() || undefined,
       });
       setPosts(res.items);
       setNextCursor(res.nextCursor);
@@ -88,7 +90,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     } finally {
       setListLoading(false);
     }
-  }, [q]);
+  }, [appliedQ]);
 
   const loadMore = useCallback(async () => {
     if (!nextCursor || loadingMore) return;
@@ -98,7 +100,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
       const res = await communityApi.listPosts({
         limit: PAGE_SIZE,
         cursor: nextCursor,
-        q: q.trim() || undefined,
+        q: appliedQ.trim() || undefined,
       });
       setPosts((prev) => {
         const seen = new Set(prev.map((p) => p.id));
@@ -111,11 +113,15 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     } finally {
       setLoadingMore(false);
     }
-  }, [nextCursor, loadingMore, q]);
+  }, [nextCursor, loadingMore, appliedQ]);
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  function submitSearch() {
+    setAppliedQ(q.trim());
+  }
 
   async function openPost(post: GalleryPost) {
     setActive(post);
@@ -209,10 +215,10 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
               value={q}
               onChange={(e) => setQ(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void load();
+                if (e.key === "Enter") submitSearch();
               }}
             />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => void load()}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={submitSearch}>
               搜索
             </button>
           </div>

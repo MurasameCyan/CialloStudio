@@ -35,7 +35,7 @@ docker compose up -d
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `CIALLO_PORT` | `8080` | 宿主机端口 |
-| `CIALLO_UPSTREAM` | `https://your-grok2api.example.com` | 上游网关根地址（可带或不带 `/v1`） |
+| `CIALLO_UPSTREAM` | （空） | **必填**真实上游根地址（可带或不带 `/v1`）。占位域名不要用 |
 | `CIALLO_ADMIN_PASSWORD` | （空） | 管理页解锁密码；**留空关闭门禁**。只写在 `.env`，不要提交 |
 | `TZ` | `Asia/Shanghai` | 时区 |
 
@@ -44,18 +44,25 @@ docker compose up -d
 示例：
 
 ```bash
-# Linux / macOS
-export CIALLO_UPSTREAM=https://your-grok2api.example.com
+# Linux / macOS — 把上游改成你的真实 grok2api（不要用 example.com 占位）
+export CIALLO_UPSTREAM=https://your-real-gateway.example
 export CIALLO_ADMIN_PASSWORD='your-strong-password'
 export CIALLO_PORT=8080
 docker compose pull && docker compose up -d
 
 # Windows PowerShell
-$env:CIALLO_UPSTREAM="https://your-grok2api.example.com"
+$env:CIALLO_UPSTREAM="https://your-real-gateway.example"
 $env:CIALLO_ADMIN_PASSWORD="your-strong-password"
 $env:CIALLO_PORT="8080"
 docker compose pull
 docker compose up -d
+```
+
+若日志出现 `host not found in upstream`，说明 `.env` 里 `CIALLO_UPSTREAM` 仍是占位域名或未设置。请写成可解析的真实地址后：
+
+```bash
+docker compose pull
+docker compose up -d --force-recreate
 ```
 
 代理宿主机上的 grok2api：

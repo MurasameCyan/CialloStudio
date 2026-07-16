@@ -2043,7 +2043,14 @@ a {
   line-height: 1.45;
 }
 
-/* 用户管理 */
+/* 管理页分区：接口设置 / 用户池 */
+.admin-section-tabs {
+  position: relative;
+  z-index: 1;
+  margin-top: 4px;
+}
+
+/* 用户池管理 */
 .user-admin-panel {
   display: grid;
   gap: 14px;

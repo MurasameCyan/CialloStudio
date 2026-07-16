@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { LogPanel } from "@/components/LogPanel";
+import { UserPoolPanel } from "@/components/UserPoolPanel";
 import {
   ApiError,
   listModels,
@@ -7,6 +8,7 @@ import {
   resolveBrowserApiBase,
   type OpenAIModel,
 } from "@/lib/api";
+import type { CommunityUser } from "@/lib/community/types";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
@@ -19,15 +21,30 @@ import {
   saveSettings,
 } from "@/lib/settings";
 
+type AdminSection = "api" | "users";
+
 type Props = {
   settings: StudioSettings;
   onChange: (next: StudioSettings) => void;
   /** Docker 部署时若设置了 CIALLO_ADMIN_PASSWORD */
   adminGateEnabled?: boolean;
   onLockAdmin?: () => void;
+  /** 社区账号（用户池管理需要 admin 角色） */
+  communityUser?: CommunityUser | null;
+  communityLoading?: boolean;
+  onNeedLogin?: () => void;
 };
 
-export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin }: Props) {
+export function SettingsPage({
+  settings,
+  onChange,
+  adminGateEnabled,
+  onLockAdmin,
+  communityUser = null,
+  communityLoading = false,
+  onNeedLogin,
+}: Props) {
+  const [section, setSection] = useState<AdminSection>("api");
   const [draft, setDraft] = useState<StudioSettings>(() => ({
     ...DEFAULT_SETTINGS,
     ...settings,
@@ -182,204 +199,237 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           ) : null}
         </div>
 
-        <div className="admin-status-row">
-          <div className="admin-status-card">
-            <span className="admin-status-label">连接</span>
-            <strong className="admin-status-value">
-              <span className={`live-dot ${hasKey ? "" : "off"}`} />
-              {hasKey ? "已配置 Key" : "未配置"}
-            </strong>
-          </div>
-          <div className="admin-status-card">
-            <span className="admin-status-label">模型</span>
-            <strong className="admin-status-value mono-tight" title={draft.model}>
-              {draft.model || "—"}
-            </strong>
-          </div>
-          <div className="admin-status-card">
-            <span className="admin-status-label">并发</span>
-            <strong className="admin-status-value">{draft.concurrency}</strong>
-          </div>
-          <div className="admin-status-card">
-            <span className="admin-status-label">请求通道</span>
-            <strong className="admin-status-value mono-tight" title={requestBase}>
-              {requestBase}
-            </strong>
-          </div>
+        <div className="admin-section-tabs segmented" role="tablist" aria-label="管理分区">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === "api"}
+            className={`chip ${section === "api" ? "active" : ""}`}
+            onClick={() => setSection("api")}
+          >
+            接口设置
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={section === "users"}
+            className={`chip ${section === "users" ? "active" : ""}`}
+            onClick={() => setSection("users")}
+          >
+            用户池
+          </button>
         </div>
+
+        {section === "api" ? (
+          <div className="admin-status-row">
+            <div className="admin-status-card">
+              <span className="admin-status-label">连接</span>
+              <strong className="admin-status-value">
+                <span className={`live-dot ${hasKey ? "" : "off"}`} />
+                {hasKey ? "已配置 Key" : "未配置"}
+              </strong>
+            </div>
+            <div className="admin-status-card">
+              <span className="admin-status-label">模型</span>
+              <strong className="admin-status-value mono-tight" title={draft.model}>
+                {draft.model || "—"}
+              </strong>
+            </div>
+            <div className="admin-status-card">
+              <span className="admin-status-label">并发</span>
+              <strong className="admin-status-value">{draft.concurrency}</strong>
+            </div>
+            <div className="admin-status-card">
+              <span className="admin-status-label">请求通道</span>
+              <strong className="admin-status-value mono-tight" title={requestBase}>
+                {requestBase}
+              </strong>
+            </div>
+          </div>
+        ) : null}
       </section>
 
-      <section className="panel admin-form-panel">
-        <div className="admin-section admin-section-merged">
-          <div className="admin-section-head">
-            <div>
-              <div className="section-card-title">Settings</div>
-              <h3 className="admin-section-title">接口与生成</h3>
-            </div>
-          </div>
+      {section === "users" ? (
+        <UserPoolPanel
+          communityUser={communityUser}
+          communityLoading={communityLoading}
+          onNeedLogin={onNeedLogin}
+        />
+      ) : (
+        <>
+          <section className="panel admin-form-panel">
+            <div className="admin-section admin-section-merged">
+              <div className="admin-section-head">
+                <div>
+                  <div className="section-card-title">Settings</div>
+                  <h3 className="admin-section-title">接口与生成</h3>
+                </div>
+              </div>
 
-          <div className="admin-stack">
-            <div className="admin-block-label">接口连接</div>
-            <div className="admin-fields-2">
-              <div className="field">
-                <div className="label-row">
-                  <label htmlFor="baseUrl">API Base URL</label>
-                </div>
-                <input
-                  id="baseUrl"
-                  className="control mono"
-                  value={baseUrl}
-                  placeholder="https://your-gateway/v1"
-                  onChange={(e) => update("baseUrl", e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-              <div className="field">
-                <div className="label-row">
-                  <label htmlFor="apiKey">API Key</label>
-                  <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
-                    {showKey ? "隐藏" : "显示"}
-                  </button>
-                </div>
-                <input
-                  id="apiKey"
-                  className="control mono"
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  placeholder="g2a_..."
-                  onChange={(e) => update("apiKey", e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-              </div>
-            </div>
-
-            <div className="admin-block-divider" role="separator" />
-
-            <div className="admin-block-label">生成默认值</div>
-            <div className="admin-fields-2">
-              <div className="field">
-                <div className="label-row">
-                  <label htmlFor="model">模型</label>
-                </div>
-                <input
-                  id="model"
-                  className="control mono"
-                  list="model-options"
-                  value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
-                  onChange={(e) => update("model", e.target.value)}
-                  placeholder="grok-imagine-image"
-                  spellCheck={false}
-                />
-                <datalist id="model-options">
-                  {imageModels.map((id) => (
-                    <option key={id} value={id} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="field">
-                <div className="label-row">
-                  <label htmlFor="concurrency">全局并发槽</label>
-                </div>
-                <input
-                  id="concurrency"
-                  className="control"
-                  type="number"
-                  min={1}
-                  max={2}
-                  value={draft.concurrency}
-                  onChange={(e) => update("concurrency", Number(e.target.value))}
-                />
-              </div>
-            </div>
-
-            <div className="admin-fields-2">
-              <div className="field">
-                <div className="label-row">
-                  <label>默认宽高比</label>
-                </div>
-                <div className="segmented">
-                  {ASPECT_RATIOS.map((ratio) => (
-                    <button
-                      key={ratio}
-                      type="button"
-                      className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                      onClick={() => update("aspectRatio", ratio)}
-                    >
-                      {ratio}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <div className="label-row">
-                  <label>默认分辨率</label>
-                </div>
-                <div className="segmented">
-                  {RESOLUTIONS.map((item) => {
-                    const allowed = modelCap.allowedResolutions.includes(item);
-                    return (
-                      <button
-                        key={item}
-                        type="button"
-                        className={`chip ${draft.resolution === item ? "active" : ""}`}
-                        disabled={!allowed}
-                        onClick={() => {
-                          if (allowed) update("resolution", item);
-                        }}
-                      >
-                        {item}
+              <div className="admin-stack">
+                <div className="admin-block-label">接口连接</div>
+                <div className="admin-fields-2">
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="baseUrl">API Base URL</label>
+                    </div>
+                    <input
+                      id="baseUrl"
+                      className="control mono"
+                      value={baseUrl}
+                      placeholder="https://your-gateway/v1"
+                      onChange={(e) => update("baseUrl", e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="apiKey">API Key</label>
+                      <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
+                        {showKey ? "隐藏" : "显示"}
                       </button>
-                    );
-                  })}
+                    </div>
+                    <input
+                      id="apiKey"
+                      className="control mono"
+                      type={showKey ? "text" : "password"}
+                      value={apiKey}
+                      placeholder="g2a_..."
+                      onChange={(e) => update("apiKey", e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {models.length > 0 ? (
-              <>
                 <div className="admin-block-divider" role="separator" />
-                <div className="admin-block-label">可用模型</div>
-                <div className="admin-model-grid" role="listbox" aria-label="可用模型">
-                  {models.map((model) => (
-                    <button
-                      key={model.id}
-                      type="button"
-                      role="option"
-                      aria-selected={draft.model === model.id}
-                      title={model.id}
-                      className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                      onClick={() => update("model", model.id)}
-                    >
-                      <span className="admin-model-chip-text">{model.id}</span>
-                    </button>
-                  ))}
+
+                <div className="admin-block-label">生成默认值</div>
+                <div className="admin-fields-2">
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="model">模型</label>
+                    </div>
+                    <input
+                      id="model"
+                      className="control mono"
+                      list="model-options"
+                      value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
+                      onChange={(e) => update("model", e.target.value)}
+                      placeholder="grok-imagine-image"
+                      spellCheck={false}
+                    />
+                    <datalist id="model-options">
+                      {imageModels.map((id) => (
+                        <option key={id} value={id} />
+                      ))}
+                    </datalist>
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="concurrency">全局并发槽</label>
+                    </div>
+                    <input
+                      id="concurrency"
+                      className="control"
+                      type="number"
+                      min={1}
+                      max={2}
+                      value={draft.concurrency}
+                      onChange={(e) => update("concurrency", Number(e.target.value))}
+                    />
+                  </div>
                 </div>
-              </>
-            ) : null}
 
-            <div className="admin-actions admin-actions-inline">
-              <div className="btn-row">
-                <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
-                  {busy ? "测试中…" : "测试连接"}
-                </button>
-                <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
-                  保存设置
-                </button>
-                <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
-                  恢复默认
-                </button>
+                <div className="admin-fields-2">
+                  <div className="field">
+                    <div className="label-row">
+                      <label>默认宽高比</label>
+                    </div>
+                    <div className="segmented">
+                      {ASPECT_RATIOS.map((ratio) => (
+                        <button
+                          key={ratio}
+                          type="button"
+                          className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                          onClick={() => update("aspectRatio", ratio)}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label>默认分辨率</label>
+                    </div>
+                    <div className="segmented">
+                      {RESOLUTIONS.map((item) => {
+                        const allowed = modelCap.allowedResolutions.includes(item);
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            className={`chip ${draft.resolution === item ? "active" : ""}`}
+                            disabled={!allowed}
+                            onClick={() => {
+                              if (allowed) update("resolution", item);
+                            }}
+                          >
+                            {item}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {models.length > 0 ? (
+                  <>
+                    <div className="admin-block-divider" role="separator" />
+                    <div className="admin-block-label">可用模型</div>
+                    <div className="admin-model-grid" role="listbox" aria-label="可用模型">
+                      {models.map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          role="option"
+                          aria-selected={draft.model === model.id}
+                          title={model.id}
+                          className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
+                          onClick={() => update("model", model.id)}
+                        >
+                          <span className="admin-model-chip-text">{model.id}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                ) : null}
+
+                <div className="admin-actions admin-actions-inline">
+                  <div className="btn-row">
+                    <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
+                      {busy ? "测试中…" : "测试连接"}
+                    </button>
+                    <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
+                      保存设置
+                    </button>
+                    <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
+                      恢复默认
+                    </button>
+                  </div>
+                  {message ? (
+                    <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
+                  ) : null}
+                </div>
               </div>
-              {message ? (
-                <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
-              ) : null}
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <LogPanel />
+          <LogPanel />
+        </>
+      )}
     </div>
   );
 }

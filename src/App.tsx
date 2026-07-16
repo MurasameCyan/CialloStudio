@@ -161,6 +161,9 @@ export default function App() {
               onChange={setSettings}
               adminGateEnabled={gateOn}
               onLockAdmin={gateOn ? handleLockAdmin : undefined}
+              communityUser={community.user}
+              communityLoading={community.loading}
+              onNeedLogin={() => setTab("account")}
             />
           </ErrorBoundary>
         )}

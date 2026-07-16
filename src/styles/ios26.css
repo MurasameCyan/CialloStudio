@@ -985,6 +985,36 @@ a {
 
 .results-panel .results-toolbar {
   margin-bottom: 14px;
+  /* 标题 + 右侧 KPI/芯片 两行时仍保持稳定占位，减少换行跳动 */
+  min-height: 52px;
+  align-items: center;
+}
+
+.results-panel .progress-track {
+  margin-bottom: 12px;
+}
+
+.results-panel .selection-bar {
+  margin-bottom: 14px;
+}
+
+.results-panel .gallery-empty {
+  /* 与约一张卡片相近的最小高度，空态 ↔ 有图切换时墙面跳动更小 */
+  min-height: 220px;
+}
+
+.gallery .card-media,
+.gallery .skeleton {
+  /* 生成中骨架与成图同一宽高比，避免加载瞬间高度变化 */
+  aspect-ratio: 1;
+  width: 100%;
+}
+
+.gallery .card-media img {
+  aspect-ratio: auto;
+  height: 100%;
+  width: 100%;
+  object-fit: cover;
 }
 
 .mono {

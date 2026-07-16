@@ -475,24 +475,23 @@ export function StudioPage({
             <h2 className="panel-title">图片墙 · {stats.total} 张</h2>
           </div>
           <div className="results-toolbar-actions">
-            {jobs.length > 0 ? (
-              <div className="kpi-row kpi-row-inline" aria-label="生成统计">
-                <div className="kpi">
-                  <div className="kpi-label">总数</div>
-                  <div className="kpi-value">{stats.total}</div>
-                </div>
-                <div className="kpi">
-                  <div className="kpi-label">完成</div>
-                  <div className="kpi-value">{stats.done}</div>
-                </div>
-                <div className="kpi">
-                  <div className="kpi-label">在飞 / 排队</div>
-                  <div className="kpi-value">
-                    {running ? inFlight : stats.running}/{stats.queued}
-                  </div>
+            {/* KPI 始终占位，避免点生成后工具栏突然插入导致图片墙下移 */}
+            <div className="kpi-row kpi-row-inline" aria-label="生成统计">
+              <div className="kpi">
+                <div className="kpi-label">总数</div>
+                <div className="kpi-value">{stats.total}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">完成</div>
+                <div className="kpi-value">{stats.done}</div>
+              </div>
+              <div className="kpi">
+                <div className="kpi-label">在飞 / 排队</div>
+                <div className="kpi-value">
+                  {running ? inFlight : stats.running}/{stats.queued}
                 </div>
               </div>
-            ) : null}
+            </div>
             <div className="connection-chip">
               <span className={`live-dot ${running ? "" : "off"}`} />
               {running
@@ -512,8 +511,46 @@ export function StudioPage({
           </div>
         </div>
 
+        {/* 进度条 / 选择栏始终占位，开始生成时只换 gallery 内容，避免整体位移 */}
+        <div className="progress-track" aria-hidden>
+          <div className="progress-fill" style={{ width: `${jobs.length ? progress : 0}%` }} />
+        </div>
+
+        <div className="selection-bar">
+          <label className="select-all">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              disabled={downloadableJobs.length === 0 || downloading}
+              onChange={toggleSelectAll}
+            />
+            <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+          </label>
+          <div className="selection-meta">
+            已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+          </div>
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={selectedCount === 0 || downloading}
+              onClick={clearSelection}
+            >
+              清除勾选
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={selectedCount === 0 || downloading}
+              onClick={handleDownloadSelected}
+            >
+              {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+            </button>
+          </div>
+        </div>
+
         {jobs.length === 0 ? (
-          <div className="empty empty-compact">
+          <div className="empty empty-compact gallery-empty">
             <div className="empty-icon" aria-hidden />
             <div>
               <span className="empty-title">还没有画面</span>
@@ -521,133 +558,94 @@ export function StudioPage({
             </div>
           </div>
         ) : (
-          <>
-            <div className="progress-track" aria-hidden>
-              <div className="progress-fill" style={{ width: `${progress}%` }} />
-            </div>
+          <div className="gallery">
+            {jobs.map((job) => {
+              const src = displayUrl(job);
+              const canSelect = job.status === "done" && Boolean(src || job.openUrl);
+              const isSelected = selected.has(job.id);
+              return (
+                <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
+                  <span
+                    className={`badge ${
+                      job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
+                    }`}
+                  >
+                    #{job.variant}/{job.variants}
+                  </span>
 
-            <div className="selection-bar">
-              <label className="select-all">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  disabled={downloadableJobs.length === 0 || downloading}
-                  onChange={toggleSelectAll}
-                />
-                <span>{allSelected ? "取消全选" : "全选已完成"}</span>
-              </label>
-              <div className="selection-meta">
-                已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
-              </div>
-              <div className="btn-row">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={selectedCount === 0 || downloading}
-                  onClick={clearSelection}
-                >
-                  清除勾选
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={selectedCount === 0 || downloading}
-                  onClick={handleDownloadSelected}
-                >
-                  {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-                </button>
-              </div>
-            </div>
+                  {canSelect ? (
+                    <label className="card-check" title="勾选下载">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        disabled={downloading}
+                        onChange={() => toggleOne(job.id)}
+                      />
+                    </label>
+                  ) : null}
 
-            <div className="gallery">
-              {jobs.map((job) => {
-                const src = displayUrl(job);
-                const canSelect = job.status === "done" && Boolean(src || job.openUrl);
-                const isSelected = selected.has(job.id);
-                return (
-                  <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
-                    <span
-                      className={`badge ${
-                        job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
-                      }`}
-                    >
-                      #{job.variant}/{job.variants}
-                    </span>
-
-                    {canSelect ? (
-                      <label className="card-check" title="勾选下载">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          disabled={downloading}
-                          onChange={() => toggleOne(job.id)}
-                        />
-                      </label>
-                    ) : null}
-
-                    <div
-                      className="card-media"
-                      onClick={() => {
-                        if (canSelect) toggleOne(job.id);
-                      }}
-                    >
-                      {job.status === "done" && src ? (
-                        <>
-                          <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
-                          <div className="card-overlay">
-                            <a
-                              href={job.openUrl || src}
-                              target="_blank"
-                              rel="noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              打开原图
-                            </a>
-                            <button
-                              type="button"
-                              className="btn btn-primary btn-sm"
-                              disabled={sharingId === job.id || shareCooldownLocked}
-                              title={
-                                shareCooldownLocked
-                                  ? `冷却中，${shareRemainSec} 秒后可分享`
-                                  : "分享到大厅"
-                              }
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleShareToHall(job);
-                              }}
-                            >
-                              {sharingId === job.id
-                                ? "分享中…"
-                                : shareCooldownLocked
-                                  ? `冷却 ${shareRemainSec}s`
-                                  : "分享到大厅"}
-                            </button>
-                          </div>
-                        </>
-                      ) : job.status === "failed" ? (
-                        <div
-                          className="skeleton"
-                          style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
-                        >
-                          <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
+                  <div
+                    className="card-media"
+                    onClick={() => {
+                      if (canSelect) toggleOne(job.id);
+                    }}
+                  >
+                    {job.status === "done" && src ? (
+                      <>
+                        <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
+                        <div className="card-overlay">
+                          <a
+                            href={job.openUrl || src}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            打开原图
+                          </a>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            disabled={sharingId === job.id || shareCooldownLocked}
+                            title={
+                              shareCooldownLocked
+                                ? `冷却中，${shareRemainSec} 秒后可分享`
+                                : "分享到大厅"
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleShareToHall(job);
+                            }}
+                          >
+                            {sharingId === job.id
+                              ? "分享中…"
+                              : shareCooldownLocked
+                                ? `冷却 ${shareRemainSec}s`
+                                : "分享到大厅"}
+                          </button>
                         </div>
-                      ) : (
-                        <div className="skeleton" />
-                      )}
-                    </div>
-                    <div className="card-body">
-                      <div className="card-meta">
-                        <strong>#{job.variant}</strong>
-                        {job.prompt}
-                        {job.resolution ? ` · ${job.resolution}` : ""}
+                      </>
+                    ) : job.status === "failed" ? (
+                      <div
+                        className="skeleton"
+                        style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+                      >
+                        <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
                       </div>
+                    ) : (
+                      <div className="skeleton" />
+                    )}
+                  </div>
+                  <div className="card-body">
+                    <div className="card-meta">
+                      <strong>#{job.variant}</strong>
+                      {job.prompt}
+                      {job.resolution ? ` · ${job.resolution}` : ""}
                     </div>
-                  </article>
-                );
-              })}
-            </div>
-          </>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
         )}
       </section>
     </div>

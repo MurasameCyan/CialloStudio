@@ -420,19 +420,30 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                 </div>
                 {canManage ? (
                   <div className="user-row-actions">
-                    <select
-                      className="control user-role-select"
-                      value={u.role === "vip" ? "vip" : "user"}
-                      disabled={rowBusy}
+                    <div
+                      className="segmented user-role-segmented"
+                      role="group"
                       aria-label={`分组 @${u.username}`}
-                      onChange={(e) => {
-                        const next = e.target.value === "vip" ? "vip" : "user";
-                        void changeRole(u, next);
-                      }}
                     >
-                      <option value="user">普通</option>
-                      <option value="vip">VIP</option>
-                    </select>
+                      <button
+                        type="button"
+                        className={`chip user-role-chip ${u.role !== "vip" ? "active" : ""}`}
+                        disabled={rowBusy || u.role === "user"}
+                        aria-pressed={u.role !== "vip"}
+                        onClick={() => void changeRole(u, "user")}
+                      >
+                        普通
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip user-role-chip user-role-chip-vip ${u.role === "vip" ? "active" : ""}`}
+                        disabled={rowBusy || u.role === "vip"}
+                        aria-pressed={u.role === "vip"}
+                        onClick={() => void changeRole(u, "vip")}
+                      >
+                        VIP
+                      </button>
+                    </div>
                     <button
                       type="button"
                       className={`btn btn-sm ${u.banned ? "btn-secondary" : "btn-ghost"}`}

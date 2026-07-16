@@ -70,64 +70,12 @@ body,
 body {
   min-height: 100dvh;
   color: var(--text);
-  background: var(--bg);
   overflow-x: hidden;
-}
-
-body::before,
-body::after {
-  content: "";
-  position: fixed;
-  inset: auto;
-  pointer-events: none;
-  z-index: -1;
-  filter: blur(10px);
-}
-
-body::before {
-  top: -12vh;
-  left: -8vw;
-  width: 58vw;
-  height: 58vw;
-  max-width: 720px;
-  max-height: 720px;
-  border-radius: 50%;
   background:
-    radial-gradient(circle at 35% 35%, rgba(130, 180, 255, 0.72), transparent 58%),
-    radial-gradient(circle at 70% 60%, rgba(190, 150, 255, 0.42), transparent 60%);
-  animation: floatA 18s var(--ease) infinite alternate;
-}
-
-body::after {
-  right: -10vw;
-  bottom: -18vh;
-  width: 52vw;
-  height: 52vw;
-  max-width: 640px;
-  max-height: 640px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 40% 40%, rgba(120, 220, 255, 0.38), transparent 58%),
-    radial-gradient(circle at 70% 30%, rgba(255, 170, 210, 0.28), transparent 62%);
-  animation: floatB 22s var(--ease) infinite alternate;
-}
-
-@keyframes floatA {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(4vw, 3vh, 0) scale(1.08);
-  }
-}
-
-@keyframes floatB {
-  from {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  to {
-    transform: translate3d(-3vw, -4vh, 0) scale(1.1);
-  }
+    radial-gradient(900px 520px at 50% -12%, rgba(140, 180, 255, 0.28), transparent 62%),
+    radial-gradient(720px 420px at 100% 0%, rgba(200, 170, 255, 0.16), transparent 55%),
+    radial-gradient(720px 420px at 0% 100%, rgba(130, 210, 255, 0.12), transparent 55%),
+    var(--bg);
 }
 
 button,
@@ -178,7 +126,7 @@ a {
   padding: 12px 14px 12px 12px;
   border-radius: 30px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.28) 45%, rgba(255, 255, 255, 0.42)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38)),
     var(--bg-elevated);
   border: var(--hairline);
   box-shadow: var(--shadow);
@@ -189,7 +137,7 @@ a {
 @media (prefers-color-scheme: dark) {
   .glass-bar {
     background:
-      linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02) 50%, rgba(255, 255, 255, 0.05)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
       var(--bg-elevated);
   }
 }
@@ -304,7 +252,7 @@ a {
 .panel {
   position: relative;
   background:
-    linear-gradient(165deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.18) 42%, rgba(255, 255, 255, 0.28)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.62), rgba(255, 255, 255, 0.28)),
     var(--bg-elevated);
   border: var(--hairline);
   border-radius: var(--radius-xl);
@@ -318,7 +266,7 @@ a {
 @media (prefers-color-scheme: dark) {
   .panel {
     background:
-      linear-gradient(165deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.015) 40%, rgba(255, 255, 255, 0.04)),
+      linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03)),
       var(--bg-elevated);
   }
 }
@@ -328,19 +276,7 @@ a {
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.85), transparent);
-  pointer-events: none;
-}
-
-.panel::after {
-  content: "";
-  position: absolute;
-  width: 180px;
-  height: 180px;
-  right: -40px;
-  top: -50px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(122, 162, 255, 0.16), transparent 68%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.75), transparent);
   pointer-events: none;
 }
 
@@ -892,10 +828,14 @@ a {
   margin-top: 8px;
   padding: 12px;
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.12)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.34);
   border: 1px solid var(--separator);
+}
+
+@media (prefers-color-scheme: dark) {
+  .action-bar {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .live-dot {
@@ -955,9 +895,9 @@ a {
 
 .admin-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 1fr);
-  gap: 18px;
-  align-items: stretch;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
+  gap: 20px;
+  align-items: center;
 }
 
 .admin-hero-copy {
@@ -969,22 +909,32 @@ a {
   min-width: 0;
 }
 
+.admin-hero-copy .panel-desc {
+  max-width: 36ch;
+}
+
 .admin-status-grid {
   position: relative;
   z-index: 1;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .admin-status-card {
-  border-radius: 20px;
+  border-radius: 18px;
   padding: 14px 15px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.45);
   border: 1px solid var(--separator);
   min-width: 0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-status-card {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
 }
 
 .admin-status-label {
@@ -1032,12 +982,16 @@ a {
 .admin-section {
   position: relative;
   z-index: 1;
-  border-radius: 24px;
+  border-radius: 22px;
   padding: 16px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.34);
   border: 1px solid var(--separator);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-section {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .admin-section-head {
@@ -1062,10 +1016,14 @@ a {
   gap: 12px;
   padding: 14px;
   border-radius: 22px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.34);
   border: 1px solid var(--separator);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-actions {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .admin-actions-hint {
@@ -1279,10 +1237,14 @@ a {
 .option-block {
   border-radius: 22px;
   padding: 14px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.06)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.3);
   border: 1px solid var(--separator);
+}
+
+@media (prefers-color-scheme: dark) {
+  .option-block {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 .option-block + .option-block {

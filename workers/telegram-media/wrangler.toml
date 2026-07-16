@@ -1,10 +1,12 @@
 # Ciallo Telegram Media — 配置全部走 CF Variables / Secrets，勿在此写密钥
 name = "ciallo-telegram-media"
 main = "src/index.ts"
-compatibility_date = "2025-07-01"
-compatibility_flags = ["nodejs_compat"]
+# 纯 Web API（fetch/FormData/Blob），不要 nodejs_compat：
+# Pages Direct Upload 往往不会带上 compat flags，带 unenv 的包可能在边缘直接挂掉（表现为 522）
+compatibility_date = "2024-11-01"
+workers_dev = true
 
-# Secrets（Dashboard → Settings → Variables and Secrets，或 wrangler secret put）：
+# Secrets（Dashboard Variables / wrangler secret put）：
 #   TELEGRAM_BOT_TOKEN   必填
 #   TELEGRAM_CHAT_ID     必填
 #   UPLOAD_TOKEN         建议

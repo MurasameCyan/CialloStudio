@@ -195,11 +195,16 @@ async function handleUpload(request: Request, env: Env, cors: Headers): Promise<
   const chatId = env.TELEGRAM_CHAT_ID.trim();
 
   // 用 document 保真（AI 图常被 sendPhoto 二次压缩）
+  // 注意：用独立 ArrayBuffer 视图，避免 SharedArrayBuffer / 偏移问题
+  const ab = payload.bytes.buffer.slice(
+    payload.bytes.byteOffset,
+    payload.bytes.byteOffset + payload.bytes.byteLength,
+  ) as ArrayBuffer;
   const form = new FormData();
   form.set("chat_id", chatId);
   form.set(
     "document",
-    new Blob([payload.bytes], { type: payload.contentType }),
+    new Blob([ab], { type: payload.contentType }),
     payload.filename,
   );
   form.set("disable_notification", "true");

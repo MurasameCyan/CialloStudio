@@ -277,9 +277,6 @@ export function StudioPage({
             <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
               停止
             </button>
-            <button type="button" className="btn btn-danger" disabled={running || jobs.length === 0} onClick={handleClear}>
-              清空
-            </button>
           </div>
           <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
             模型 {settings.model || "未选择"} →
@@ -293,13 +290,23 @@ export function StudioPage({
             <div className="panel-kicker">Gallery</div>
             <h2 className="panel-title">结果墙</h2>
           </div>
-          <div className="connection-chip">
-            <span className={`live-dot ${running ? "" : "off"}`} />
-            {running
-              ? `在飞 ${inFlight}/${draft.concurrency} · 排队 ${stats.queued}`
-              : stats.total
-                ? "空闲"
-                : "等待开始"}
+          <div className="results-toolbar-actions">
+            <div className="connection-chip">
+              <span className={`live-dot ${running ? "" : "off"}`} />
+              {running
+                ? `在飞 ${inFlight}/${draft.concurrency} · 排队 ${stats.queued}`
+                : stats.total
+                  ? "空闲"
+                  : "等待开始"}
+            </div>
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={running || jobs.length === 0}
+              onClick={handleClear}
+            >
+              清空
+            </button>
           </div>
         </div>
 

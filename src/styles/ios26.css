@@ -1374,6 +1374,14 @@ a {
   margin: 0;
 }
 
+.results-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .progress-track {
   height: 7px;
   border-radius: 999px;

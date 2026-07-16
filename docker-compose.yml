@@ -3,16 +3,30 @@ name: ciallo-studio
 services:
   ciallo-studio:
     container_name: ciallo-studio
-    image: ${CIALLO_IMAGE:-ghcr.io/murasamecyan/ciallostudio:latest}
+    # 优先本地 build；CI 推送后可改成仅 pull 镜像
+    image: ${CIALLO_IMAGE:-ghcr.io/murasamecyan/ciallostudio:beta}
     build:
       context: .
       dockerfile: Dockerfile
     ports:
       - "${CIALLO_PORT:-8080}:8080"
     environment:
-      # 上游 grok2api / OpenAI 兼容网关根地址（不要带 /v1 也行）
+      # 上游 OpenAI 兼容网关根地址（可带或不带 /v1）
+      # 例: https://grokb.yuzu.gv.uy
+      # 例: http://host.docker.internal:8000
       CIALLO_UPSTREAM: ${CIALLO_UPSTREAM:-https://grokb.yuzu.gv.uy}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped
+    init: true
+    stop_grace_period: 15s
     security_opt:
       - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    # 当 CIALLO_UPSTREAM 指向宿主机上的服务时取消注释：
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"

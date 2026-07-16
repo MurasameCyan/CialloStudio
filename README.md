@@ -12,17 +12,18 @@ iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接
 ## 快速开始（Docker Compose）
 
 ```bash
-git clone https://github.com/MurasameCyan/CialloStudio.git
+git clone -b beta https://github.com/MurasameCyan/CialloStudio.git
 cd CialloStudio
+cp .env.example .env   # 按需修改上游地址
 docker compose up -d --build
 ```
 
 浏览器打开：`http://127.0.0.1:8080`
 
 1. 进入 **管理**
-2. Base URL 保持 `/v1`（容器内反向代理到上游）
+2. Base URL 保持 `/v1`（容器内 Nginx 同源反代到上游）
 3. 填入你的 `g2a_...` API Key
-4. 点 **测试连接并拉取模型**
+4. 点 **测试连接**
 5. 回到 **生图** 开始出图
 
 ### 环境变量
@@ -31,14 +32,26 @@ docker compose up -d --build
 | --- | --- | --- |
 | `CIALLO_PORT` | `8080` | 宿主机端口 |
 | `CIALLO_UPSTREAM` | `https://grokb.yuzu.gv.uy` | 上游网关根地址（可带或不带 `/v1`） |
-| `CIALLO_IMAGE` | `ghcr.io/murasamecyan/ciallostudio:latest` | 拉取的镜像名 |
+| `CIALLO_IMAGE` | `ghcr.io/murasamecyan/ciallostudio:beta` | 镜像名（本地 build 也会打此 tag） |
+| `TZ` | `Asia/Shanghai` | 时区 |
 
 示例：
 
 ```bash
-CIALLO_UPSTREAM=https://your-grok2api.example.com \
-CIALLO_PORT=8080 \
-docker compose up -d
+# Linux / macOS
+CIALLO_UPSTREAM=https://your-grok2api.example.com CIALLO_PORT=8080 docker compose up -d --build
+
+# Windows PowerShell
+$env:CIALLO_UPSTREAM="https://your-grok2api.example.com"
+$env:CIALLO_PORT="8080"
+docker compose up -d --build
+```
+
+代理宿主机上的 grok2api：
+
+```yaml
+# docker-compose.yml 中取消 extra_hosts 注释，并设置：
+# CIALLO_UPSTREAM=http://host.docker.internal:8000
 ```
 
 ## 本地开发

@@ -1139,7 +1139,7 @@ a {
 
 .admin-hero {
   display: grid;
-  gap: 18px;
+  gap: 16px;
 }
 
 .admin-hero-top {
@@ -1147,8 +1147,80 @@ a {
   z-index: 1;
 }
 
+.admin-hero-top-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .admin-hero-top .panel-desc {
   max-width: 48ch;
+}
+
+/* 管理分区大号切换：接口设置 | 用户池 */
+.admin-section-switch {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 18px;
+  background: rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--separator);
+  box-sizing: border-box;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-section-switch {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.admin-section-switch-btn {
+  appearance: none;
+  border: 0;
+  margin: 0;
+  min-height: 44px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 15px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.admin-section-switch-btn:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.admin-section-switch-btn.active {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-section-switch-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .admin-section-switch-btn.active {
+    background: rgba(255, 255, 255, 0.14);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+}
+
+.admin-users-hint {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  max-width: none;
 }
 
 .admin-status-row {
@@ -2041,13 +2113,6 @@ a {
   margin: 6px 0 0;
   font-size: 13px;
   line-height: 1.45;
-}
-
-/* 管理页分区：接口设置 / 用户池 */
-.admin-section-tabs {
-  position: relative;
-  z-index: 1;
-  margin-top: 4px;
 }
 
 /* 用户池管理 */

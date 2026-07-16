@@ -187,24 +187,25 @@ export function SettingsPage({
   return (
     <div className="page admin-layout">
       <section className="panel admin-hero">
-        <div className="admin-hero-top">
-          <div className="panel-kicker">Admin</div>
-          <h2 className="panel-title">控制台</h2>
+        <div className="admin-hero-top admin-hero-top-row">
+          <div>
+            <div className="panel-kicker">Admin</div>
+            <h2 className="panel-title">控制台</h2>
+          </div>
           {adminGateEnabled && onLockAdmin ? (
-            <div className="btn-row" style={{ marginTop: 12 }}>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={onLockAdmin}>
-                锁定管理
-              </button>
-            </div>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onLockAdmin}>
+              锁定管理
+            </button>
           ) : null}
         </div>
 
-        <div className="admin-section-tabs segmented" role="tablist" aria-label="管理分区">
+        {/* 分区切换：独立大号 Tab，避免被缓存旧包/样式淹没 */}
+        <div className="admin-section-switch" role="tablist" aria-label="管理分区">
           <button
             type="button"
             role="tab"
             aria-selected={section === "api"}
-            className={`chip ${section === "api" ? "active" : ""}`}
+            className={`admin-section-switch-btn ${section === "api" ? "active" : ""}`}
             onClick={() => setSection("api")}
           >
             接口设置
@@ -213,7 +214,7 @@ export function SettingsPage({
             type="button"
             role="tab"
             aria-selected={section === "users"}
-            className={`chip ${section === "users" ? "active" : ""}`}
+            className={`admin-section-switch-btn ${section === "users" ? "active" : ""}`}
             onClick={() => setSection("users")}
           >
             用户池
@@ -246,7 +247,11 @@ export function SettingsPage({
               </strong>
             </div>
           </div>
-        ) : null}
+        ) : (
+          <p className="panel-desc admin-users-hint">
+            管理社区账号池。需先在「用户」页以管理员登录（Mock：admin / admin123）。
+          </p>
+        )}
       </section>
 
       {section === "users" ? (

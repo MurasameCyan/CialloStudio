@@ -33,7 +33,6 @@ type Props = {
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
   running: boolean;
-  inFlight: number;
   prompts: string[];
   plannedJobs: number;
   stats: Stats;
@@ -126,9 +125,13 @@ export function StudioPage({
     }
   }, [shareUiRevealed, shareStatus, shareRemainSec]);
 
+  const safeJobs = Array.isArray(jobs) ? jobs : [];
   const downloadableJobs = useMemo(
-    () => jobs.filter((job) => job.status === "done" && Boolean(displayUrl(job) || job.openUrl)),
-    [jobs],
+    () =>
+      safeJobs.filter(
+        (job) => job && job.status === "done" && Boolean(displayUrl(job) || job.openUrl),
+      ),
+    [safeJobs],
   );
   const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
 
@@ -488,7 +491,7 @@ export function StudioPage({
             <button
               type="button"
               className="btn btn-danger btn-sm"
-              disabled={running || jobs.length === 0}
+              disabled={running || safeJobs.length === 0}
               onClick={handleClear}
             >
               清空
@@ -498,7 +501,7 @@ export function StudioPage({
 
         {/* 进度条 / 选择栏始终占位，开始生成时只换 gallery 内容，避免整体位移 */}
         <div className="progress-track" aria-hidden>
-          <div className="progress-fill" style={{ width: `${jobs.length ? progress : 0}%` }} />
+          <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
         </div>
 
         <div className="selection-bar">
@@ -534,7 +537,7 @@ export function StudioPage({
           </div>
         </div>
 
-        {jobs.length === 0 ? (
+        {safeJobs.length === 0 ? (
           <div className="empty empty-compact gallery-empty">
             <div className="empty-icon" aria-hidden />
             <div>
@@ -544,7 +547,7 @@ export function StudioPage({
           </div>
         ) : (
           <div className="gallery">
-            {jobs.map((job) => {
+            {safeJobs.map((job) => {
               const src = displayUrl(job);
               const canSelect = job.status === "done" && Boolean(src || job.openUrl);
               const isSelected = selected.has(job.id);

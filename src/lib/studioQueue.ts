@@ -227,8 +227,11 @@ export function saveDraft(draft: StudioDraft): void {
   }
 }
 
-export function displayUrl(job: StudioJob): string | undefined {
-  if (job.imageUrl && !job.imageUrl.startsWith("blob:")) return job.imageUrl;
-  if (job.openUrl) return job.openUrl;
-  return job.imageUrl;
+export function displayUrl(job: StudioJob | null | undefined): string | undefined {
+  if (!job) return undefined;
+  if (typeof job.imageUrl === "string" && job.imageUrl && !job.imageUrl.startsWith("blob:")) {
+    return job.imageUrl;
+  }
+  if (typeof job.openUrl === "string" && job.openUrl) return job.openUrl;
+  return typeof job.imageUrl === "string" ? job.imageUrl : undefined;
 }

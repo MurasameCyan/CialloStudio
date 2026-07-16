@@ -45,13 +45,22 @@ export class ErrorBoundary extends Component<Props, State> {
                 onClick={() => {
                   try {
                     localStorage.removeItem("ciallo-studio.settings.v1");
+                    localStorage.removeItem("ciallo-studio.jobs.v1");
+                    localStorage.removeItem("ciallo-studio.draft.v1");
                   } catch {
                     // ignore
                   }
                   window.location.reload();
                 }}
               >
-                清除设置并刷新
+                清除缓存并刷新
+              </button>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => window.location.reload()}
+              >
+                刷新页面
               </button>
             </div>
           </section>

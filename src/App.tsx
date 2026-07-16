@@ -114,25 +114,26 @@ export default function App() {
 
       <main className="app-main">
         {tab === "studio" ? (
-          <StudioPage
-            settings={settings}
-            onOpenSettings={openSettings}
-            onNeedLogin={openHallAuth}
-            isLoggedIn={isLoggedIn}
-            onSharedToHall={() => setTab("hall")}
-            draft={queue.draft}
-            setDraft={queue.setDraft}
-            jobs={queue.jobs}
-            running={queue.running}
-            inFlight={queue.inFlight}
-            prompts={queue.prompts}
-            plannedJobs={queue.plannedJobs}
-            stats={queue.stats}
-            progress={queue.progress}
-            onStart={queue.start}
-            onStop={queue.stop}
-            onClear={queue.clear}
-          />
+          <ErrorBoundary label="生图页">
+            <StudioPage
+              settings={settings}
+              onOpenSettings={openSettings}
+              onNeedLogin={openHallAuth}
+              isLoggedIn={isLoggedIn}
+              onSharedToHall={() => setTab("hall")}
+              draft={queue.draft}
+              setDraft={queue.setDraft}
+              jobs={queue.jobs}
+              running={queue.running}
+              prompts={queue.prompts}
+              plannedJobs={queue.plannedJobs}
+              stats={queue.stats}
+              progress={queue.progress}
+              onStart={queue.start}
+              onStop={queue.stop}
+              onClear={queue.clear}
+            />
+          </ErrorBoundary>
         ) : tab === "hall" ? (
           <HallPage
             user={community.user}

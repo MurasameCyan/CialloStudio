@@ -655,6 +655,12 @@ a {
   letter-spacing: -0.03em;
 }
 
+.kpi-value-sep {
+  margin: 0 0.2em;
+  opacity: 0.45;
+  font-weight: 600;
+}
+
 .kpi {
   position: relative;
   overflow: hidden;

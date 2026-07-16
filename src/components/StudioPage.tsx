@@ -506,17 +506,15 @@ export function StudioPage({
               <div className="kpi">
                 <div className="kpi-label">在飞 / 排队</div>
                 <div className="kpi-value">
-                  {running ? inFlight : stats.running}/{stats.queued}
+                  {running ? inFlight : stats.running}/{effectiveConcurrency || draft.concurrency}
+                  <span className="kpi-value-sep">·</span>
+                  {stats.queued}
                 </div>
               </div>
             </div>
-            <div className="connection-chip">
+            <div className="connection-chip" title={running ? "生成中" : stats.total ? "空闲" : "等待开始"}>
               <span className={`live-dot ${running ? "" : "off"}`} />
-              {running
-                ? `在飞 ${inFlight}/${effectiveConcurrency} · 排队 ${stats.queued}`
-                : stats.total
-                  ? "空闲"
-                  : "等待开始"}
+              {running ? "生成中" : stats.total ? "空闲" : "等待开始"}
             </div>
             <button
               type="button"

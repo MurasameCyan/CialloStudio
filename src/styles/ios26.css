@@ -1717,11 +1717,11 @@ a {
   box-sizing: border-box;
 }
 
-/* 第一行：数量 | 并发 | 分辨率，列间距 15px */
+/* 第一行：数量 | 并发 | 分辨率，列间距 10px */
 .studio-params-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
-  column-gap: 15px;
+  column-gap: 10px;
   row-gap: 0;
   align-items: start;
   width: 100%;

@@ -13,6 +13,7 @@ dist-ssr/
 workers/**/.dev.vars
 workers/**/.wrangler/
 releases/_pack_*/
+releases/_cf_dashboard_worker/
 
 # Editor / OS
 .DS_Store

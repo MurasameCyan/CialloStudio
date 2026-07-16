@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
-    "pack:media-worker": "node scripts/pack-media-worker.mjs"
+    "pack:media-worker": "node scripts/pack-media-worker.mjs",
+    "pack:media-worker:dashboard": "node scripts/pack-media-worker-dashboard.mjs"
   },
   "dependencies": {
     "react": "^19.1.0",

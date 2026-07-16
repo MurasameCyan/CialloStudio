@@ -24,6 +24,27 @@ GET  /healthz
 
 ---
 
+## 方式 0：Dashboard 上传预构建 zip（网页无法接受 wrangler 项目时）
+
+使用仓库产物：
+
+```text
+releases/ciallo-telegram-media-dashboard.zip
+```
+
+- 内含：`worker.js` + `README.txt`（**无 wrangler.toml**）
+- Cloudflare 网页上传不会再提示「请用 wrangler deploy」
+- 上传后在 **Settings → Variables and Secrets** 配置下表变量并 Deploy
+
+本地重新生成：
+
+```bash
+# 在仓库根目录
+npm run pack:media-worker:dashboard
+```
+
+---
+
 ## 方式 A：Wrangler（推荐）
 
 ### 1. 解压

@@ -45,7 +45,27 @@ Telegram 群/频道（file_id）
 
 ---
 
-## 1. 安装与登录 Cloudflare
+## 1. 两种部署方式
+
+### 方式 A：Dashboard 直接上传 zip（无需本机构建）
+
+包路径：
+
+```text
+releases/ciallo-telegram-media-dashboard.zip
+```
+
+内含 **预构建 `worker.js`**，**没有** `wrangler.toml`，避免 CF 提示「请用 wrangler deploy」。
+
+1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → **Create Worker**（可先留 Hello World）
+2. 打开该 Worker → **Edit code** 或版本部署里的 **Upload** / 拖拽上传  
+   上传 **`ciallo-telegram-media-dashboard.zip`**
+3. **Settings → Variables and Secrets** 添加下表变量后 **Deploy**
+4. 复制 `*.workers.dev` 地址到 Studio「Media Base URL」
+
+> 若界面只有「连接 Git / wrangler」且无法上传 zip，请用下面方式 B。
+
+### 方式 B：本机 Wrangler
 
 本机需 Node 18+ 与 npm。
 
@@ -57,9 +77,12 @@ npx wrangler login
 
 浏览器完成 Cloudflare 授权。
 
+重新打 Dashboard 包：`npm run pack:media-worker:dashboard`  
+重新打源码包：`npm run pack:media-worker`
+
 ---
 
-## 2. 写入 Secrets（不要写进 wrangler.toml）
+## 2. 写入 Secrets（不要写进仓库；Dashboard 或 wrangler 均可）
 
 在 `workers/telegram-media` 目录执行：
 

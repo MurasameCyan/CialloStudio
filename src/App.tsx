@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
+import { useStudioQueue } from "@/hooks/useStudioQueue";
 import { log } from "@/lib/logger";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
 
@@ -19,6 +20,8 @@ export default function App() {
     return initial;
   });
 
+  // 队列挂在 App 层：切到管理页也不会丢任务/结果，生成可继续跑
+  const queue = useStudioQueue(settings);
   const ready = Boolean(settings.apiKey.trim());
 
   return (
@@ -34,7 +37,7 @@ export default function App() {
         <div className="header-right">
           <div className="connection-chip" title={ready ? "API Key 已配置" : "尚未配置 API Key"}>
             <span className={`live-dot ${ready ? "" : "off"}`} />
-            {ready ? "Ready" : "Setup"}
+            {queue.running ? `生成中 ${queue.stats.active}` : ready ? "Ready" : "Setup"}
           </div>
           <nav className="nav-pills" aria-label="主导航">
             <button
@@ -57,7 +60,21 @@ export default function App() {
 
       <main className="app-main">
         {tab === "studio" ? (
-          <StudioPage settings={settings} onOpenSettings={() => setTab("settings")} />
+          <StudioPage
+            settings={settings}
+            onOpenSettings={() => setTab("settings")}
+            draft={queue.draft}
+            setDraft={queue.setDraft}
+            jobs={queue.jobs}
+            running={queue.running}
+            prompts={queue.prompts}
+            plannedJobs={queue.plannedJobs}
+            stats={queue.stats}
+            progress={queue.progress}
+            onStart={queue.start}
+            onStop={queue.stop}
+            onClear={queue.clear}
+          />
         ) : (
           <SettingsPage settings={settings} onChange={setSettings} />
         )}

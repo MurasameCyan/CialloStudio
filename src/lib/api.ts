@@ -426,22 +426,26 @@ export async function generateImage(input: {
     if (typeof item.url === "string" && item.url.trim()) {
       const rewritten = rewriteMediaUrl(item.url, input.baseUrl);
       log("info", "生图返回 URL", { raw: item.url, rewritten });
-      // 优先物化为 blob，避免 <img> 直接请求内网/跨域地址
+      // 默认使用可持久化的同源/上游 URL，便于切换页面与刷新后仍能显示
+      // 仅当 rewritten 仍是内网地址时，才退化为 blob
       let displayUrl = rewritten;
-      try {
-        displayUrl = await materializeImageUrl({
-          rawUrl: item.url,
-          baseUrl: input.baseUrl,
-          apiKey: input.apiKey,
-          signal: input.signal,
-        });
-      } catch (error) {
-        log("warn", "blob 化失败，回退 rewritten URL", error);
-        displayUrl = rewritten;
+      const stillLoopback = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rewritten);
+      if (stillLoopback) {
+        try {
+          displayUrl = await materializeImageUrl({
+            rawUrl: item.url,
+            baseUrl: input.baseUrl,
+            apiKey: input.apiKey,
+            signal: input.signal,
+          });
+        } catch (error) {
+          log("warn", "blob 化失败，回退 rewritten URL", error);
+          displayUrl = rewritten;
+        }
       }
       images.push({
         url: displayUrl,
-        openUrl: rewritten,
+        openUrl: rewritten.startsWith("blob:") ? undefined : rewritten,
         revised_prompt: typeof item.revised_prompt === "string" ? item.revised_prompt : undefined,
         mime_type: typeof item.mime_type === "string" ? item.mime_type : undefined,
       });

@@ -3,11 +3,9 @@ name: ciallo-studio
 services:
   ciallo-studio:
     container_name: ciallo-studio
-    # 优先本地 build；CI 推送后可改成仅 pull 镜像
+    # 仅使用预构建镜像（GHCR / 本地 tag），不在 compose 里 build
     image: ${CIALLO_IMAGE:-ghcr.io/murasamecyan/ciallostudio:beta}
-    build:
-      context: .
-      dockerfile: Dockerfile
+    pull_policy: ${CIALLO_PULL_POLICY:-always}
     ports:
       - "${CIALLO_PORT:-8080}:8080"
     environment:
@@ -15,6 +13,8 @@ services:
       # 例: https://your-grok2api.example.com
       # 例: http://host.docker.internal:8000
       CIALLO_UPSTREAM: ${CIALLO_UPSTREAM:-https://your-grok2api.example.com}
+      # 管理页解锁密码（写在 .env，勿提交仓库）。留空 = 不设门禁
+      CIALLO_ADMIN_PASSWORD: ${CIALLO_ADMIN_PASSWORD:-}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped
     init: true

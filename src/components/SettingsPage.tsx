@@ -16,9 +16,12 @@ import {
 type Props = {
   settings: StudioSettings;
   onChange: (next: StudioSettings) => void;
+  /** Docker 部署时若设置了 CIALLO_ADMIN_PASSWORD */
+  adminGateEnabled?: boolean;
+  onLockAdmin?: () => void;
 };
 
-export function SettingsPage({ settings, onChange }: Props) {
+export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin }: Props) {
   const [draft, setDraft] = useState<StudioSettings>(settings);
   const [models, setModels] = useState<OpenAIModel[]>([]);
   const [busy, setBusy] = useState(false);
@@ -139,6 +142,13 @@ export function SettingsPage({ settings, onChange }: Props) {
           <div className="panel-kicker">Admin</div>
           <h2 className="panel-title">控制台</h2>
           <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
+          {adminGateEnabled && onLockAdmin ? (
+            <div className="btn-row" style={{ marginTop: 12 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onLockAdmin}>
+                锁定管理
+              </button>
+            </div>
+          ) : null}
         </div>
 
         <div className="admin-status-row">

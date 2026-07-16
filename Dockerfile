@@ -27,6 +27,7 @@ RUN chmod +x /entrypoint.sh \
 COPY --from=frontend-builder /src/dist /usr/share/nginx/html
 
 ENV CIALLO_UPSTREAM=https://your-grok2api.example.com \
+    CIALLO_ADMIN_PASSWORD= \
     TZ=Asia/Shanghai
 
 EXPOSE 8080

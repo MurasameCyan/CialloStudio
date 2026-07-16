@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { AdminUnlock } from "@/components/AdminUnlock";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
 import { useStudioQueue } from "@/hooks/useStudioQueue";
 import { log } from "@/lib/logger";
+import { isAdminGateEnabled, isAdminUnlocked, lockAdmin } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
 
 type Tab = "studio" | "settings";
@@ -15,14 +17,42 @@ export default function App() {
       baseUrl: initial.baseUrl,
       model: initial.model,
       hasKey: Boolean(initial.apiKey.trim()),
+      adminGate: isAdminGateEnabled(),
       page: typeof window !== "undefined" ? window.location.href : "",
     });
     return initial;
   });
+  const [adminUnlocked, setAdminUnlocked] = useState(() => isAdminUnlocked());
 
   // 队列挂在 App 层：切到管理页也不会丢任务/结果，生成可继续跑
   const queue = useStudioQueue(settings);
   const ready = Boolean(settings.apiKey.trim());
+  const gateOn = isAdminGateEnabled();
+
+  function openSettings() {
+    if (gateOn && !isAdminUnlocked()) {
+      setAdminUnlocked(false);
+      setTab("settings");
+      return;
+    }
+    setAdminUnlocked(true);
+    setTab("settings");
+  }
+
+  function handleUnlocked() {
+    setAdminUnlocked(true);
+    setTab("settings");
+    log("ok", "管理页已解锁（会话内有效）");
+  }
+
+  function handleLockAdmin() {
+    lockAdmin();
+    setAdminUnlocked(false);
+    setTab("studio");
+    log("info", "已锁定管理页");
+  }
+
+  const showUnlock = tab === "settings" && gateOn && !adminUnlocked;
 
   return (
     <div className="app-shell">
@@ -53,10 +83,10 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`nav-pill ${tab === "settings" ? "active" : ""}`}
-              onClick={() => setTab("settings")}
+              className={`nav-pill ${tab === "settings" || showUnlock ? "active" : ""}`}
+              onClick={openSettings}
             >
-              管理
+              管理{gateOn && !adminUnlocked ? " 🔒" : ""}
             </button>
           </nav>
         </div>
@@ -66,7 +96,7 @@ export default function App() {
         {tab === "studio" ? (
           <StudioPage
             settings={settings}
-            onOpenSettings={() => setTab("settings")}
+            onOpenSettings={openSettings}
             draft={queue.draft}
             setDraft={queue.setDraft}
             jobs={queue.jobs}
@@ -80,8 +110,15 @@ export default function App() {
             onStop={queue.stop}
             onClear={queue.clear}
           />
+        ) : showUnlock ? (
+          <AdminUnlock onUnlocked={handleUnlocked} onCancel={() => setTab("studio")} />
         ) : (
-          <SettingsPage settings={settings} onChange={setSettings} />
+          <SettingsPage
+            settings={settings}
+            onChange={setSettings}
+            adminGateEnabled={gateOn}
+            onLockAdmin={gateOn ? handleLockAdmin : undefined}
+          />
         )}
       </main>
     </div>

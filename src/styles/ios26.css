@@ -467,6 +467,16 @@ a {
   resize: vertical;
   line-height: 1.6;
   font-size: 15px;
+  /* 隐藏上下滚动条（仍可用滚轮/触控滚动） */
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome / Safari */
 }
 
 .row {

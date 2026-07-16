@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { LogPanel } from "@/components/LogPanel";
 import { ApiError, listModels, resolveBrowserApiBase, type OpenAIModel } from "@/lib/api";
 import { log } from "@/lib/logger";
 import {
@@ -136,7 +137,7 @@ export function SettingsPage({ settings, onChange }: Props) {
           <div className="field-hint">
             推荐填 <span className="mono">/v1</span>（同源代理，可避开 CORS）。
             若填完整域名，前端也会自动改走 <span className="mono">/v1</span>。
-            页面底部有运行日志，失败时请看红色条目。
+            本页下方有运行日志（生图页不显示）。
           </div>
         </div>
 
@@ -265,6 +266,8 @@ export function SettingsPage({ settings, onChange }: Props) {
           <span className="mono">grok-imagine-image</span>。
         </p>
       </section>
+
+      <LogPanel />
     </div>
   );
 }

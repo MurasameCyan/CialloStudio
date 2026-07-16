@@ -521,69 +521,20 @@ a {
   line-height: 1.4;
 }
 
-.log-dock {
-  position: sticky;
-  bottom: 0;
-  z-index: 40;
-  border-radius: var(--radius-xl);
-  background: var(--bg-elevated);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  box-shadow: var(--shadow);
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  overflow: hidden;
-}
-
-.log-dock-bar {
+.log-panel-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 10px 12px;
-}
-
-.log-dock-summary {
-  min-width: 0;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 12px;
-  font-size: 13px;
-}
-
-.log-dock-count {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.log-dock-latest {
-  min-width: 0;
-  max-width: min(560px, 55vw);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.log-dock-latest.log-error {
-  color: var(--danger);
-}
-
-.log-dock-latest.log-ok {
-  color: #1f8f45;
-}
-
-.log-dock-latest.log-warn {
-  color: var(--warning);
+  margin-bottom: 12px;
 }
 
 .log-list {
   display: grid;
   gap: 8px;
-  max-height: min(36vh, 320px);
+  max-height: min(48vh, 420px);
   overflow: auto;
-  padding: 0 12px 12px;
+  padding-right: 4px;
 }
 
 .log-item {

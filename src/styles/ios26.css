@@ -1460,12 +1460,23 @@ a {
   gap: 10px;
 }
 
-.option-block-append {
-  padding-top: 12px;
-  padding-bottom: 12px;
+/* 开始生成 + 追加到图片墙 合并卡片（在选项区顶部） */
+.option-block-actions {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+  padding-bottom: 14px;
 }
 
-.option-block-append .append-toggle {
+.option-block-actions .action-bar-compact {
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.option-block-actions .append-toggle {
   width: 100%;
   justify-content: flex-start;
   box-sizing: border-box;

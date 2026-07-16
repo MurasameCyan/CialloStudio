@@ -221,7 +221,25 @@ export function StudioPage({
         </div>
 
         <div className="studio-options">
-          <div className="option-block option-block-append">
+          <div className="option-block option-block-actions">
+            <div className="action-bar action-bar-compact">
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={running || prompts.length === 0}
+                  onClick={handleGenerate}
+                >
+                  {running ? "生成中…" : `开始生成 · ${plannedJobs}`}
+                </button>
+                <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
+                  停止
+                </button>
+              </div>
+              <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
+                模型 {settings.model || "未选择"} →
+              </button>
+            </div>
             <label className="append-toggle" title="关闭后，每次生成只保留本次结果">
               <input
                 type="checkbox"
@@ -324,25 +342,6 @@ export function StudioPage({
               </div>
             </div>
           </div>
-        </div>
-
-        <div className="action-bar">
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn btn-primary"
-              disabled={running || prompts.length === 0}
-              onClick={handleGenerate}
-            >
-              {running ? "生成中…" : `开始生成 · ${plannedJobs}`}
-            </button>
-            <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
-              停止
-            </button>
-          </div>
-          <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
-            模型 {settings.model || "未选择"} →
-          </button>
         </div>
       </section>
 

@@ -134,17 +134,27 @@ export function saveJobs(jobs: StudioJob[]): void {
 export function loadDraft(defaults: StudioDraft): StudioDraft {
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return { ...defaults };
+    if (!raw) {
+      return {
+        ...defaults,
+        variants: clampVariants(defaults.variants),
+        concurrency: clampConcurrency(defaults.concurrency),
+      };
+    }
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
     return {
       promptText: typeof parsed.promptText === "string" ? parsed.promptText : defaults.promptText,
       aspectRatio: typeof parsed.aspectRatio === "string" ? parsed.aspectRatio : defaults.aspectRatio,
       resolution: typeof parsed.resolution === "string" ? parsed.resolution : defaults.resolution,
-      variants: clampVariants(parsed.variants ?? defaults.variants),
-      concurrency: clampConcurrency(parsed.concurrency ?? defaults.concurrency),
+      variants: clampVariants(Number(parsed.variants ?? defaults.variants)),
+      concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
     };
   } catch {
-    return { ...defaults };
+    return {
+      ...defaults,
+      variants: clampVariants(defaults.variants),
+      concurrency: clampConcurrency(defaults.concurrency),
+    };
   }
 }
 

@@ -35,7 +35,8 @@ function readRuntime(): CialloRuntime {
     typeof raw?.mediaUploadToken === "string" ? raw.mediaUploadToken.trim() : "";
   const modeRaw =
     typeof raw?.communityMode === "string" ? raw.communityMode.trim().toLowerCase() : "";
-  const communityMode: "mock" | "http" = modeRaw === "http" ? "http" : "mock";
+  // 默认 http；仅显式 mock 走浏览器 localStorage
+  const communityMode: "mock" | "http" = modeRaw === "mock" ? "mock" : "http";
   const communityApiBase =
     typeof raw?.communityApiBase === "string" && raw.communityApiBase.trim()
       ? raw.communityApiBase.trim()
@@ -50,7 +51,7 @@ function readRuntime(): CialloRuntime {
   };
 }
 
-/** Docker 注入的社区模式（未注入时默认 mock，便于本地 dev） */
+/** env / runtime-config 注入的社区模式（默认 http） */
 export function getRuntimeCommunityMode(): "mock" | "http" {
   return readRuntime().communityMode;
 }

@@ -72,21 +72,35 @@ window.__CIALLO_RUNTIME__ = {
 };
 EOF
 
-# 启动社区 API（用户/帖子写到 volume）
+# 启动社区 API（用户/帖子写到 volume）+ /v1 代理（SSRF 防护 + 自定义公网上游）
 export CIALLO_DATA_DIR="${CIALLO_DATA_DIR:-/data}"
 export CIALLO_COMMUNITY_PORT="${CIALLO_COMMUNITY_PORT:-8090}"
+export CIALLO_V1_PROXY_PORT="${CIALLO_V1_PROXY_PORT:-8091}"
 export CIALLO_MASTER_USERNAME="${CIALLO_MASTER_USERNAME:-admin}"
 export CIALLO_MASTER_PASSWORD="${CIALLO_MASTER_PASSWORD:-}"
+# 透传上游白名单 / 调试开关给 v1-proxy（compose/.env 注入）
+export CIALLO_UPSTREAM_ALLOWLIST="${CIALLO_UPSTREAM_ALLOWLIST:-}"
+export CIALLO_DEBUG_UPSTREAM="${CIALLO_DEBUG_UPSTREAM:-1}"
+if [ -n "$CIALLO_UPSTREAM_ALLOWLIST" ]; then
+  echo "[ciallo] upstream allowlist: ${CIALLO_UPSTREAM_ALLOWLIST}"
+else
+  echo "[ciallo] upstream allowlist: (empty — public http(s) only)"
+fi
 mkdir -p "$CIALLO_DATA_DIR"
 node /opt/ciallo/community-api.mjs &
 COMMUNITY_PID=$!
 echo "[ciallo] community-api pid=${COMMUNITY_PID}"
 
-# 等社区 API 就绪再开 nginx
+node /opt/ciallo/v1-proxy.mjs &
+V1_PROXY_PID=$!
+echo "[ciallo] v1-proxy pid=${V1_PROXY_PID} port=${CIALLO_V1_PROXY_PORT}"
+
+# 等内部服务就绪再开 nginx
 i=0
 while [ "$i" -lt 30 ]; do
-  if curl -fsS "http://127.0.0.1:${CIALLO_COMMUNITY_PORT}/healthz" >/dev/null 2>&1; then
-    echo "[ciallo] community-api ready"
+  if curl -fsS "http://127.0.0.1:${CIALLO_COMMUNITY_PORT}/healthz" >/dev/null 2>&1 \
+    && curl -fsS "http://127.0.0.1:${CIALLO_V1_PROXY_PORT}/healthz" >/dev/null 2>&1; then
+    echo "[ciallo] community-api + v1-proxy ready"
     break
   fi
   i=$((i + 1))
@@ -96,7 +110,9 @@ done
 cleanup() {
   echo "[ciallo] shutting down…"
   kill "$COMMUNITY_PID" 2>/dev/null || true
+  kill "$V1_PROXY_PID" 2>/dev/null || true
   wait "$COMMUNITY_PID" 2>/dev/null || true
+  wait "$V1_PROXY_PID" 2>/dev/null || true
 }
 trap cleanup EXIT INT TERM
 

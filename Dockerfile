@@ -25,6 +25,8 @@ RUN apk add --no-cache gettext curl nodejs \
 COPY nginx.conf /etc/nginx/nginx.conf.template
 COPY docker/entrypoint.sh /entrypoint.sh
 COPY server/community-api.mjs /opt/ciallo/community-api.mjs
+COPY server/upstream-guard.mjs /opt/ciallo/upstream-guard.mjs
+COPY server/v1-proxy.mjs /opt/ciallo/v1-proxy.mjs
 RUN chmod +x /entrypoint.sh \
   && sed -i 's/\r$//' /entrypoint.sh
 

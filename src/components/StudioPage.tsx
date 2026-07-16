@@ -318,26 +318,32 @@ export function StudioPage({
           </div>
         </div>
 
-        {/* 默认不显示；点过分享后才出现成功/失败/冷却倒计时 */}
+        {/* 轻量反馈：玻璃胶囊条，与 connection-chip / stat-pill 同系 */}
         {shareUiRevealed && shareCooldownLocked ? (
-          <div className="status err share-cooldown-status" role="status" style={{ marginBottom: 14 }}>
-            分享冷却中：还剩 {shareRemainSec} 秒
+          <div className="studio-feedback studio-feedback-warn" role="status">
+            <span className="studio-feedback-dot warn" aria-hidden />
+            <span className="studio-feedback-text">
+              分享冷却中 · 还剩 <strong>{shareRemainSec}</strong> 秒
+            </span>
           </div>
         ) : shareNotice ? (
           <div
-            className={`status ${shareNotice.ok ? "ok" : "err"}`}
+            className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
             role="status"
-            style={{ marginBottom: 14 }}
           >
-            {shareNotice.text}
+            <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
+            <span className="studio-feedback-text">{shareNotice.text}</span>
           </div>
         ) : null}
 
         {!configured ? (
-          <div className="status err" style={{ marginBottom: 14 }}>
-            {isLoggedIn
-              ? "还没有 API Key。请到「设置」页填写接口与密钥。"
-              : "还没有 API Key。请先登录，再到「设置」页填写接口与密钥。"}
+          <div className="studio-feedback studio-feedback-muted" role="status">
+            <span className="studio-feedback-dot muted" aria-hidden />
+            <span className="studio-feedback-text">
+              {isLoggedIn
+                ? "尚未配置 API Key · 请到「设置」填写接口与密钥"
+                : "尚未配置 API Key · 请先登录，再到「设置」填写"}
+            </span>
           </div>
         ) : null}
 

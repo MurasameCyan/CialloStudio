@@ -1,8 +1,9 @@
 /**
  * 社区 API 客户端。
- * - 本地 dev 默认 mock（浏览器 localStorage）
- * - Docker：runtime-config 注入 communityMode=http，数据落在容器 volume /data
- * - 可手动 localStorage 覆盖：ciallo-studio.community.mode = "http" | "mock"
+ * - 模式仅由 env / runtime-config 决定（CIALLO_COMMUNITY_MODE，默认 http）
+ * - 不再提供 UI / localStorage 切换
+ * - mock：浏览器 localStorage（仅 CIALLO_COMMUNITY_MODE=mock）
+ * - http：/api/community → Docker 或本机 community-api（/data volume）
  */
 import {
   getRuntimeCommunityApiBase,
@@ -26,21 +27,20 @@ import type {
 } from "./types";
 
 const TOKEN_KEY = "ciallo-studio.community.token.v1";
-const MODE_KEY = "ciallo-studio.community.mode"; // "mock" | "http"
+/** 旧版 UI 切换写入的 key，读取时清掉，避免卡在 mock */
+const LEGACY_MODE_KEY = "ciallo-studio.community.mode";
 const BASE_KEY = "ciallo-studio.community.apiBase"; // e.g. /api/community
 
 export function getCommunityMode(): "mock" | "http" {
   try {
-    const override = localStorage.getItem(MODE_KEY);
-    if (override === "http" || override === "mock") return override;
+    // 清除历史 Mock/HTTP 切换残留
+    if (localStorage.getItem(LEGACY_MODE_KEY) != null) {
+      localStorage.removeItem(LEGACY_MODE_KEY);
+    }
   } catch {
     // ignore
   }
   return getRuntimeCommunityMode();
-}
-
-export function setCommunityMode(mode: "mock" | "http"): void {
-  localStorage.setItem(MODE_KEY, mode);
 }
 
 export function getCommunityApiBase(): string {

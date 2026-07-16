@@ -13,6 +13,10 @@ services:
       CIALLO_MASTER_PASSWORD: ${CIALLO_MASTER_PASSWORD:-}
       CIALLO_MEDIA_BASE: ${CIALLO_MEDIA_BASE:-}
       CIALLO_MEDIA_UPLOAD_TOKEN: ${CIALLO_MEDIA_UPLOAD_TOKEN:-}
+      # 上游白名单：本机/内网 API（逗号分隔 origin 或 host）
+      CIALLO_UPSTREAM_ALLOWLIST: ${CIALLO_UPSTREAM_ALLOWLIST:-}
+      # GET /debug/upstream?url= 校验上游（1=开，0=关）
+      CIALLO_DEBUG_UPSTREAM: ${CIALLO_DEBUG_UPSTREAM:-1}
       # 社区数据持久化目录（容器内）；volume 挂到宿主机
       CIALLO_DATA_DIR: /data
       CIALLO_COMMUNITY_MODE: ${CIALLO_COMMUNITY_MODE:-http}

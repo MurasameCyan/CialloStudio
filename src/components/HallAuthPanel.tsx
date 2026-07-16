@@ -1,5 +1,4 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { getCommunityMode, setCommunityMode } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
 
 type Props = {
@@ -31,7 +30,6 @@ export function HallAuthPanel({
   const [message, setMessage] = useState("");
   const [ok, setOk] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
-  const [apiMode, setApiMode] = useState(getCommunityMode());
 
   useEffect(() => {
     if (forceAuth && !user) {
@@ -63,13 +61,6 @@ export function HallAuthPanel({
     } finally {
       setBusy(false);
     }
-  }
-
-  function switchApiMode(next: "mock" | "http") {
-    setCommunityMode(next);
-    setApiMode(next);
-    setMessage(`社区 API 模式：${next === "mock" ? "Mock 本地" : "HTTP（需后端）"}。请刷新或重新登录。`);
-    setOk(true);
   }
 
   if (loading) {
@@ -188,28 +179,6 @@ export function HallAuthPanel({
               {busy ? "提交中…" : mode === "login" ? "登录" : "注册"}
             </button>
           </form>
-
-          <div className="hall-auth-api">
-            <div className="footer-note" style={{ marginBottom: 8 }}>
-              社区 API 模式
-            </div>
-            <div className="segmented">
-              <button
-                type="button"
-                className={`chip ${apiMode === "mock" ? "active" : ""}`}
-                onClick={() => switchApiMode("mock")}
-              >
-                Mock
-              </button>
-              <button
-                type="button"
-                className={`chip ${apiMode === "http" ? "active" : ""}`}
-                onClick={() => switchApiMode("http")}
-              >
-                HTTP
-              </button>
-            </div>
-          </div>
         </div>
       ) : null}
     </section>

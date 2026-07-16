@@ -36,6 +36,7 @@ docker-compose.override.yml
 
 # Local community API test data
 .tmp-data/
+.data/
 
 uploads/
 

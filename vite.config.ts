@@ -4,6 +4,11 @@ import { fileURLToPath, URL } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import http from "node:http";
 import https from "node:https";
+import {
+  debugValidateUpstream,
+  readUpstreamRawFromRequest,
+  validateUpstreamOrigin,
+} from "./server/upstream-guard.mjs";
 
 /** hop-by-hop / 浏览器残留，转发到 Cloudflare 源站时容易把长 POST 搞坏 */
 const HOP_BY_HOP = new Set([
@@ -20,8 +25,8 @@ const HOP_BY_HOP = new Set([
 ]);
 
 /**
- * 开发态：同源 /v1 → 按请求头 X-Ciallo-Upstream 转发（与 Docker nginx 行为对齐）。
- * 管理页配置的 Base URL 决定上游，不写死在 .env。
+ * 开发态：同源 /v1 → 按请求头 X-Ciallo-Upstream 转发（与 Docker 行为对齐）。
+ * 管理页配置的 Base URL 决定上游；服务端校验拦截私网/SSRF。
  */
 function cialloV1ProxyPlugin(): Plugin {
   return {
@@ -29,6 +34,34 @@ function cialloV1ProxyPlugin(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const url = req.url || "";
+        const pathOnly = url.split("?")[0] || "";
+
+        // 调试：GET /debug/upstream?url= 或 /api/upstream-check?url=
+        if (pathOnly === "/debug/upstream" || pathOnly === "/api/upstream-check") {
+          void (async () => {
+            let probe = "";
+            try {
+              const u = new URL(url, "http://127.0.0.1");
+              probe = u.searchParams.get("url") || u.searchParams.get("upstream") || "";
+            } catch {
+              probe = "";
+            }
+            if (!probe) {
+              probe = readUpstreamRawFromRequest(req as IncomingMessage);
+            }
+            const detail = await debugValidateUpstream(probe);
+            res.statusCode = 200;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ service: "ciallo-vite-proxy", ...detail }, null, 2));
+          })().catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            res.statusCode = 500;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ error: { message, code: "debug_failed" } }));
+          });
+          return;
+        }
+
         if (!url.startsWith("/v1")) {
           next();
           return;
@@ -54,29 +87,6 @@ function cialloV1ProxyPlugin(): Plugin {
   };
 }
 
-function readUpstreamFromRequest(req: IncomingMessage): string {
-  const raw = req.headers["x-ciallo-upstream"];
-  const header = Array.isArray(raw) ? raw[0] : raw;
-  if (header && /^https?:\/\//i.test(header)) {
-    try {
-      return new URL(header).origin;
-    } catch {
-      // fall through
-    }
-  }
-  const cookie = req.headers.cookie || "";
-  const m = cookie.match(/(?:^|;\s*)ciallo_upstream=([^;]+)/);
-  if (m?.[1]) {
-    try {
-      const decoded = decodeURIComponent(m[1]);
-      if (/^https?:\/\//i.test(decoded)) return new URL(decoded).origin;
-    } catch {
-      // ignore
-    }
-  }
-  return "";
-}
-
 function pickForwardHeaders(req: IncomingMessage, targetHost: string): Record<string, string> {
   const out: Record<string, string> = {
     host: targetHost,
@@ -98,7 +108,6 @@ function pickForwardHeaders(req: IncomingMessage, targetHost: string): Record<st
     else if (Array.isArray(v) && v[0]) out[key] = v[0];
   }
 
-  // 其余自定义头（排除 hop-by-hop）
   for (const [key, value] of Object.entries(req.headers)) {
     const lower = key.toLowerCase();
     if (HOP_BY_HOP.has(lower)) continue;
@@ -112,33 +121,37 @@ function pickForwardHeaders(req: IncomingMessage, targetHost: string): Record<st
   return out;
 }
 
-function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const origin = readUpstreamFromRequest(req);
-    if (!origin) {
-      res.statusCode = 400;
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.end(
-        JSON.stringify({
-          error: {
-            message: "缺少上游。请在管理页填写 API Base URL 并测试连接一次。",
-            code: "missing_upstream_header",
-          },
-        }),
-      );
-      resolve();
-      return;
-    }
+async function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  const raw = readUpstreamRawFromRequest(req);
+  const checked = await validateUpstreamOrigin(raw);
+  if (!checked.ok) {
+    const status = checked.code === "missing_upstream" ? 400 : 403;
+    res.statusCode = status;
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.end(
+      JSON.stringify({
+        error: {
+          message:
+            checked.message ||
+            "上游被拒绝。请使用公网 http(s) API 地址，不要填内网/本机/metadata。",
+          code: checked.code || "upstream_blocked",
+        },
+      }),
+    );
+    return;
+  }
 
-    const path = req.url || "/v1/";
-    const targetUrl = new URL(path, origin.endsWith("/") ? origin : `${origin}/`);
-    const lib = targetUrl.protocol === "https:" ? https : http;
-    const started = Date.now();
+  const origin = checked.origin;
+  const path = req.url || "/v1/";
+  const targetUrl = new URL(path, origin.endsWith("/") ? origin : `${origin}/`);
+  const lib = targetUrl.protocol === "https:" ? https : http;
+  const started = Date.now();
 
-    console.log(`[ciallo] proxy ${req.method} ${path} → ${targetUrl.origin}`);
+  console.log(`[ciallo] proxy ${req.method} ${path} → ${targetUrl.origin}`);
 
-    const headers = pickForwardHeaders(req, targetUrl.host);
+  const headers = pickForwardHeaders(req, targetUrl.host);
 
+  await new Promise<void>((resolve, reject) => {
     const proxyReq = lib.request(
       {
         protocol: targetUrl.protocol,
@@ -147,9 +160,7 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<voi
         path: targetUrl.pathname + targetUrl.search,
         method: req.method,
         headers,
-        // 生图可能很长；与 nginx proxy_*_timeout 300s 对齐
         timeout: 300_000,
-        // SNI / TLS server name（Cloudflare 需要）
         servername: targetUrl.hostname,
       },
       (proxyRes) => {
@@ -159,8 +170,6 @@ function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<voi
           `[ciallo] proxy ← ${status} ${req.method} ${path} (${ms}ms) content-type=${proxyRes.headers["content-type"] || "-"}`,
         );
 
-        // 若上游/CF 已压缩，Node 默认不解压；直接 pipe 时应保留 content-encoding。
-        // 但 transfer-encoding / connection 等仍需剥离，避免 writeHead 报错。
         const outHeaders: Record<string, string | number | string[]> = {};
         for (const [key, value] of Object.entries(proxyRes.headers)) {
           if (value == null) continue;
@@ -209,5 +218,12 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5173,
+    // 社区默认 http：转发到本机 community-api（node server/community-api.mjs）
+    proxy: {
+      "/api/community": {
+        target: "http://127.0.0.1:8090",
+        changeOrigin: true,
+      },
+    },
   },
 });

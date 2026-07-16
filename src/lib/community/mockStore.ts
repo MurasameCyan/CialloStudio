@@ -181,7 +181,14 @@ export const mockCommunity = {
     const userId = store.sessions[token];
     if (!userId) return null;
     const user = store.users.find((u) => u.id === userId);
-    return user ? publicUser(user) : null;
+    if (!user) return null;
+    // 被禁用后会话失效，前端 me() 会回到未登录
+    if (user.banned) {
+      delete store.sessions[token];
+      save(store);
+      return null;
+    }
+    return publicUser(user);
   },
 
   async logout(token: string | null): Promise<void> {
@@ -251,6 +258,8 @@ export const mockCommunity = {
     const store = load();
     const userId = token ? store.sessions[token] : null;
     if (!userId) throw new Error("请先登录");
+    const actor = store.users.find((u) => u.id === userId);
+    if (!actor || actor.banned) throw new Error("账号已被禁用");
     const post = store.posts.find((p) => p.id === postId);
     if (!post) throw new Error("帖子不存在");
     const set = new Set(store.likes[postId] ?? []);
@@ -299,19 +308,28 @@ export const mockCommunity = {
     const store = load();
     const userId = token ? store.sessions[token] : null;
     const me = store.users.find((u) => u.id === userId);
-    if (!me || me.role !== "admin") throw new Error("需要管理员权限");
-    return store.users.map(publicUser);
+    if (!me || me.role !== "admin" || me.banned) throw new Error("需要管理员权限");
+    return store.users
+      .map(publicUser)
+      .sort((a, b) => b.createdAt - a.createdAt);
   },
 
   async setBanned(userId: string, banned: boolean, token: string | null): Promise<CommunityUser> {
     const store = load();
     const adminId = token ? store.sessions[token] : null;
     const admin = store.users.find((u) => u.id === adminId);
-    if (!admin || admin.role !== "admin") throw new Error("需要管理员权限");
+    if (!admin || admin.role !== "admin" || admin.banned) throw new Error("需要管理员权限");
     const user = store.users.find((u) => u.id === userId);
     if (!user) throw new Error("用户不存在");
     if (user.role === "admin") throw new Error("不能禁用管理员");
+    if (user.id === admin.id) throw new Error("不能禁用自己");
     user.banned = banned;
+    // 禁用时吊销该用户全部会话，避免已登录状态继续发帖/评论
+    if (banned) {
+      for (const [tok, uid] of Object.entries(store.sessions)) {
+        if (uid === user.id) delete store.sessions[tok];
+      }
+    }
     save(store);
     return publicUser(user);
   },

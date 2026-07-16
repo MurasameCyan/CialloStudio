@@ -82,9 +82,16 @@ Base：`/api/community`
 - 邮箱验证、OAuth
 - 服务端管理门禁替代（现有 `CIALLO_ADMIN_PASSWORD` 仍只管「管理」页配置）
 
+## 用户管理（Mock 已落地）
+
+- 管理员登录后在 **用户** 页可见用户管理：统计、搜索、筛选、禁用/解禁
+- `POST /admin/users/:id/ban`：`banned=true` 时吊销该用户全部 session；`me` 对已禁用会话返回 null
+- 不能禁用管理员或自己；禁用后无法登录 / 发帖 / 评论 / 点赞
+
 ## 验收（Mock）
 
 1. 打开应用 → **用户** → `demo` / `demo123` 登录  
 2. **生图** 出图后点「分享到大厅」  
 3. **大厅** 可见新帖，可点赞、写点评  
-4. `admin` / `admin123` 登录 → 用户管理可禁用 demo  
+4. `admin` / `admin123` 登录 → 用户管理可禁用 demo；demo 会话失效、无法再登录  
+5. 解禁 demo 后可重新登录

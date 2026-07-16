@@ -54,7 +54,7 @@ export function StudioPage({
   onStop,
   onClear,
 }: Props) {
-  const configured = Boolean(settings.apiKey.trim());
+  const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);

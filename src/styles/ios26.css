@@ -1192,7 +1192,8 @@ a {
   box-sizing: border-box;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  /* visible：避免子内容被裁切成「黑屏/空白」 */
+  overflow: visible;
 }
 
 .admin-block-label {

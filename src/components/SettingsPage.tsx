@@ -28,7 +28,16 @@ type Props = {
 };
 
 export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin }: Props) {
-  const [draft, setDraft] = useState<StudioSettings>(settings);
+  const [draft, setDraft] = useState<StudioSettings>(() => ({
+    ...DEFAULT_SETTINGS,
+    ...settings,
+    baseUrl: settings?.baseUrl ?? DEFAULT_SETTINGS.baseUrl,
+    apiKey: settings?.apiKey ?? DEFAULT_SETTINGS.apiKey,
+    model: settings?.model || DEFAULT_SETTINGS.model,
+    aspectRatio: settings?.aspectRatio || DEFAULT_SETTINGS.aspectRatio,
+    resolution: settings?.resolution === "2k" ? "2k" : "1k",
+    concurrency: clampConcurrency(settings?.concurrency),
+  }));
   const [models, setModels] = useState<OpenAIModel[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -43,9 +52,14 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
     return ids;
   }, [models]);
 
-  const hasKey = Boolean(draft.apiKey.trim());
-  const requestBase = resolveBrowserApiBase(draft.baseUrl);
-  const modelCap = useMemo(() => getImageModelCapability(draft.model), [draft.model]);
+  const apiKey = typeof draft.apiKey === "string" ? draft.apiKey : "";
+  const baseUrl = typeof draft.baseUrl === "string" ? draft.baseUrl : "";
+  const hasKey = Boolean(apiKey.trim());
+  const requestBase = resolveBrowserApiBase(baseUrl);
+  const modelCap = useMemo(
+    () => getImageModelCapability(typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model),
+    [draft.model],
+  );
 
   function update<K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -53,8 +67,14 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
 
   function persist(next: StudioSettings) {
     const normalized: StudioSettings = {
+      ...DEFAULT_SETTINGS,
       ...next,
-      baseUrl: normalizeBaseUrl(next.baseUrl),
+      baseUrl: normalizeBaseUrl(typeof next.baseUrl === "string" ? next.baseUrl : baseUrl),
+      apiKey: typeof next.apiKey === "string" ? next.apiKey : apiKey,
+      model: (typeof next.model === "string" && next.model) || DEFAULT_SETTINGS.model,
+      aspectRatio:
+        (typeof next.aspectRatio === "string" && next.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
+      resolution: next.resolution === "2k" ? "2k" : "1k",
       concurrency: clampConcurrency(next.concurrency),
     };
     saveSettings(normalized);
@@ -114,17 +134,22 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
   }
 
   function handleSave() {
-    if (!draft.baseUrl.trim()) {
+    if (!baseUrl.trim()) {
       setOk(false);
       setMessage("请填写 API Base URL（完整地址，如 https://your-gateway/v1）");
       return;
     }
-    if (!draft.apiKey.trim()) {
+    if (!apiKey.trim()) {
       setOk(false);
       setMessage("请填写 API Key");
       return;
     }
-    const normalized = persist(draft);
+    const normalized = persist({
+      ...draft,
+      baseUrl,
+      apiKey,
+      model: typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model,
+    });
     log("ok", "设置已保存", {
       baseUrl: normalized.baseUrl,
       requestBase: resolveBrowserApiBase(normalized.baseUrl),
@@ -204,7 +229,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 <input
                   id="baseUrl"
                   className="control mono"
-                  value={draft.baseUrl}
+                  value={baseUrl}
                   placeholder="https://your-gateway/v1"
                   onChange={(e) => update("baseUrl", e.target.value)}
                   autoComplete="off"
@@ -222,7 +247,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                   id="apiKey"
                   className="control mono"
                   type={showKey ? "text" : "password"}
-                  value={draft.apiKey}
+                  value={apiKey}
                   placeholder="g2a_..."
                   onChange={(e) => update("apiKey", e.target.value)}
                   autoComplete="off"
@@ -243,7 +268,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                   id="model"
                   className="control mono"
                   list="model-options"
-                  value={draft.model}
+                  value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
                   onChange={(e) => update("model", e.target.value)}
                   placeholder="grok-imagine-image"
                   spellCheck={false}

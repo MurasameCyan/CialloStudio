@@ -19,9 +19,15 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   concurrency: 3,
 };
 
+function asString(value: unknown, fallback: string): string {
+  if (typeof value === "string") return value;
+  if (value == null) return fallback;
+  return String(value);
+}
+
 /** 从 Base URL 得到上游根 origin（https://host），用于代理头 X-Ciallo-Upstream */
 export function upstreamOrigin(baseUrl: string): string {
-  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  const trimmed = asString(baseUrl, "").trim().replace(/\/+$/, "");
   if (!trimmed || trimmed.startsWith("/")) return "";
   try {
     const withScheme = trimmed.includes("://") ? trimmed : `https://${trimmed}`;
@@ -38,14 +44,15 @@ export function loadSettings(): StudioSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<StudioSettings>;
-    const resolutionRaw = (parsed.resolution ?? DEFAULT_SETTINGS.resolution).toLowerCase();
+    const resolutionRaw = asString(parsed.resolution, DEFAULT_SETTINGS.resolution).toLowerCase();
     const resolution = resolutionRaw === "2k" ? "2k" : "1k";
     return {
-      ...DEFAULT_SETTINGS,
-      ...parsed,
-      baseUrl: normalizeBaseUrl(parsed.baseUrl ?? DEFAULT_SETTINGS.baseUrl),
-      concurrency: clampConcurrency(parsed.concurrency ?? DEFAULT_SETTINGS.concurrency),
+      baseUrl: normalizeBaseUrl(asString(parsed.baseUrl, DEFAULT_SETTINGS.baseUrl)),
+      apiKey: asString(parsed.apiKey, DEFAULT_SETTINGS.apiKey),
+      model: asString(parsed.model, DEFAULT_SETTINGS.model) || DEFAULT_SETTINGS.model,
+      aspectRatio: asString(parsed.aspectRatio, DEFAULT_SETTINGS.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
       resolution,
+      concurrency: clampConcurrency(parsed.concurrency ?? DEFAULT_SETTINGS.concurrency),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -54,15 +61,18 @@ export function loadSettings(): StudioSettings {
 
 export function saveSettings(settings: StudioSettings): void {
   const next: StudioSettings = {
-    ...settings,
-    baseUrl: normalizeBaseUrl(settings.baseUrl),
+    baseUrl: normalizeBaseUrl(asString(settings.baseUrl, "")),
+    apiKey: asString(settings.apiKey, ""),
+    model: asString(settings.model, DEFAULT_SETTINGS.model) || DEFAULT_SETTINGS.model,
+    aspectRatio: asString(settings.aspectRatio, DEFAULT_SETTINGS.aspectRatio),
+    resolution: settings.resolution === "2k" ? "2k" : "1k",
     concurrency: clampConcurrency(settings.concurrency),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
 
 export function normalizeBaseUrl(value: string): string {
-  const trimmed = value.trim().replace(/\/+$/, "");
+  const trimmed = asString(value, "").trim().replace(/\/+$/, "");
   if (!trimmed) return "";
   // 仅本地 dev 允许相对 /v1
   if (trimmed.startsWith("/")) return trimmed;

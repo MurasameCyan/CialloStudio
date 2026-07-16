@@ -133,7 +133,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const currentDraft = draftRef.current;
     const currentPrompts = splitPrompts(currentDraft.promptText);
 
-    if (!currentSettings.apiKey.trim()) {
+    const apiKey = typeof currentSettings.apiKey === "string" ? currentSettings.apiKey : "";
+    if (!apiKey.trim()) {
       throw new ApiError(401, "请先在管理页填写 API Key", "missing_api_key");
     }
     if (currentPrompts.length === 0) return;
@@ -234,7 +235,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
 
           const images = await generateImage({
             baseUrl: currentSettings.baseUrl,
-            apiKey: currentSettings.apiKey,
+            apiKey,
             model: currentSettings.model,
             prompt: job.prompt,
             n: 1,

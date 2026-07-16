@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { AccountPage } from "@/components/AccountPage";
 import { AdminUnlock } from "@/components/AdminUnlock";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HallPage } from "@/components/HallPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
@@ -16,10 +17,11 @@ export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
   const [settings, setSettings] = useState<StudioSettings>(() => {
     const initial = loadSettings();
+    const key = typeof initial.apiKey === "string" ? initial.apiKey : "";
     log("info", "Ciallo Studio 已加载", {
       baseUrl: initial.baseUrl,
       model: initial.model,
-      hasKey: Boolean(initial.apiKey.trim()),
+      hasKey: Boolean(key.trim()),
       adminGate: isAdminGateEnabled(),
       page: typeof window !== "undefined" ? window.location.href : "",
     });
@@ -30,7 +32,7 @@ export default function App() {
 
   // 队列挂在 App 层：切到管理页也不会丢任务/结果，生成可继续跑
   const queue = useStudioQueue(settings);
-  const ready = Boolean(settings.apiKey.trim());
+  const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const gateOn = isAdminGateEnabled();
 
   function openSettings() {
@@ -149,14 +151,18 @@ export default function App() {
             }}
           />
         ) : showUnlock ? (
-          <AdminUnlock onUnlocked={handleUnlocked} onCancel={() => setTab("studio")} />
+          <ErrorBoundary label="管理解锁">
+            <AdminUnlock onUnlocked={handleUnlocked} onCancel={() => setTab("studio")} />
+          </ErrorBoundary>
         ) : (
-          <SettingsPage
-            settings={settings}
-            onChange={setSettings}
-            adminGateEnabled={gateOn}
-            onLockAdmin={gateOn ? handleLockAdmin : undefined}
-          />
+          <ErrorBoundary label="管理页">
+            <SettingsPage
+              settings={settings}
+              onChange={setSettings}
+              adminGateEnabled={gateOn}
+              onLockAdmin={gateOn ? handleLockAdmin : undefined}
+            />
+          </ErrorBoundary>
         )}
       </main>
     </div>

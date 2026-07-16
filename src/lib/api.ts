@@ -212,8 +212,9 @@ export async function materializeImageUrl(input: {
   const rewritten = rewriteMediaUrl(input.rawUrl, input.baseUrl);
   log("info", "拉取媒体", { raw: input.rawUrl, rewritten });
   const headers = new Headers({ Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" });
-  if (input.apiKey.trim()) {
-    headers.set("Authorization", `Bearer ${input.apiKey.trim()}`);
+  const mediaKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
+  if (mediaKey) {
+    headers.set("Authorization", `Bearer ${mediaKey}`);
   }
   const origin = resolveUpstreamOrigin(input.baseUrl);
   if (origin && (rewritten.startsWith("/v1") || rewritten.startsWith("/media"))) {
@@ -259,11 +260,12 @@ async function apiRequest(
     signal?: AbortSignal;
   } = {},
 ): Promise<unknown> {
-  if (!apiKey.trim()) {
+  const key = typeof apiKey === "string" ? apiKey.trim() : "";
+  if (!key) {
     throw new ApiError(401, "请先在管理页填写 API Key", "missing_api_key");
   }
 
-  const configuredBase = normalizeBaseUrl(baseUrl);
+  const configuredBase = normalizeBaseUrl(typeof baseUrl === "string" ? baseUrl : "");
   if (!configuredBase) {
     throw new ApiError(
       400,
@@ -271,9 +273,9 @@ async function apiRequest(
       "missing_base_url",
     );
   }
-  const requestBase = resolveBrowserApiBase(baseUrl);
-  const origin = resolveUpstreamOrigin(baseUrl);
-  const url = joinUrl(baseUrl, path);
+  const requestBase = resolveBrowserApiBase(typeof baseUrl === "string" ? baseUrl : "");
+  const origin = resolveUpstreamOrigin(typeof baseUrl === "string" ? baseUrl : "");
+  const url = joinUrl(typeof baseUrl === "string" ? baseUrl : "", path);
   log("info", "请求基址", {
     configuredBase,
     requestBase,
@@ -283,7 +285,7 @@ async function apiRequest(
 
   const headers = new Headers({
     Accept: "application/json",
-    Authorization: `Bearer ${apiKey.trim()}`,
+    Authorization: `Bearer ${key}`,
   });
   // 同源代理根据此头转发到真实上游（不写进 .env）
   if (origin) {

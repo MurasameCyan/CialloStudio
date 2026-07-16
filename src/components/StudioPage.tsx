@@ -335,6 +335,24 @@ export function StudioPage({
             <h2 className="panel-title">图片墙 · {stats.total} 张</h2>
           </div>
           <div className="results-toolbar-actions">
+            {jobs.length > 0 ? (
+              <div className="kpi-row kpi-row-inline" aria-label="生成统计">
+                <div className="kpi">
+                  <div className="kpi-label">总数</div>
+                  <div className="kpi-value">{stats.total}</div>
+                </div>
+                <div className="kpi">
+                  <div className="kpi-label">完成</div>
+                  <div className="kpi-value">{stats.done}</div>
+                </div>
+                <div className="kpi">
+                  <div className="kpi-label">在飞 / 排队</div>
+                  <div className="kpi-value">
+                    {running ? inFlight : stats.running}/{stats.queued}
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="connection-chip">
               <span className={`live-dot ${running ? "" : "off"}`} />
               {running
@@ -364,23 +382,6 @@ export function StudioPage({
           </div>
         ) : (
           <>
-            <div className="kpi-row">
-              <div className="kpi">
-                <div className="kpi-label">总数</div>
-                <div className="kpi-value">{stats.total}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">完成</div>
-                <div className="kpi-value">{stats.done}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">在飞 / 排队</div>
-                <div className="kpi-value">
-                  {running ? inFlight : stats.running}/{stats.queued}
-                </div>
-              </div>
-            </div>
-
             <div className="progress-track" aria-hidden>
               <div className="progress-fill" style={{ width: `${progress}%` }} />
             </div>

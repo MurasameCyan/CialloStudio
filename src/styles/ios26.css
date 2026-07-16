@@ -621,6 +621,40 @@ a {
   margin-bottom: 16px;
 }
 
+/* 图片墙工具栏：紧凑 KPI，排在「空闲」芯片左侧 */
+.kpi-row-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 6px;
+  margin-bottom: 0;
+  grid-template-columns: none;
+}
+
+.kpi-row-inline .kpi {
+  flex: 0 0 auto;
+  min-width: 58px;
+  border-radius: 12px;
+  padding: 6px 10px;
+}
+
+.kpi-row-inline .kpi::after {
+  width: 42px;
+  height: 42px;
+  inset: auto -30% -50% auto;
+}
+
+.kpi-row-inline .kpi-label {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+}
+
+.kpi-row-inline .kpi-value {
+  margin-top: 2px;
+  font-size: 15px;
+  letter-spacing: -0.03em;
+}
+
 .kpi {
   position: relative;
   overflow: hidden;
@@ -1632,7 +1666,19 @@ a {
   flex-wrap: wrap;
   align-items: center;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
+}
+
+.results-toolbar-actions .kpi-row-inline {
+  order: 0;
+}
+
+.results-toolbar-actions .connection-chip {
+  order: 1;
+}
+
+.results-toolbar-actions .btn {
+  order: 2;
 }
 
 /* 开始生成 + 追加到图片墙 合并卡片（在选项区顶部） */

@@ -58,18 +58,29 @@ docker compose up -d --build
 
 ```bash
 npm install
+# 先配置上游，否则「测试连接」会失败（默认是占位域名）
+cp .env.example .env.local
+# 编辑 .env.local：把 VITE_DEV_PROXY_TARGET 改成你的 grok2api 根地址
 npm run dev
 ```
 
-开发服务器默认 `http://127.0.0.1:5173`，并把 `/v1` 代理到示例上游（见 `vite.config.ts`，请改成你自己的网关）。
+开发服务器：`http://127.0.0.1:5173`  
+管理页 Base URL 保持 **`/v1`**（由 Vite 同源代理到 `VITE_DEV_PROXY_TARGET`）。
 
-可覆盖：
+也可用环境变量一次性覆盖：
 
 ```bash
 # Windows PowerShell
-$env:VITE_DEV_PROXY_TARGET="https://your-host"
+$env:VITE_DEV_PROXY_TARGET="https://你的网关"
 npm run dev
 ```
+
+若出现「连不上 / 网络失败 / HTTP 500|502」：
+
+1. 看终端是否打印 `[ciallo] 开发代理仍指向占位上游`
+2. 确认 `VITE_DEV_PROXY_TARGET` 是真实可访问的 grok2api（不是 `your-grok2api.example.com`）
+3. **改完代理必须重启** `npm run dev`（Vite 只在启动时读代理配置）
+4. 管理页 Base URL = `/v1`，填对 API Key 后再点「测试连接」
 
 ## 接口约定
 

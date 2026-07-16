@@ -83,7 +83,23 @@ export function SettingsPage({ settings, onChange }: Props) {
       setMessage(`连接成功 · ${list.length} 个模型 · 当前 ${preferred}`);
     } catch (error) {
       setOk(false);
-      const text = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
+      let text = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
+      // 本地 dev 最常见：Vite 代理仍指向占位上游 / 上游宕机
+      if (
+        /proxy_upstream_unreachable|占位|your-grok2api\.example\.com|ECONNREFUSED|ENOTFOUND|network|CORS|Failed to fetch|502|504/i.test(
+          text,
+        )
+      ) {
+        text = [
+          text,
+          "",
+          "排查：",
+          "1) 管理页 Base URL 用同源 `/v1`（不要填跨域绝对地址，除非上游开了 CORS）",
+          "2) 本地 npm run dev：设置 VITE_DEV_PROXY_TARGET=你的 grok2api 根地址后重启",
+          "3) Docker：设置 CIALLO_UPSTREAM=你的 grok2api 根地址后 compose up",
+          "4) 确认 API Key 正确，上游 /v1/models 可访问",
+        ].join("\n");
+      }
       log("error", "管理页：测试连接失败", text);
       setMessage(text);
     } finally {

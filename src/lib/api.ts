@@ -8,7 +8,10 @@ export type OpenAIModel = {
 };
 
 export type ImageResult = {
+  /** 用于 <img> 展示：blob:/data: 或可访问 URL */
   url: string;
+  /** 同源可打开的媒体路径（非 blob），便于“打开原图” */
+  openUrl?: string;
   b64_json?: string;
   revised_prompt?: string;
   mime_type?: string;
@@ -48,9 +51,22 @@ function readError(payload: unknown): { code?: string; message?: string } {
   };
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"]);
+
+function extractMediaPath(pathname: string, search = "", hash = ""): string | null {
+  const mediaIdx = pathname.indexOf("/v1/media/");
+  if (mediaIdx >= 0) {
+    return `${pathname.slice(mediaIdx)}${search}${hash}`;
+  }
+  if (pathname.startsWith("/media/")) {
+    return `/v1${pathname}${search}${hash}`;
+  }
+  return null;
+}
+
 /**
- * grok2api 有时会返回内网媒体地址（如 http://127.0.0.1:8000/v1/media/...）。
- * 前端按当前配置的 baseUrl 主机重写，保证图片可访问。
+ * grok2api 常返回内网媒体地址（如 http://127.0.0.1:8000/v1/media/...）。
+ * 必须改写为当前 API base / 同源代理路径，否则浏览器会打到用户本机 8000。
  */
 export function rewriteMediaUrl(rawUrl: string, baseUrl: string): string {
   const value = rawUrl.trim();
@@ -58,48 +74,78 @@ export function rewriteMediaUrl(rawUrl: string, baseUrl: string): string {
   if (value.startsWith("data:") || value.startsWith("blob:")) return value;
 
   const base = normalizeBaseUrl(baseUrl);
+  const originFallback =
+    typeof window !== "undefined" && window.location?.origin
+      ? window.location.origin
+      : "http://localhost";
 
   try {
+    const parsed = new URL(value, originFallback);
+    const mediaPath = extractMediaPath(parsed.pathname, parsed.search, parsed.hash);
+    const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
+
+    // 内网地址或明确 media 路径：一律改写
+    if (mediaPath && (isLoopback || mediaPath.startsWith("/v1/media/"))) {
+      if (base.startsWith("/")) {
+        return mediaPath;
+      }
+      const api = new URL(base.endsWith("/v1") ? base : `${base}/v1`);
+      return `${api.origin}${mediaPath}`;
+    }
+
     if (base.startsWith("/")) {
-      const parsed = new URL(value, window.location.origin);
-      if (parsed.pathname.startsWith("/v1/media/") || parsed.pathname.startsWith("/media/")) {
+      if (parsed.origin === originFallback) {
         return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-      }
-      if (parsed.origin === window.location.origin) {
-        return `${parsed.pathname}${parsed.search}${parsed.hash}`;
-      }
-      // 绝对外链但走同源代理时，尽量映射到 /v1/media
-      if (parsed.pathname.includes("/v1/media/")) {
-        const idx = parsed.pathname.indexOf("/v1/media/");
-        return `${parsed.pathname.slice(idx)}${parsed.search}${parsed.hash}`;
       }
       return value;
     }
 
-    const api = new URL(base.endsWith("/v1") ? base : `${base}/v1`);
-    const parsed = new URL(value, api.origin);
-
-    if (
-      parsed.hostname === "127.0.0.1" ||
-      parsed.hostname === "localhost" ||
-      parsed.hostname === "0.0.0.0" ||
-      parsed.pathname.includes("/v1/media/") ||
-      parsed.pathname.includes("/media/")
-    ) {
-      let mediaPath = parsed.pathname;
-      const mediaIdx = mediaPath.indexOf("/v1/media/");
-      if (mediaIdx >= 0) {
-        mediaPath = mediaPath.slice(mediaIdx);
-      } else if (mediaPath.startsWith("/media/")) {
-        mediaPath = `/v1${mediaPath}`;
-      }
-      return `${api.origin}${mediaPath}${parsed.search}${parsed.hash}`;
-    }
-
     return parsed.toString();
   } catch {
+    // 兜底：纯字符串替换 loopback
+    const replaced = value
+      .replace(/^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "")
+      .replace(/^\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "");
+    if (replaced.startsWith("/v1/media/") || replaced.startsWith("/media/")) {
+      return replaced.startsWith("/media/") ? `/v1${replaced}` : replaced;
+    }
     return value;
   }
+}
+
+/**
+ * 通过可访问地址拉取图片并转为 blob: URL，彻底避开跨域/内网主机问题。
+ */
+export async function materializeImageUrl(input: {
+  rawUrl: string;
+  baseUrl: string;
+  apiKey: string;
+  signal?: AbortSignal;
+}): Promise<string> {
+  if (input.rawUrl.startsWith("data:") || input.rawUrl.startsWith("blob:")) {
+    return input.rawUrl;
+  }
+
+  const rewritten = rewriteMediaUrl(input.rawUrl, input.baseUrl);
+  const headers = new Headers({ Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" });
+  if (input.apiKey.trim()) {
+    headers.set("Authorization", `Bearer ${input.apiKey.trim()}`);
+  }
+
+  const response = await fetch(rewritten, {
+    method: "GET",
+    headers,
+    signal: input.signal,
+  });
+  if (!response.ok) {
+    throw new ApiError(response.status, `图片资源拉取失败 (${response.status})`, "media_fetch_failed");
+  }
+
+  const blob = await response.blob();
+  if (!blob.size) {
+    throw new ApiError(200, "图片资源为空", "media_empty");
+  }
+  return URL.createObjectURL(blob);
 }
 
 async function apiRequest(
@@ -212,24 +258,43 @@ export async function generateImage(input: {
     throw new ApiError(200, "生图响应格式无效", "invalid_response");
   }
 
-  const images = payload.data.flatMap((item) => {
-    if (!isRecord(item)) return [];
-    const url =
-      typeof item.url === "string" && item.url.trim()
-        ? rewriteMediaUrl(item.url, input.baseUrl)
-        : typeof item.b64_json === "string" && item.b64_json.trim()
-          ? `data:${typeof item.mime_type === "string" ? item.mime_type : "image/png"};base64,${item.b64_json}`
-          : "";
-    if (!url) return [];
-    return [
-      {
-        url,
-        b64_json: typeof item.b64_json === "string" ? item.b64_json : undefined,
+  const images: ImageResult[] = [];
+  for (const item of payload.data) {
+    if (!isRecord(item)) continue;
+
+    if (typeof item.b64_json === "string" && item.b64_json.trim()) {
+      const mime = typeof item.mime_type === "string" && item.mime_type.trim() ? item.mime_type : "image/png";
+      images.push({
+        url: `data:${mime};base64,${item.b64_json}`,
+        b64_json: item.b64_json,
+        revised_prompt: typeof item.revised_prompt === "string" ? item.revised_prompt : undefined,
+        mime_type: mime,
+      });
+      continue;
+    }
+
+    if (typeof item.url === "string" && item.url.trim()) {
+      const rewritten = rewriteMediaUrl(item.url, input.baseUrl);
+      // 优先物化为 blob，避免 <img> 直接请求内网/跨域地址
+      let displayUrl = rewritten;
+      try {
+        displayUrl = await materializeImageUrl({
+          rawUrl: item.url,
+          baseUrl: input.baseUrl,
+          apiKey: input.apiKey,
+          signal: input.signal,
+        });
+      } catch {
+        displayUrl = rewritten;
+      }
+      images.push({
+        url: displayUrl,
+        openUrl: rewritten,
         revised_prompt: typeof item.revised_prompt === "string" ? item.revised_prompt : undefined,
         mime_type: typeof item.mime_type === "string" ? item.mime_type : undefined,
-      },
-    ];
-  });
+      });
+    }
+  }
 
   if (images.length === 0) {
     throw new ApiError(200, "生图响应中没有图片", "invalid_response");

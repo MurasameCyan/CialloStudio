@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { ApiError, generateImage, runPool } from "@/lib/api";
+import { ApiError, generateImage, rewriteMediaUrl, runPool } from "@/lib/api";
 import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
 
 type JobStatus = "queued" | "running" | "done" | "failed";
@@ -9,6 +9,8 @@ type Job = {
   prompt: string;
   status: JobStatus;
   imageUrl?: string;
+  /** 同源可打开的媒体链接（非 blob） */
+  openUrl?: string;
   error?: string;
   createdAt: number;
   finishedAt?: number;
@@ -90,7 +92,10 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           if (!imageUrl) {
             throw new ApiError(200, "未返回图片 URL", "invalid_response");
           }
-          return imageUrl;
+          const openUrl = images[0]?.openUrl || (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
+            ? undefined
+            : rewriteMediaUrl(imageUrl, settings.baseUrl));
+          return { imageUrl, openUrl };
         },
         (index, result) => {
           const job = batch[index];
@@ -101,7 +106,8 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                   ? {
                       ...item,
                       status: "done",
-                      imageUrl: result.value,
+                      imageUrl: result.value.imageUrl,
+                      openUrl: result.value.openUrl,
                       finishedAt: Date.now(),
                     }
                   : item,
@@ -260,7 +266,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                   {job.status}
                 </span>
                 {job.status === "done" && job.imageUrl ? (
-                  <a href={job.imageUrl} target="_blank" rel="noreferrer">
+                  <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
                     <img src={job.imageUrl} alt={job.prompt} loading="lazy" />
                   </a>
                 ) : job.status === "failed" ? (
@@ -273,7 +279,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 <div className="card-body">
                   <div className="card-meta">{job.prompt}</div>
                   {job.imageUrl ? (
-                    <a className="mono" href={job.imageUrl} target="_blank" rel="noreferrer">
+                    <a className="mono" href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
                       打开原图
                     </a>
                   ) : null}

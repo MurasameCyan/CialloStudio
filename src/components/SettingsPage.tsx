@@ -192,7 +192,7 @@ export function SettingsPage({
             <p className="panel-desc" style={{ marginTop: 6 }}>
               {isStationMaster
                 ? `站长 @${communityUser?.username ?? ""} · 接口与用户池可用`
-                : "接口设置对所有人开放；用户池需站长登录（.env 账号）"}
+                : "接口设置对所有人开放；用户池需在「大厅」用站长账号登录"}
             </p>
           </div>
         </div>

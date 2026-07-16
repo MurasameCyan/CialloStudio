@@ -1943,7 +1943,37 @@ a {
   margin-bottom: 4px;
 }
 
-/* —— 分享大厅 / 用户 —— */
+/* —— 分享大厅（含登录/注册） —— */
+.hall-auth-panel {
+  display: grid;
+  gap: 12px;
+}
+
+.hall-auth-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.hall-auth-desc {
+  margin: 4px 0 0;
+  max-width: 52ch;
+}
+
+.hall-auth-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--separator);
+}
+
+.hall-auth-api {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+}
+
 .hall-layout {
   max-width: 1200px;
   margin: 0 auto;

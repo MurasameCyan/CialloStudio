@@ -150,7 +150,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           </div>
         </div>
         <div className="status err" role="status">
-          请先在「用户」页以站长账号登录
+          请先在「大厅」登录站长账号
           {isMasterConfigured()
             ? `（.env：${getMasterUsername()}）`
             : "（Mock：admin / admin123）"}
@@ -159,7 +159,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         {onNeedLogin ? (
           <div className="btn-row" style={{ marginTop: 12 }}>
             <button type="button" className="btn btn-primary" onClick={onNeedLogin}>
-              去登录
+              去大厅登录
             </button>
           </div>
         ) : null}

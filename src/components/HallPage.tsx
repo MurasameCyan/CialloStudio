@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
+import { HallAuthPanel } from "@/components/HallAuthPanel";
 import { communityApi } from "@/lib/community/client";
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 
 type Props = {
   user: CommunityUser | null;
-  onNeedLogin: () => void;
+  loading?: boolean;
+  onLogin: (username: string, password: string) => Promise<void>;
+  onRegister: (username: string, password: string, displayName?: string) => Promise<void>;
+  onLogout: () => Promise<void>;
 };
 
-export function HallPage({ user, onNeedLogin }: Props) {
+export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props) {
   const [posts, setPosts] = useState<GalleryPost[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [listLoading, setListLoading] = useState(true);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [active, setActive] = useState<GalleryPost | null>(null);
@@ -18,9 +22,14 @@ export function HallPage({ user, onNeedLogin }: Props) {
   const [commentBody, setCommentBody] = useState("");
   const [rating, setRating] = useState(5);
   const [busy, setBusy] = useState(false);
+  const [forceAuth, setForceAuth] = useState(false);
+
+  const needLogin = useCallback(() => {
+    setForceAuth(true);
+  }, []);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    setListLoading(true);
     setError("");
     try {
       const res = await communityApi.listPosts({ limit: 40, q: q.trim() || undefined });
@@ -28,7 +37,7 @@ export function HallPage({ user, onNeedLogin }: Props) {
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
-      setLoading(false);
+      setListLoading(false);
     }
   }, [q]);
 
@@ -51,7 +60,7 @@ export function HallPage({ user, onNeedLogin }: Props) {
 
   async function handleLike(post: GalleryPost) {
     if (!user) {
-      onNeedLogin();
+      needLogin();
       return;
     }
     try {
@@ -65,7 +74,7 @@ export function HallPage({ user, onNeedLogin }: Props) {
 
   async function handleComment() {
     if (!user) {
-      onNeedLogin();
+      needLogin();
       return;
     }
     if (!active) return;
@@ -104,6 +113,16 @@ export function HallPage({ user, onNeedLogin }: Props) {
 
   return (
     <div className="page hall-layout">
+      <HallAuthPanel
+        user={user}
+        loading={loading}
+        forceAuth={forceAuth}
+        onForceAuthHandled={() => setForceAuth(false)}
+        onLogin={onLogin}
+        onRegister={onRegister}
+        onLogout={onLogout}
+      />
+
       <section className="panel">
         <div className="panel-head hall-head">
           <div>
@@ -137,7 +156,7 @@ export function HallPage({ user, onNeedLogin }: Props) {
           </div>
         ) : null}
 
-        {loading ? (
+        {listLoading ? (
           <div className="empty empty-compact">
             <span className="empty-title">加载中…</span>
           </div>

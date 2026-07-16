@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { AccountPage } from "@/components/AccountPage";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HallPage } from "@/components/HallPage";
 import { SettingsPage } from "@/components/SettingsPage";
@@ -10,7 +9,7 @@ import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
 
-type Tab = "studio" | "hall" | "account" | "settings";
+type Tab = "studio" | "hall" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
@@ -36,6 +35,10 @@ export default function App() {
 
   function openSettings() {
     setTab("settings");
+  }
+
+  function openHallAuth() {
+    setTab("hall");
   }
 
   return (
@@ -76,13 +79,6 @@ export default function App() {
             </button>
             <button
               type="button"
-              className={`nav-pill ${tab === "account" ? "active" : ""}`}
-              onClick={() => setTab("account")}
-            >
-              用户
-            </button>
-            <button
-              type="button"
               className={`nav-pill ${tab === "settings" ? "active" : ""}`}
               onClick={openSettings}
             >
@@ -97,7 +93,7 @@ export default function App() {
           <StudioPage
             settings={settings}
             onOpenSettings={openSettings}
-            onNeedLogin={() => setTab("account")}
+            onNeedLogin={openHallAuth}
             onSharedToHall={() => setTab("hall")}
             draft={queue.draft}
             setDraft={queue.setDraft}
@@ -113,9 +109,7 @@ export default function App() {
             onClear={queue.clear}
           />
         ) : tab === "hall" ? (
-          <HallPage user={community.user} onNeedLogin={() => setTab("account")} />
-        ) : tab === "account" ? (
-          <AccountPage
+          <HallPage
             user={community.user}
             loading={community.loading}
             onLogin={async (username, password) => {
@@ -136,7 +130,7 @@ export default function App() {
               isStationMaster={isStationMaster}
               communityUser={community.user}
               communityLoading={community.loading}
-              onNeedLogin={() => setTab("account")}
+              onNeedLogin={openHallAuth}
             />
           </ErrorBoundary>
         )}

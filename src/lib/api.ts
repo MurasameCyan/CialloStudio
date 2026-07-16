@@ -32,22 +32,12 @@ export class ApiError extends Error {
 
 /**
  * 浏览器侧请求基址。
- * 上游 grok2api 通常不返回 CORS 头；若配置了跨域绝对 URL，会强制改走同源 `/v1` 代理
- *（Vite dev / Docker nginx 均已提供）。
+ * - 绝对 URL（https://host/v1）：浏览器直连上游（部署形态：Web 配置，无容器内反代）
+ * - 相对路径 /v1：仅本地 Vite dev 同源代理（见 vite.config.ts）
+ * 不再把跨域绝对 URL 强行改写为 /v1。
  */
 export function resolveBrowserApiBase(baseUrl: string): string {
-  const base = normalizeBaseUrl(baseUrl);
-  if (base.startsWith("/")) return base;
-  if (typeof window === "undefined") return base;
-  try {
-    const api = new URL(base.endsWith("/v1") ? base : `${base}/v1`);
-    if (api.origin !== window.location.origin) {
-      return "/v1";
-    }
-    return base;
-  } catch {
-    return base;
-  }
+  return normalizeBaseUrl(baseUrl);
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -247,15 +237,20 @@ async function apiRequest(
   }
 
   const configuredBase = normalizeBaseUrl(baseUrl);
+  if (!configuredBase) {
+    throw new ApiError(
+      400,
+      "请先在管理页填写 API Base URL（完整地址，如 https://your-gateway/v1）",
+      "missing_base_url",
+    );
+  }
   const requestBase = resolveBrowserApiBase(baseUrl);
   const url = joinUrl(baseUrl, path);
-  if (configuredBase !== requestBase) {
-    log("warn", "已自动改走同源代理，避免 CORS", {
-      configuredBase,
-      requestBase,
-      pageOrigin: typeof window !== "undefined" ? window.location.origin : "(ssr)",
-    });
-  }
+  log("info", "请求基址", {
+    configuredBase,
+    requestBase,
+    pageOrigin: typeof window !== "undefined" ? window.location.origin : "(ssr)",
+  });
 
   const headers = new Headers({
     Accept: "application/json",

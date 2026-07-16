@@ -3,17 +3,13 @@ name: ciallo-studio
 services:
   ciallo-studio:
     container_name: ciallo-studio
+    # 固定使用 GHCR beta；不本地 build
     image: ghcr.io/murasamecyan/ciallostudio:beta
     pull_policy: always
     ports:
       - "${CIALLO_PORT:-8080}:8080"
     environment:
-      # 上游 OpenAI 兼容网关根地址（可带或不带 /v1）
-      # 例: https://your-grok2api.example.com
-      # 例: http://host.docker.internal:8000
-      # 必填真实地址；占位域名会导致 /v1 不可用（但容器仍能启动静态页）
-      CIALLO_UPSTREAM: ${CIALLO_UPSTREAM:-}
-      # 管理页解锁密码（写在 .env，勿提交仓库）。留空 = 不设门禁
+      # 管理页解锁密码（.env）。留空 = 不设门禁
       CIALLO_ADMIN_PASSWORD: ${CIALLO_ADMIN_PASSWORD:-}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped
@@ -27,6 +23,3 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
-    # 当 CIALLO_UPSTREAM 指向宿主机上的服务时取消注释：
-    # extra_hosts:
-    #   - "host.docker.internal:host-gateway"

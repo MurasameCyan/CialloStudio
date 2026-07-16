@@ -9,7 +9,9 @@ export type StudioSettings = {
 };
 
 export const DEFAULT_SETTINGS: StudioSettings = {
-  baseUrl: "/v1",
+  // 部署：在管理页填完整上游，如 https://your-gateway/v1
+  // 本地 Vite：可填 /v1 走开发代理，或同样填绝对 URL
+  baseUrl: "",
   apiKey: "",
   model: "grok-imagine-image",
   aspectRatio: "1:1",
@@ -49,7 +51,8 @@ export function saveSettings(settings: StudioSettings): void {
 
 export function normalizeBaseUrl(value: string): string {
   const trimmed = value.trim().replace(/\/+$/, "");
-  if (!trimmed) return "/v1";
+  if (!trimmed) return "";
+  // 仅本地 dev 允许相对 /v1
   if (trimmed.startsWith("/")) return trimmed;
   try {
     const url = new URL(trimmed);

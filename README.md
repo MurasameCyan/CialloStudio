@@ -2,117 +2,64 @@
 
 iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接口（已验证 grok2api），支持：
 
-- 管理页配置 **Base URL + API Key**
+- 管理页配置 **Base URL + API Key**（浏览器 localStorage）
 - 拉取 `/v1/models` 并选择模型（默认 `grok-imagine-image`）
 - 多行 prompt **多并发**生图
-- Docker 一键部署，GitHub Actions 自动构建 **linux/amd64 + linux/arm64** 镜像
+- 分享大厅 / 用户 / 点评（前端 + Mock 契约，后端可后续对接）
+- Docker 一键部署静态镜像（GHCR multi-arch）
 
-> API Key 只保存在浏览器 `localStorage`，不会进入镜像或 Git 仓库。
+> API Key 与上游地址只保存在浏览器，**不进** `.env` / 镜像 / Git。
 
 ## 快速开始（Docker Compose）
 
-> Compose **只使用** 固定镜像 `ghcr.io/murasamecyan/ciallostudio:beta`，不本地 `build`、不换镜像名。镜像由 GitHub Actions 推送到 GHCR。
+Compose **只拉取** `ghcr.io/murasamecyan/ciallostudio:beta`，不本地 build。
 
 ```bash
 git clone -b beta https://github.com/MurasameCyan/CialloStudio.git
 cd CialloStudio
 cp .env.example .env
-# 编辑 .env：CIALLO_UPSTREAM、CIALLO_ADMIN_PASSWORD 等
+# 只需改：CIALLO_PORT、CIALLO_ADMIN_PASSWORD
 docker compose pull
 docker compose up -d
 ```
 
-浏览器打开：`http://127.0.0.1:8080`
+浏览器：`http://127.0.0.1:8080`
 
-1. 进入 **管理**（若配置了 `CIALLO_ADMIN_PASSWORD` 需先输入密码）
-2. Base URL 保持 `/v1`（容器内 Nginx 同源反代到上游）
-3. 填入你的 `g2a_...` API Key
-4. 点 **测试连接**
-5. 回到 **生图** 开始出图
+1. **管理**（若配置了管理密码需先解锁）
+2. **API Base URL** 填完整上游，例如 `https://your-gateway/v1`
+3. 填 **API Key** → 保存 → 测试连接
+4. 回 **生图** 出图
 
-### 环境变量
+### `.env` 仅两项
 
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `CIALLO_PORT` | `8080` | 宿主机端口 |
-| `CIALLO_UPSTREAM` | （空） | **必填**真实上游根地址（可带或不带 `/v1`）。占位域名不要用 |
-| `CIALLO_ADMIN_PASSWORD` | （空） | 管理页解锁密码；**留空关闭门禁**。只写在 `.env`，不要提交 |
-| `TZ` | `Asia/Shanghai` | 时区 |
+| `CIALLO_ADMIN_PASSWORD` | （空） | 管理页解锁密码；留空关闭门禁 |
 
-镜像写死在 `docker-compose.yml`：`ghcr.io/murasamecyan/ciallostudio:beta`（`pull_policy: always`）。
+上游、Key、模型、并发等 **全部在网页配置**。
 
-示例：
+### 管理密码
 
-```bash
-# Linux / macOS — 把上游改成你的真实 grok2api（不要用 example.com 占位）
-export CIALLO_UPSTREAM=https://your-real-gateway.example
-export CIALLO_ADMIN_PASSWORD='your-strong-password'
-export CIALLO_PORT=8080
-docker compose pull && docker compose up -d
-
-# Windows PowerShell
-$env:CIALLO_UPSTREAM="https://your-real-gateway.example"
-$env:CIALLO_ADMIN_PASSWORD="your-strong-password"
-$env:CIALLO_PORT="8080"
-docker compose pull
-docker compose up -d
-```
-
-若日志出现 `host not found in upstream`，说明 `.env` 里 `CIALLO_UPSTREAM` 仍是占位域名或未设置。请写成可解析的真实地址后：
-
-```bash
-docker compose pull
-docker compose up -d --force-recreate
-```
-
-代理宿主机上的 grok2api：
-
-```yaml
-# docker-compose.yml 中取消 extra_hosts 注释，并设置：
-# CIALLO_UPSTREAM=http://host.docker.internal:8000
-```
-
-### 管理密码说明
-
-- 密码来自 `.env` 的 `CIALLO_ADMIN_PASSWORD`，由容器 entrypoint 算 **SHA-256** 写入 `/runtime-config.js`（**不写明文**）。
-- 浏览器只比对哈希；解锁状态存在 **sessionStorage**（关标签后需重新输入）。
-- 这是前端门禁，用于挡住随便点进管理页改配置；**不是**完整的服务端鉴权。公网请再加反向代理鉴权 / VPN。
-- 镜像只由 GitHub Actions 构建并推到 GHCR；部署侧只 `docker compose pull && up -d`，不要本地 `build`。
+- entrypoint 将密码的 SHA-256 写入 `/runtime-config.js`（不写明文）
+- 解锁状态在 sessionStorage
+- 仅为前端门禁，公网请再加反代鉴权 / VPN
 
 ## 本地开发
 
 ```bash
 npm install
-# 先配置上游，否则「测试连接」会失败（默认是占位域名）
-cp .env.example .env.local
-# 编辑 .env.local：把 VITE_DEV_PROXY_TARGET 改成你的 grok2api 根地址
+# 可选：.env.local 里 VITE_DEV_PROXY_TARGET=https://your-gateway 以便使用 Base=/v1
 npm run dev
 ```
 
-开发服务器：`http://127.0.0.1:5173`  
-管理页 Base URL 保持 **`/v1`**（由 Vite 同源代理到 `VITE_DEV_PROXY_TARGET`）。
-
-也可用环境变量一次性覆盖：
-
-```bash
-# Windows PowerShell
-$env:VITE_DEV_PROXY_TARGET="https://你的网关"
-npm run dev
-```
-
-若出现「连不上 / 网络失败 / HTTP 500|502」：
-
-1. 看终端是否打印 `[ciallo] 开发代理仍指向占位上游`
-2. 确认 `VITE_DEV_PROXY_TARGET` 是真实可访问的 grok2api（不是 `your-grok2api.example.com`）
-3. **改完代理必须重启** `npm run dev`（Vite 只在启动时读代理配置）
-4. 管理页 Base URL = `/v1`，填对 API Key 后再点「测试连接」
+- 地址：`http://127.0.0.1:5173`
+- Base 可填绝对 URL，或 `/v1`（走 Vite 代理）
 
 ## 接口约定
 
-- `GET /v1/models`
-- `POST /v1/images/generations`
-
-请求体示例：
+- `GET {base}/models`
+- `POST {base}/images/generations`
 
 ```json
 {
@@ -126,23 +73,20 @@ npm run dev
 }
 ```
 
-若上游返回内网媒体地址（如 `http://127.0.0.1:8000/v1/media/...`），前端会按当前 Base URL 自动改写主机。
+## 社区契约
+
+见 `docs/superpowers/specs/2026-07-17-community-hall-design.md`。
 
 ## 镜像发布
 
-推送到 `main` / `beta` 或打 `v*.*.*` tag 后，GitHub Actions 会：
+推送 `main` / `beta` 或 `v*.*.*` tag → GitHub Actions 构建并推送 GHCR。
 
-1. `npm ci && npm run build`
-2. 分别在 amd64 / arm64 runner 构建并推送
-3. 合并 multi-arch manifest 到 GHCR
+镜像：`ghcr.io/murasamecyan/ciallostudio:beta`
 
-镜像：`ghcr.io/murasamecyan/ciallostudio`
+## 安全
 
-## 安全提示
-
-- 不要把 API Key 写进代码、README、compose 或镜像
-- 公网部署时请自行加访问控制（反代鉴权 / VPN / 防火墙）
-- 本项目仅提供前端调用能力，请遵守上游服务条款与当地法律
+- 不要把 API Key / 真实管理密码写进仓库
+- 上游需允许浏览器 CORS（Docker 镜像不再反代上游）
 
 ## License
 

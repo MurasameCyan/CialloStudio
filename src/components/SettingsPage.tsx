@@ -87,21 +87,18 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
     } catch (error) {
       setOk(false);
       let text = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
-      // 本地 dev 最常见：Vite 代理仍指向占位上游 / 上游宕机
-      if (
-        /proxy_upstream_unreachable|占位|your-grok2api\.example\.com|ECONNREFUSED|ENOTFOUND|network|CORS|Failed to fetch|502|504/i.test(
-          text,
-        )
-      ) {
+      if (/CORS|Failed to fetch|network|Load failed|NetworkError/i.test(text)) {
         text = [
           text,
           "",
           "排查：",
-          "1) 管理页 Base URL 用同源 `/v1`（不要填跨域绝对地址，除非上游开了 CORS）",
-          "2) 本地 npm run dev：设置 VITE_DEV_PROXY_TARGET=你的 grok2api 根地址后重启",
-          "3) Docker：设置 CIALLO_UPSTREAM=你的 grok2api 根地址后 compose up",
+          "1) Base URL 填完整上游，例如 https://your-gateway/v1（不要只填 /v1，Docker 镜像不再反代）",
+          "2) 上游需允许浏览器跨域（CORS），或你在上游/网关侧处理 CORS",
+          "3) 本地 npm run dev 可用 /v1 + VITE_DEV_PROXY_TARGET 走 Vite 代理",
           "4) 确认 API Key 正确，上游 /v1/models 可访问",
         ].join("\n");
+      } else if (/missing_base_url|填写 API Base/i.test(text)) {
+        text = `${text}\n\n在管理页「API Base URL」填：https://你的网关/v1`;
       }
       log("error", "管理页：测试连接失败", text);
       setMessage(text);
@@ -111,6 +108,16 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
   }
 
   function handleSave() {
+    if (!draft.baseUrl.trim()) {
+      setOk(false);
+      setMessage("请填写 API Base URL（完整地址，如 https://your-gateway/v1）");
+      return;
+    }
+    if (!draft.apiKey.trim()) {
+      setOk(false);
+      setMessage("请填写 API Key");
+      return;
+    }
     const normalized = persist(draft);
     log("ok", "设置已保存", {
       baseUrl: normalized.baseUrl,
@@ -122,9 +129,9 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
     setMessage(`已保存 · 模型 ${normalized.model} · 并发 ${normalized.concurrency}`);
   }
 
-  function useSameOriginProxy() {
-    update("baseUrl", "/v1");
-    setMessage("已切换为同源代理 /v1，请保存或测试连接。");
+  function useExampleAbsolute() {
+    update("baseUrl", "https://");
+    setMessage("请补全你的网关域名，例如 https://grokb.example.com/v1，然后保存并测试。");
     setOk(null);
   }
 
@@ -185,8 +192,8 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
               <div className="section-card-title">Connection</div>
               <h3 className="admin-section-title">接口连接</h3>
             </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={useSameOriginProxy}>
-              使用 /v1
+            <button type="button" className="btn btn-secondary btn-sm" onClick={useExampleAbsolute}>
+              填 https://
             </button>
           </div>
 
@@ -197,12 +204,15 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 id="baseUrl"
                 className="control mono"
                 value={draft.baseUrl}
-                placeholder="/v1 或 https://host/v1"
+                placeholder="https://your-gateway/v1"
                 onChange={(e) => update("baseUrl", e.target.value)}
                 autoComplete="off"
                 spellCheck={false}
               />
-              <div className="field-hint">推荐同源代理 `/v1`，可避免浏览器 CORS 问题。</div>
+              <div className="field-hint">
+                在网页里配置上游（不写进 .env）。Docker 部署请填<strong>完整 URL</strong>，例如{" "}
+                <code>https://your-gateway/v1</code>。仅本地 Vite 开发可用 <code>/v1</code> 走代理。
+              </div>
             </div>
 
             <div className="field">

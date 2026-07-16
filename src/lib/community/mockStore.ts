@@ -15,9 +15,17 @@ import type {
   ListPostsResult,
   LoginInput,
   RegisterInput,
+  ShareCooldownConfig,
+  UserRole,
+} from "./types";
+import {
+  DEFAULT_SHARE_COOLDOWN,
+  normalizeShareCooldown,
+  shareCooldownForRole,
 } from "./types";
 
 const STORAGE_KEY = "ciallo-studio.community.mock.v1";
+const COOLDOWN_KEY = "ciallo-studio.community.shareCooldown.v1";
 /** 密码由 .env 哈希校验，不存明文 */
 const ENV_PASSWORD_MARKER = "__env_master__";
 /** 本地未配置 .env 时的 Mock 站长密码 */
@@ -191,15 +199,49 @@ function save(store: Store): void {
   }
 }
 
+function loadShareCooldown(): ShareCooldownConfig {
+  try {
+    const raw = localStorage.getItem(COOLDOWN_KEY);
+    if (!raw) return { ...DEFAULT_SHARE_COOLDOWN };
+    return normalizeShareCooldown(JSON.parse(raw) as Partial<ShareCooldownConfig>);
+  } catch {
+    return { ...DEFAULT_SHARE_COOLDOWN };
+  }
+}
+
+function saveShareCooldown(cfg: ShareCooldownConfig): void {
+  try {
+    localStorage.setItem(COOLDOWN_KEY, JSON.stringify(normalizeShareCooldown(cfg)));
+  } catch {
+    // ignore
+  }
+}
+
+function normalizeRole(role: unknown): UserRole {
+  if (role === "admin" || role === "vip" || role === "user") return role;
+  return "user";
+}
+
 function publicUser(u: CommunityUser & { password?: string }): CommunityUser {
   return {
     id: u.id,
     username: u.username,
     displayName: u.displayName,
-    role: u.role,
+    role: normalizeRole(u.role),
     createdAt: u.createdAt,
     banned: u.banned,
+    lastShareAt: typeof u.lastShareAt === "number" ? u.lastShareAt : undefined,
   };
+}
+
+function requireAdmin(token: string | null): { store: Store; admin: StoreUser } {
+  const store = load();
+  const adminId = token ? store.sessions[token] : null;
+  const admin = store.users.find((u) => u.id === adminId);
+  if (!admin || admin.role !== "admin" || admin.banned) {
+    throw new Error("需要管理员权限");
+  }
+  return { store, admin };
 }
 
 function withLiked(post: GalleryPost, userId?: string, store?: Store): GalleryPost {
@@ -339,6 +381,19 @@ export const mockCommunity = {
     const user = store.users.find((u) => u.id === userId);
     if (!user || user.banned) throw new Error("无法发帖");
     if (!input.imageUrl?.trim()) throw new Error("缺少图片");
+
+    // 分享冷却：按用户组（user / vip；admin 不限）
+    const cooldownCfg = loadShareCooldown();
+    const role = normalizeRole(user.role);
+    const cooldownSec = shareCooldownForRole(role, cooldownCfg);
+    if (cooldownSec > 0 && typeof user.lastShareAt === "number" && user.lastShareAt > 0) {
+      const elapsed = (Date.now() - user.lastShareAt) / 1000;
+      const remain = Math.ceil(cooldownSec - elapsed);
+      if (remain > 0) {
+        throw new Error(`分享冷却中，请 ${remain} 秒后再试（${role === "vip" ? "VIP" : "普通用户"}间隔 ${cooldownSec} 秒）`);
+      }
+    }
+
     const post: GalleryPost = {
       id: uid("post-"),
       authorId: user.id,
@@ -357,6 +412,7 @@ export const mockCommunity = {
     };
     store.posts.unshift(post);
     store.likes[post.id] = [];
+    user.lastShareAt = Date.now();
     save(store);
     return post;
   },
@@ -412,20 +468,14 @@ export const mockCommunity = {
   },
 
   async listUsers(token: string | null): Promise<CommunityUser[]> {
-    const store = load();
-    const userId = token ? store.sessions[token] : null;
-    const me = store.users.find((u) => u.id === userId);
-    if (!me || me.role !== "admin" || me.banned) throw new Error("需要管理员权限");
+    const { store } = requireAdmin(token);
     return store.users
       .map(publicUser)
       .sort((a, b) => b.createdAt - a.createdAt);
   },
 
   async setBanned(userId: string, banned: boolean, token: string | null): Promise<CommunityUser> {
-    const store = load();
-    const adminId = token ? store.sessions[token] : null;
-    const admin = store.users.find((u) => u.id === adminId);
-    if (!admin || admin.role !== "admin" || admin.banned) throw new Error("需要管理员权限");
+    const { store, admin } = requireAdmin(token);
     const user = store.users.find((u) => u.id === userId);
     if (!user) throw new Error("用户不存在");
     if (user.role === "admin") throw new Error("不能禁用管理员");
@@ -441,12 +491,43 @@ export const mockCommunity = {
     return publicUser(user);
   },
 
+  /** 设置用户分组：user | vip（不可改站长） */
+  async setUserRole(userId: string, role: UserRole, token: string | null): Promise<CommunityUser> {
+    const { store, admin } = requireAdmin(token);
+    if (role !== "user" && role !== "vip") {
+      throw new Error("仅可设为普通用户或 VIP");
+    }
+    const user = store.users.find((u) => u.id === userId);
+    if (!user) throw new Error("用户不存在");
+    if (user.role === "admin" || user.id === admin.id) {
+      throw new Error("不能修改站长分组");
+    }
+    user.role = role;
+    save(store);
+    return publicUser(user);
+  },
+
+  async getShareCooldown(token: string | null): Promise<ShareCooldownConfig> {
+    requireAdmin(token);
+    return loadShareCooldown();
+  },
+
+  async setShareCooldown(
+    cfg: Partial<ShareCooldownConfig>,
+    token: string | null,
+  ): Promise<ShareCooldownConfig> {
+    requireAdmin(token);
+    const next = normalizeShareCooldown({
+      ...loadShareCooldown(),
+      ...cfg,
+    });
+    saveShareCooldown(next);
+    return next;
+  },
+
   /** 删除用户：吊销会话、移除账号；保留其帖子/评论（作者名仍可见） */
   async deleteUser(userId: string, token: string | null): Promise<void> {
-    const store = load();
-    const adminId = token ? store.sessions[token] : null;
-    const admin = store.users.find((u) => u.id === adminId);
-    if (!admin || admin.role !== "admin" || admin.banned) throw new Error("需要管理员权限");
+    const { store, admin } = requireAdmin(token);
     const user = store.users.find((u) => u.id === userId);
     if (!user) throw new Error("用户不存在");
     if (user.role === "admin") throw new Error("不能删除站长/管理员");

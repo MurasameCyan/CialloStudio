@@ -127,9 +127,12 @@ const endpoints = [
   "POST /posts/:id/comments",
   "GET /admin/users",
   "POST /admin/users/:id/ban",
+  "POST /admin/users/:id/role",
   "DELETE /admin/users/:id",
+  "GET /admin/share-cooldown",
+  "PUT /admin/share-cooldown",
 ];
-assert(endpoints.length >= 11, "endpoint list");
+assert(endpoints.length >= 13, "endpoint list");
 
 // 用户管理路径
 {
@@ -176,10 +179,27 @@ assert(endpoints.length >= 11, "endpoint list");
   }
   assert(delAdminBlocked, "cannot delete admin");
 
+  // VIP 分组
+  const demoUser = store.users.find((u) => u.username === "demo");
+  assert(demoUser, "demo exists");
+  demoUser.role = "vip";
+  assert(demoUser.role === "vip", "demo is vip");
+
   deleteUser(store, demo.user.id, admin.token);
   assert(!store.users.some((u) => u.username === "demo"), "demo removed");
   assert(me(store, again.token) === null, "deleted user session gone");
   assert(listUsers(store, admin.token).length === 1, "only admin left");
 }
 
-console.log("community mock user-admin ok:", endpoints.length, "routes + ban/delete flows");
+// 分享冷却秒数语义
+{
+  function remain(cooldownSec, lastShareAt, now) {
+    if (cooldownSec <= 0 || !lastShareAt) return 0;
+    return Math.max(0, Math.ceil(cooldownSec - (now - lastShareAt) / 1000));
+  }
+  assert(remain(60, Date.now() - 10_000, Date.now()) === 50, "user cooldown remain");
+  assert(remain(15, Date.now() - 20_000, Date.now()) === 0, "vip cooldown done");
+  assert(remain(0, Date.now(), Date.now()) === 0, "admin no cooldown");
+}
+
+console.log("community mock user-admin ok:", endpoints.length, "routes + ban/delete/vip/cooldown");

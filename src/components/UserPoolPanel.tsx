@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { communityApi } from "@/lib/community/client";
-import type { CommunityUser } from "@/lib/community/types";
+import type { CommunityUser, ShareCooldownConfig, UserRole } from "@/lib/community/types";
+import { DEFAULT_SHARE_COOLDOWN, roleLabel } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 
@@ -32,8 +33,12 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
   const [filter, setFilter] = useState<"all" | "active" | "banned">("all");
   const [banBusyId, setBanBusyId] = useState<string | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
+  const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [ok, setOk] = useState<boolean | null>(null);
+  const [cooldown, setCooldown] = useState<ShareCooldownConfig>({ ...DEFAULT_SHARE_COOLDOWN });
+  const [cooldownDraft, setCooldownDraft] = useState<ShareCooldownConfig>({ ...DEFAULT_SHARE_COOLDOWN });
+  const [cooldownBusy, setCooldownBusy] = useState(false);
 
   const isAdmin = communityUser?.role === "admin";
 
@@ -46,8 +51,13 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
     setUsersLoading(true);
     setUsersError("");
     try {
-      const list = await communityApi.listUsers();
+      const [list, cd] = await Promise.all([
+        communityApi.listUsers(),
+        communityApi.getShareCooldown(),
+      ]);
       setUsers(list);
+      setCooldown(cd);
+      setCooldownDraft(cd);
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
       setUsersError(text);
@@ -79,8 +89,48 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
     const total = users.length;
     const banned = users.filter((u) => u.banned).length;
     const admins = users.filter((u) => u.role === "admin").length;
-    return { total, banned, active: total - banned, admins };
+    const vips = users.filter((u) => u.role === "vip").length;
+    return { total, banned, active: total - banned, admins, vips };
   }, [users]);
+
+  async function saveCooldown() {
+    setCooldownBusy(true);
+    setMessage("");
+    setOk(null);
+    try {
+      const next = await communityApi.setShareCooldown(cooldownDraft);
+      setCooldown(next);
+      setCooldownDraft(next);
+      setOk(true);
+      setMessage(`已保存分享冷却：普通 ${next.user}s · VIP ${next.vip}s`);
+      log("ok", "分享冷却已保存", next);
+    } catch (e) {
+      setOk(false);
+      setMessage(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setCooldownBusy(false);
+    }
+  }
+
+  async function changeRole(u: CommunityUser, role: UserRole) {
+    if (u.role === "admin" || role === "admin") return;
+    if (u.role === role) return;
+    setRoleBusyId(u.id);
+    setMessage("");
+    setOk(null);
+    try {
+      const next = await communityApi.setUserRole(u.id, role);
+      setUsers((prev) => prev.map((x) => (x.id === next.id ? next : x)));
+      setOk(true);
+      setMessage(`已将 @${next.username} 设为 ${roleLabel(next.role)}`);
+      log("ok", `用户分组 ${next.username} → ${next.role}`);
+    } catch (e) {
+      setOk(false);
+      setMessage(e instanceof Error ? e.message : "设置分组失败");
+    } finally {
+      setRoleBusyId(null);
+    }
+  }
 
   async function toggleBan(u: CommunityUser) {
     if (u.role === "admin") return;
@@ -225,12 +275,65 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           <strong className="admin-status-value">{userStats.active}</strong>
         </div>
         <div className="admin-status-card">
+          <span className="admin-status-label">VIP</span>
+          <strong className="admin-status-value">{userStats.vips}</strong>
+        </div>
+        <div className="admin-status-card">
           <span className="admin-status-label">已禁用</span>
           <strong className="admin-status-value">{userStats.banned}</strong>
         </div>
-        <div className="admin-status-card">
-          <span className="admin-status-label">管理员</span>
-          <strong className="admin-status-value">{userStats.admins}</strong>
+      </div>
+
+      <div className="user-cooldown-card">
+        <div className="user-cooldown-head">
+          <div>
+            <div className="admin-block-label">分享冷却（秒）</div>
+            <p className="footer-note" style={{ marginTop: 4 }}>
+              各用户组分享到大厅的最小间隔。站长不限。当前生效：普通 {cooldown.user}s · VIP {cooldown.vip}s
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={cooldownBusy}
+            onClick={() => void saveCooldown()}
+          >
+            {cooldownBusy ? "保存中…" : "保存冷却"}
+          </button>
+        </div>
+        <div className="admin-fields-2" style={{ marginTop: 10 }}>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="cd-user">普通用户</label>
+            </div>
+            <input
+              id="cd-user"
+              className="control"
+              type="number"
+              min={0}
+              max={86400}
+              value={cooldownDraft.user}
+              onChange={(e) =>
+                setCooldownDraft((p) => ({ ...p, user: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="cd-vip">VIP</label>
+            </div>
+            <input
+              id="cd-vip"
+              className="control"
+              type="number"
+              min={0}
+              max={86400}
+              value={cooldownDraft.vip}
+              onChange={(e) =>
+                setCooldownDraft((p) => ({ ...p, vip: Number(e.target.value) }))
+              }
+            />
+          </div>
         </div>
       </div>
 
@@ -289,7 +392,10 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           {filteredUsers.map((u) => {
             const isSelf = u.id === communityUser.id;
             const canManage = u.role !== "admin" && !isSelf;
-            const rowBusy = banBusyId === u.id || deleteBusyId === u.id;
+            const rowBusy =
+              banBusyId === u.id || deleteBusyId === u.id || roleBusyId === u.id;
+            const badgeClass =
+              u.role === "admin" ? "admin" : u.role === "vip" ? "vip" : "user";
             return (
               <div
                 key={u.id}
@@ -300,19 +406,33 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                   <div className="user-row-title">
                     <strong>{u.displayName}</strong>
                     <span className="user-badges">
-                      <span className={`user-badge ${u.role === "admin" ? "admin" : "user"}`}>
-                        {u.role === "admin" ? "站长" : "用户"}
-                      </span>
+                      <span className={`user-badge ${badgeClass}`}>{roleLabel(u.role)}</span>
                       {u.banned ? <span className="user-badge banned">已禁用</span> : null}
                       {isSelf ? <span className="user-badge self">我</span> : null}
                     </span>
                   </div>
                   <div className="user-row-meta">
                     @{u.username} · 加入 {formatJoined(u.createdAt)}
+                    {u.role !== "admin"
+                      ? ` · 冷却 ${u.role === "vip" ? cooldown.vip : cooldown.user}s`
+                      : " · 冷却不限"}
                   </div>
                 </div>
                 {canManage ? (
                   <div className="user-row-actions">
+                    <select
+                      className="control user-role-select"
+                      value={u.role === "vip" ? "vip" : "user"}
+                      disabled={rowBusy}
+                      aria-label={`分组 @${u.username}`}
+                      onChange={(e) => {
+                        const next = e.target.value === "vip" ? "vip" : "user";
+                        void changeRole(u, next);
+                      }}
+                    >
+                      <option value="user">普通</option>
+                      <option value="vip">VIP</option>
+                    </select>
                     <button
                       type="button"
                       className={`btn btn-sm ${u.banned ? "btn-secondary" : "btn-ghost"}`}

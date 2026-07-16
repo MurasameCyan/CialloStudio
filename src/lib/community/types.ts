@@ -1,6 +1,7 @@
 /** 社区 API 契约类型（前后端共用形状；本阶段 mock 实现） */
 
-export type UserRole = "user" | "admin";
+/** user=普通 · vip=VIP · admin=站长 */
+export type UserRole = "user" | "vip" | "admin";
 
 export type CommunityUser = {
   id: string;
@@ -9,6 +10,19 @@ export type CommunityUser = {
   role: UserRole;
   createdAt: number;
   banned?: boolean;
+  /** 上次成功分享到大厅的时间戳（ms），用于冷却 */
+  lastShareAt?: number;
+};
+
+/** 各组「分享到大厅」最小间隔（秒）。admin 固定 0。 */
+export type ShareCooldownConfig = {
+  user: number;
+  vip: number;
+};
+
+export const DEFAULT_SHARE_COOLDOWN: ShareCooldownConfig = {
+  user: 60,
+  vip: 15,
 };
 
 export type AuthSession = {
@@ -89,3 +103,29 @@ export type ApiErrorBody = {
     message: string;
   };
 };
+
+export function roleLabel(role: UserRole): string {
+  if (role === "admin") return "站长";
+  if (role === "vip") return "VIP";
+  return "用户";
+}
+
+export function clampShareCooldownSec(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(86400, Math.max(0, Math.round(n)));
+}
+
+export function normalizeShareCooldown(raw?: Partial<ShareCooldownConfig> | null): ShareCooldownConfig {
+  return {
+    user: clampShareCooldownSec(raw?.user, DEFAULT_SHARE_COOLDOWN.user),
+    vip: clampShareCooldownSec(raw?.vip, DEFAULT_SHARE_COOLDOWN.vip),
+  };
+}
+
+/** 按角色取冷却秒数；站长 0 */
+export function shareCooldownForRole(role: UserRole, cfg: ShareCooldownConfig): number {
+  if (role === "admin") return 0;
+  if (role === "vip") return Math.max(0, cfg.vip);
+  return Math.max(0, cfg.user);
+}

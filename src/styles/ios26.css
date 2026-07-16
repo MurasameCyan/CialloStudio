@@ -2273,6 +2273,42 @@ a {
   background: rgba(48, 209, 88, 0.12);
 }
 
+.user-badge.vip {
+  color: #9a6700;
+  border-color: rgba(255, 204, 0, 0.35);
+  background: rgba(255, 214, 10, 0.18);
+}
+
+.user-cooldown-card {
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--separator);
+  background: var(--bg-soft);
+}
+
+.user-cooldown-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.user-role-select {
+  width: auto;
+  min-width: 88px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+@media (prefers-color-scheme: dark) {
+  .user-badge.vip {
+    color: #ffd60a;
+    background: rgba(255, 214, 10, 0.12);
+  }
+}
+
 @media (prefers-color-scheme: dark) {
   .user-badge {
     background: rgba(255, 255, 255, 0.06);

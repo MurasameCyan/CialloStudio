@@ -16,6 +16,8 @@ import type {
   ListPostsResult,
   LoginInput,
   RegisterInput,
+  ShareCooldownConfig,
+  UserRole,
 } from "./types";
 
 const TOKEN_KEY = "ciallo-studio.community.token.v1";
@@ -221,6 +223,33 @@ export const communityApi = {
       });
     }
     return mockCommunity.setBanned(userId, banned, getToken());
+  },
+
+  async setUserRole(userId: string, role: UserRole): Promise<CommunityUser> {
+    if (getCommunityMode() === "http") {
+      return http<CommunityUser>(`/admin/users/${encodeURIComponent(userId)}/role`, {
+        method: "POST",
+        body: JSON.stringify({ role }),
+      });
+    }
+    return mockCommunity.setUserRole(userId, role, getToken());
+  },
+
+  async getShareCooldown(): Promise<ShareCooldownConfig> {
+    if (getCommunityMode() === "http") {
+      return http<ShareCooldownConfig>("/admin/share-cooldown");
+    }
+    return mockCommunity.getShareCooldown(getToken());
+  },
+
+  async setShareCooldown(cfg: Partial<ShareCooldownConfig>): Promise<ShareCooldownConfig> {
+    if (getCommunityMode() === "http") {
+      return http<ShareCooldownConfig>("/admin/share-cooldown", {
+        method: "PUT",
+        body: JSON.stringify(cfg),
+      });
+    }
+    return mockCommunity.setShareCooldown(cfg, getToken());
   },
 
   async deleteUser(userId: string): Promise<void> {

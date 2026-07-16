@@ -397,15 +397,6 @@ export function StudioPage({
                 模型 {settings.model || "未选择"} →
               </button>
             </div>
-            <label className="append-toggle" title="关闭后，每次生成只保留本次结果">
-              <input
-                type="checkbox"
-                checked={Boolean(draft.appendResults)}
-                disabled={running}
-                onChange={(e) => setDraft({ appendResults: e.target.checked })}
-              />
-              <span>追加到图片墙</span>
-            </label>
           </div>
 
           <div className="option-block option-block-params">

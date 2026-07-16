@@ -1791,7 +1791,7 @@ a {
   order: 2;
 }
 
-/* 开始生成 + 追加到图片墙 合并卡片（在选项区顶部） */
+/* 开始生成操作卡片（在选项区顶部） */
 .option-block-actions {
   display: grid;
   gap: 12px;
@@ -1805,12 +1805,6 @@ a {
   border: 0;
   border-radius: 0;
   background: transparent;
-}
-
-.option-block-actions .append-toggle {
-  width: 100%;
-  justify-content: flex-start;
-  box-sizing: border-box;
 }
 
 /* 生图数量 / 并发 / 分辨率 / 宽高比 合并为一张卡片 */
@@ -1902,34 +1896,6 @@ a {
 
   .studio-params-row .segmented {
     width: 100%;
-  }
-}
-
-.append-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
-  user-select: none;
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.34);
-  border: 1px solid var(--separator);
-}
-
-.append-toggle input {
-  width: 15px;
-  height: 15px;
-  accent-color: var(--accent);
-  margin: 0;
-}
-
-@media (prefers-color-scheme: dark) {
-  .append-toggle {
-    background: rgba(255, 255, 255, 0.04);
   }
 }
 

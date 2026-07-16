@@ -1,13 +1,16 @@
 import { useState } from "react";
+import { AccountPage } from "@/components/AccountPage";
 import { AdminUnlock } from "@/components/AdminUnlock";
+import { HallPage } from "@/components/HallPage";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
+import { useCommunityAuth } from "@/hooks/useCommunityAuth";
 import { useStudioQueue } from "@/hooks/useStudioQueue";
 import { log } from "@/lib/logger";
 import { isAdminGateEnabled, isAdminUnlocked, lockAdmin } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
 
-type Tab = "studio" | "settings";
+type Tab = "studio" | "hall" | "account" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
@@ -23,6 +26,7 @@ export default function App() {
     return initial;
   });
   const [adminUnlocked, setAdminUnlocked] = useState(() => isAdminUnlocked());
+  const community = useCommunityAuth();
 
   // 队列挂在 App 层：切到管理页也不会丢任务/结果，生成可继续跑
   const queue = useStudioQueue(settings);
@@ -69,9 +73,11 @@ export default function App() {
             <span className={`live-dot ${ready ? "" : "off"}`} />
             {queue.running
               ? `在飞 ${queue.inFlight}/${Math.max(1, Math.min(queue.draft.concurrency, queue.stats.total || queue.plannedJobs || 1))}`
-              : ready
-                ? "Ready"
-                : "Setup"}
+              : community.user
+                ? community.user.displayName
+                : ready
+                  ? "Ready"
+                  : "Setup"}
           </div>
           <nav className="nav-pills" aria-label="主导航">
             <button
@@ -80,6 +86,20 @@ export default function App() {
               onClick={() => setTab("studio")}
             >
               生图
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${tab === "hall" ? "active" : ""}`}
+              onClick={() => setTab("hall")}
+            >
+              大厅
+            </button>
+            <button
+              type="button"
+              className={`nav-pill ${tab === "account" ? "active" : ""}`}
+              onClick={() => setTab("account")}
+            >
+              用户
             </button>
             <button
               type="button"
@@ -97,6 +117,8 @@ export default function App() {
           <StudioPage
             settings={settings}
             onOpenSettings={openSettings}
+            onNeedLogin={() => setTab("account")}
+            onSharedToHall={() => setTab("hall")}
             draft={queue.draft}
             setDraft={queue.setDraft}
             jobs={queue.jobs}
@@ -109,6 +131,22 @@ export default function App() {
             onStart={queue.start}
             onStop={queue.stop}
             onClear={queue.clear}
+          />
+        ) : tab === "hall" ? (
+          <HallPage user={community.user} onNeedLogin={() => setTab("account")} />
+        ) : tab === "account" ? (
+          <AccountPage
+            user={community.user}
+            loading={community.loading}
+            onLogin={async (username, password) => {
+              await community.login({ username, password });
+            }}
+            onRegister={async (username, password, displayName) => {
+              await community.register({ username, password, displayName });
+            }}
+            onLogout={async () => {
+              await community.logout();
+            }}
           />
         ) : showUnlock ? (
           <AdminUnlock onUnlocked={handleUnlocked} onCancel={() => setTab("studio")} />

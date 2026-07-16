@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
+import { communityApi } from "@/lib/community/client";
 import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
@@ -17,6 +18,10 @@ type Stats = { total: number; done: number; failed: number; active: number; runn
 type Props = {
   settings: StudioSettings;
   onOpenSettings: () => void;
+  /** 未登录时跳转账号页 */
+  onNeedLogin?: () => void;
+  /** 分享成功后可选跳转大厅 */
+  onSharedToHall?: () => void;
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
@@ -34,6 +39,8 @@ type Props = {
 export function StudioPage({
   settings,
   onOpenSettings,
+  onNeedLogin,
+  onSharedToHall,
   draft,
   setDraft,
   jobs,
@@ -51,6 +58,7 @@ export function StudioPage({
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
+  const [sharingId, setSharingId] = useState<string | null>(null);
 
   const downloadableJobs = useMemo(
     () => jobs.filter((job) => job.status === "done" && Boolean(displayUrl(job) || job.openUrl)),
@@ -134,6 +142,33 @@ export function StudioPage({
   function handleClear() {
     clearSelection();
     onClear();
+  }
+
+  async function handleShareToHall(job: StudioJob) {
+    const src = displayUrl(job) || job.openUrl;
+    if (!src || job.status !== "done") return;
+    setSharingId(job.id);
+    try {
+      const me = await communityApi.me();
+      if (!me) {
+        log("warn", "分享大厅需要先登录社区账号");
+        onNeedLogin?.();
+        return;
+      }
+      await communityApi.createPost({
+        imageUrl: src,
+        prompt: job.prompt,
+        model: settings.model,
+        aspectRatio: job.aspectRatio || draft.aspectRatio,
+        resolution: job.resolution || draft.resolution,
+      });
+      log("ok", "已分享到大厅");
+      onSharedToHall?.();
+    } catch (error) {
+      log("error", "分享失败", error instanceof Error ? error.message : String(error));
+    } finally {
+      setSharingId(null);
+    }
   }
 
   return (
@@ -467,6 +502,17 @@ export function StudioPage({
                             >
                               打开原图
                             </a>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              disabled={sharingId === job.id}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleShareToHall(job);
+                              }}
+                            >
+                              {sharingId === job.id ? "分享中…" : "分享到大厅"}
+                            </button>
                           </div>
                         </>
                       ) : job.status === "failed" ? (

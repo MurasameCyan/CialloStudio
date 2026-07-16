@@ -12,6 +12,7 @@ dist-ssr/
 !.env.example
 workers/**/.dev.vars
 workers/**/.wrangler/
+releases/_pack_*/
 
 # Editor / OS
 .DS_Store

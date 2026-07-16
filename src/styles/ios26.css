@@ -1705,7 +1705,7 @@ a {
   box-sizing: border-box;
 }
 
-/* 生图数量 / 并发 / 宽高比 / 分辨率 合并为一张卡片 */
+/* 生图数量 / 并发 / 分辨率 / 宽高比 合并为一张卡片 */
 .option-block-params {
   padding: 14px;
 }
@@ -1717,13 +1717,18 @@ a {
   box-sizing: border-box;
 }
 
-/* 每行左右 50/50，同排按钮顶对齐（宽高比 ↔ 分辨率 第一排同高） */
+/* 第一行：生图数量 | 并发 | 分辨率，按钮同风格同高 */
 .studio-params-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
   gap: 0 16px;
   align-items: start;
   width: 100%;
+}
+
+/* 第二行：宽高比独占整行 */
+.studio-params-row-aspect {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .studio-params-row > .field {
@@ -1753,7 +1758,7 @@ a {
   width: 100%;
 }
 
-/* 同一卡片内所有 chip 同高同内边距 */
+/* 同一卡片内所有 chip 同高同内边距（并发 / 分辨率一致） */
 .studio-params-row .chip {
   min-height: 40px;
   height: 40px;
@@ -1764,12 +1769,33 @@ a {
   box-sizing: border-box;
   line-height: 1;
   flex: 0 0 auto;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.studio-params-row .chip:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .studio-params-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .studio-params-row > .field:nth-child(3) {
+    grid-column: 1 / -1;
+  }
 }
 
 @media (max-width: 560px) {
   .studio-params-row {
     grid-template-columns: 1fr;
     gap: 14px 0;
+  }
+
+  .studio-params-row > .field:nth-child(3) {
+    grid-column: auto;
   }
 }
 

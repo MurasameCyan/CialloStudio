@@ -269,7 +269,7 @@ export function StudioPage({
                   </div>
                 </div>
                 <div className="field">
-                  <label>并发数（同时请求）</label>
+                  <label>并发</label>
                   <div className="segmented">
                     {CONCURRENCY_OPTIONS.map((n) => (
                       <button
@@ -279,23 +279,6 @@ export function StudioPage({
                         onClick={() => setDraft({ concurrency: n })}
                       >
                         {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-              <div className="studio-params-row">
-                <div className="field">
-                  <label>宽高比</label>
-                  <div className="segmented">
-                    {ASPECT_RATIOS.map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                        onClick={() => setDraft({ aspectRatio: ratio })}
-                      >
-                        {ratio}
                       </button>
                     ))}
                   </div>
@@ -320,6 +303,23 @@ export function StudioPage({
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+              </div>
+              <div className="studio-params-row studio-params-row-aspect">
+                <div className="field">
+                  <label>宽高比</label>
+                  <div className="segmented">
+                    {ASPECT_RATIOS.map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                        onClick={() => setDraft({ aspectRatio: ratio })}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
                   </div>
                 </div>
               </div>

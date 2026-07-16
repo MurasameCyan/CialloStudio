@@ -25,6 +25,8 @@ export type StudioDraft = {
   resolution: string;
   variants: number;
   concurrency: number;
+  /** 新生成是否追加到结果墙；false=只保留本次 */
+  appendResults: boolean;
 };
 
 const JOBS_KEY = "ciallo-studio.jobs.v1";
@@ -139,6 +141,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         ...defaults,
         variants: clampVariants(defaults.variants),
         concurrency: clampConcurrency(defaults.concurrency),
+        appendResults: defaults.appendResults ?? false,
       };
     }
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
@@ -148,12 +151,14 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       resolution: typeof parsed.resolution === "string" ? parsed.resolution : defaults.resolution,
       variants: clampVariants(Number(parsed.variants ?? defaults.variants)),
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
+      appendResults: typeof parsed.appendResults === "boolean" ? parsed.appendResults : false,
     };
   } catch {
     return {
       ...defaults,
       variants: clampVariants(defaults.variants),
       concurrency: clampConcurrency(defaults.concurrency),
+      appendResults: defaults.appendResults ?? false,
     };
   }
 }

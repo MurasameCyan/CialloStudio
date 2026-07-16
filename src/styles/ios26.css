@@ -1382,6 +1382,34 @@ a {
   gap: 10px;
 }
 
+.append-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  user-select: none;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid var(--separator);
+}
+
+.append-toggle input {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--accent);
+  margin: 0;
+}
+
+@media (prefers-color-scheme: dark) {
+  .append-toggle {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
 .progress-track {
   height: 7px;
   border-radius: 999px;

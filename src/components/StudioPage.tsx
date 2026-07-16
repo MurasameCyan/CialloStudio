@@ -279,10 +279,24 @@ export function StudioPage({
               停止
             </button>
           </div>
+          <label className="append-toggle" title="关闭后，每次生成只保留本次结果">
+            <input
+              type="checkbox"
+              checked={Boolean(draft.appendResults)}
+              disabled={running}
+              onChange={(e) => setDraft({ appendResults: e.target.checked })}
+            />
+            <span>追加到结果墙</span>
+          </label>
           <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
             模型 {settings.model || "未选择"} →
           </button>
         </div>
+        {!draft.appendResults ? (
+          <p className="footer-note">默认会替换结果墙。只保留本次 {plannedJobs} 张，不会和历史混在一起。</p>
+        ) : (
+          <p className="footer-note">追加模式：新图会堆在旧结果上面，总数会越来越多。</p>
+        )}
       </section>
 
       <section className="panel results-panel">

@@ -49,6 +49,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       resolution: settings.resolution,
       variants: 4,
       concurrency: clampConcurrency(settings.concurrency),
+      appendResults: false,
     }),
   );
   const [jobs, setJobs] = useState<StudioJob[]>(() => loadJobs());
@@ -154,18 +155,24 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       resolution,
       aspectRatio,
     });
-    setJobs((prev) => [...batch, ...prev]);
+
+    // 默认替换结果墙，避免历史累积看起来像“一次出了十几张”
+    if (currentDraft.appendResults) {
+      setJobs((prev) => [...batch, ...prev]);
+    } else {
+      setJobs(batch);
+    }
 
     log(
       "info",
-      `并发生图开始：共 ${batch.length} 张 · worker=${concurrency} · 模型=${currentSettings.model} · 分辨率=${resolution}`,
+      `并发生图开始：本次 ${batch.length} 张 · worker=${concurrency} · ${currentDraft.appendResults ? "追加" : "替换"}模式`,
       {
         concurrency,
         variants,
-        typeofConcurrency: typeof currentDraft.concurrency,
-        coercedConcurrency: concurrency,
+        appendResults: currentDraft.appendResults,
         aspectRatio,
         resolution,
+        model: currentSettings.model,
       },
     );
 

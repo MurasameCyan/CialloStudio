@@ -45,27 +45,30 @@ Telegram 群/频道（file_id）
 
 ---
 
-## 1. 两种部署方式
+## 1. 部署方式（推荐 Pages 直传）
 
-### 方式 A：Dashboard 直接上传 zip（无需本机构建）
+### 方式 A：Cloudflare Pages 上传 zip（推荐）
+
+Workers 控制台对「含 JS 的 zip」会提示必须用 wrangler。请改用 **Pages → Upload assets**。
 
 包路径：
 
 ```text
-releases/ciallo-telegram-media-dashboard.zip
+releases/ciallo-telegram-media-pages.zip
 ```
 
-内含 **预构建 `worker.js`**，**没有** `wrangler.toml`，避免 CF 提示「请用 wrangler deploy」。
+内容：`index.html` + **`_worker.js`**（预构建）+ `README.txt`（无 wrangler.toml）。
 
-1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → **Create Worker**（可先留 Hello World）
-2. 打开该 Worker → **Edit code** 或版本部署里的 **Upload** / 拖拽上传  
-   上传 **`ciallo-telegram-media-dashboard.zip`**
-3. **Settings → Variables and Secrets** 添加下表变量后 **Deploy**
-4. 复制 `*.workers.dev` 地址到 Studio「Media Base URL」
+1. [Workers & Pages](https://dash.cloudflare.com/) → **Create** → 选 **Pages**
+2. **Upload assets** / **Direct Upload**
+3. 项目名例如 `ciallo-media`，上传 **`ciallo-telegram-media-pages.zip`**
+4. Deploy 后：**Settings → Environment variables**（Production）添加密钥
+5. 变量若后加：点 **Retry deployment** 或再传一次
+6. 地址：`https://ciallo-media.pages.dev` → Studio **Media Base URL**
 
-> 若界面只有「连接 Git / wrangler」且无法上传 zip，请用下面方式 B。
+重新打包：`npm run pack:media-worker:pages`
 
-### 方式 B：本机 Wrangler
+### 方式 B：本机 Wrangler（Workers）
 
 本机需 Node 18+ 与 npm。
 
@@ -76,9 +79,6 @@ npx wrangler login
 ```
 
 浏览器完成 Cloudflare 授权。
-
-重新打 Dashboard 包：`npm run pack:media-worker:dashboard`  
-重新打源码包：`npm run pack:media-worker`
 
 ---
 

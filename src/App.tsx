@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
 import { log } from "@/lib/logger";
@@ -19,11 +19,6 @@ export default function App() {
     return initial;
   });
 
-  const connectionLabel = useMemo(() => {
-    if (!settings.apiKey.trim()) return "未配置 API Key · 先去管理页填写";
-    return `${settings.model} · ${settings.baseUrl}`;
-  }, [settings]);
-
   const ready = Boolean(settings.apiKey.trim());
 
   return (
@@ -33,7 +28,6 @@ export default function App() {
           <div className="brand-mark" aria-hidden />
           <div className="brand-text">
             <div className="brand-title">Ciallo Studio</div>
-            <div className="brand-sub">{connectionLabel}</div>
           </div>
         </div>
 

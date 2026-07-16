@@ -12,9 +12,9 @@ services:
       - "${CIALLO_PORT:-8080}:8080"
     environment:
       # 上游 OpenAI 兼容网关根地址（可带或不带 /v1）
-      # 例: https://grokb.yuzu.gv.uy
+      # 例: https://your-grok2api.example.com
       # 例: http://host.docker.internal:8000
-      CIALLO_UPSTREAM: ${CIALLO_UPSTREAM:-https://grokb.yuzu.gv.uy}
+      CIALLO_UPSTREAM: ${CIALLO_UPSTREAM:-https://your-grok2api.example.com}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped
     init: true

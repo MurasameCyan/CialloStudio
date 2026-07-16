@@ -15,7 +15,7 @@ export default defineConfig({
     proxy: {
       // 本地开发：同源代理，绕过浏览器 CORS
       "/v1": {
-        target: "https://grokb.yuzu.gv.uy",
+        target: process.env.VITE_DEV_PROXY_TARGET || "https://your-grok2api.example.com",
         changeOrigin: true,
         secure: true,
       },

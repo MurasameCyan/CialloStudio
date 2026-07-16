@@ -31,7 +31,7 @@ docker compose up -d --build
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `CIALLO_PORT` | `8080` | 宿主机端口 |
-| `CIALLO_UPSTREAM` | `https://grokb.yuzu.gv.uy` | 上游网关根地址（可带或不带 `/v1`） |
+| `CIALLO_UPSTREAM` | `https://your-grok2api.example.com` | 上游网关根地址（可带或不带 `/v1`） |
 | `CIALLO_IMAGE` | `ghcr.io/murasamecyan/ciallostudio:beta` | 镜像名（本地 build 也会打此 tag） |
 | `TZ` | `Asia/Shanghai` | 时区 |
 
@@ -61,7 +61,7 @@ npm install
 npm run dev
 ```
 
-开发服务器默认 `http://127.0.0.1:5173`，并把 `/v1` 代理到 `https://grokb.yuzu.gv.uy`。
+开发服务器默认 `http://127.0.0.1:5173`，并把 `/v1` 代理到示例上游（见 `vite.config.ts`，请改成你自己的网关）。
 
 可覆盖：
 

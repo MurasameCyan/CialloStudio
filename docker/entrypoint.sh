@@ -2,10 +2,10 @@
 set -eu
 
 # CIALLO_UPSTREAM 例：
-#   https://grokb.yuzu.gv.uy
-#   https://grokb.yuzu.gv.uy/v1
+#   https://your-grok2api.example.com
+#   https://your-grok2api.example.com/v1
 #   http://host.docker.internal:8000
-UPSTREAM="${CIALLO_UPSTREAM:-https://grokb.yuzu.gv.uy}"
+UPSTREAM="${CIALLO_UPSTREAM:-https://your-grok2api.example.com}"
 UPSTREAM="$(printf '%s' "$UPSTREAM" | tr -d '\r' | sed 's/[[:space:]]//g')"
 
 # 去掉末尾斜杠

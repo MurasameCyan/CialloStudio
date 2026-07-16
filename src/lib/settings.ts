@@ -71,4 +71,4 @@ export function clampConcurrency(value: number): number {
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
-export const RESOLUTIONS = ["1k", "2k"] as const;
+export const RESOLUTIONS = ["1k", "2k", "4k"] as const;

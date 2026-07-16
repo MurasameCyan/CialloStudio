@@ -12,7 +12,7 @@ function levelClass(level: LogEntry["level"]): string {
   return "log-info";
 }
 
-/** 仅在管理页展示的运行日志面板 */
+/** 仅站长控制台展示的运行日志面板（普通用户设置页不渲染） */
 export function LogPanel() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
   const [open, setOpen] = useState(false);

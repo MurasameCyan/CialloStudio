@@ -297,7 +297,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
                   ? reason.message
                   : "生成失败";
             if (message.length > 280) {
-              message = `${message.slice(0, 280)}…（完整内容见管理页运行日志）`;
+              message = `${message.slice(0, 280)}…`;
             }
             log(
               "error",

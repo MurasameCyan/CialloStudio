@@ -561,7 +561,7 @@ export function SettingsPage({
             </section>
           ) : null}
 
-          <LogPanel />
+          {isStationMaster ? <LogPanel /> : null}
         </>
       )}
     </div>

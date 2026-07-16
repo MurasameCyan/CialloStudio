@@ -34,7 +34,7 @@ type AdminSection = "api" | "users";
 type Props = {
   settings: StudioSettings;
   onChange: (next: StudioSettings) => void;
-  /** 社区站长账号（由 App 门禁保证已是 admin） */
+  /** 已登录社区用户（App 保证已登录；role=admin 为站长） */
   communityUser?: CommunityUser | null;
   communityLoading?: boolean;
   onNeedLogin?: () => void;
@@ -47,6 +47,7 @@ export function SettingsPage({
   communityLoading = false,
   onNeedLogin,
 }: Props) {
+  const isStationMaster = communityUser?.role === "admin";
   const [section, setSection] = useState<AdminSection>("api");
   const [draft, setDraft] = useState<StudioSettings>(() => ({
     ...DEFAULT_SETTINGS,
@@ -73,6 +74,12 @@ export function SettingsPage({
     setMediaBaseDraft(getMediaBase());
     setMediaTokenDraft(getMediaUploadToken());
   }, []);
+
+  useEffect(() => {
+    if (!isStationMaster && section !== "api") {
+      setSection("api");
+    }
+  }, [isStationMaster, section]);
 
   const imageModels = useMemo(() => {
     const ids = models.map((m) => m.id);
@@ -120,7 +127,7 @@ export function SettingsPage({
     setOk(null);
     try {
       const normalized = persist(draft);
-      log("info", "管理页：测试连接", {
+      log("info", "设置页：测试连接", {
         baseUrl: normalized.baseUrl,
         requestBase: resolveBrowserApiBase(normalized.baseUrl),
         model: normalized.model,
@@ -154,9 +161,9 @@ export function SettingsPage({
           "3) 确认上游可访问、API Key 正确",
         ].join("\n");
       } else if (/missing_base_url|填写 API Base|缺少上游/i.test(text)) {
-        text = `${text}\n\n在管理页「API Base URL」填：https://你的网关/v1 后保存再测`;
+        text = `${text}\n\n在设置页「API Base URL」填：https://你的网关/v1 后保存再测`;
       }
-      log("error", "管理页：测试连接失败", text);
+      log("error", "设置页：测试连接失败", text);
       setMessage(text);
     } finally {
       setBusy(false);
@@ -227,76 +234,85 @@ export function SettingsPage({
     }
   }
 
+  const connectionStatusRow = (
+    <div className="admin-status-row">
+      <div className="admin-status-card">
+        <span className="admin-status-label">连接</span>
+        <strong className="admin-status-value">
+          <span className={`live-dot ${hasKey ? "" : "off"}`} />
+          {hasKey ? "已配置 Key" : "未配置"}
+        </strong>
+      </div>
+      <div className="admin-status-card">
+        <span className="admin-status-label">模型</span>
+        <strong className="admin-status-value mono-tight" title={draft.model}>
+          {draft.model || "—"}
+        </strong>
+      </div>
+      <div className="admin-status-card">
+        <span className="admin-status-label">并发</span>
+        <strong className="admin-status-value">{draft.concurrency}</strong>
+      </div>
+      <div className="admin-status-card">
+        <span className="admin-status-label">请求通道</span>
+        <strong className="admin-status-value mono-tight" title={requestBase}>
+          {requestBase}
+        </strong>
+      </div>
+    </div>
+  );
+
   return (
     <div className="page admin-layout">
       <section className="panel admin-hero">
         <div className="admin-hero-top admin-hero-top-row">
           <div>
-            <div className="panel-kicker">Admin</div>
-            <h2 className="panel-title">控制台</h2>
+            <div className="panel-kicker">{isStationMaster ? "Admin" : "Settings"}</div>
+            <h2 className="panel-title">{isStationMaster ? "控制台" : "设置"}</h2>
             <p className="panel-desc" style={{ marginTop: 6 }}>
-              站长 @{communityUser?.username ?? getMasterUsername()} · 接口 / 用户池 / 媒体
+              {isStationMaster ? (
+                <>站长 @{communityUser?.username ?? getMasterUsername()} · 接口 / 用户池 / 媒体</>
+              ) : (
+                <>@{communityUser?.username ?? "用户"} · 接口与生成</>
+              )}
             </p>
           </div>
         </div>
 
-        {/* 分区切换：独立大号 Tab，避免被缓存旧包/样式淹没 */}
-        <div className="admin-section-switch" role="tablist" aria-label="管理分区">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={section === "api"}
-            className={`admin-section-switch-btn ${section === "api" ? "active" : ""}`}
-            onClick={() => setSection("api")}
-          >
-            接口设置
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={section === "users"}
-            className={`admin-section-switch-btn ${section === "users" ? "active" : ""}`}
-            onClick={() => setSection("users")}
-          >
-            用户池
-          </button>
-        </div>
-
-        {section === "api" ? (
-          <div className="admin-status-row">
-            <div className="admin-status-card">
-              <span className="admin-status-label">连接</span>
-              <strong className="admin-status-value">
-                <span className={`live-dot ${hasKey ? "" : "off"}`} />
-                {hasKey ? "已配置 Key" : "未配置"}
-              </strong>
-            </div>
-            <div className="admin-status-card">
-              <span className="admin-status-label">模型</span>
-              <strong className="admin-status-value mono-tight" title={draft.model}>
-                {draft.model || "—"}
-              </strong>
-            </div>
-            <div className="admin-status-card">
-              <span className="admin-status-label">并发</span>
-              <strong className="admin-status-value">{draft.concurrency}</strong>
-            </div>
-            <div className="admin-status-card">
-              <span className="admin-status-label">请求通道</span>
-              <strong className="admin-status-value mono-tight" title={requestBase}>
-                {requestBase}
-              </strong>
-            </div>
+        {isStationMaster ? (
+          <div className="admin-section-switch" role="tablist" aria-label="管理分区">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={section === "api"}
+              className={`admin-section-switch-btn ${section === "api" ? "active" : ""}`}
+              onClick={() => setSection("api")}
+            >
+              接口设置
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={section === "users"}
+              className={`admin-section-switch-btn ${section === "users" ? "active" : ""}`}
+              onClick={() => setSection("users")}
+            >
+              用户池
+            </button>
           </div>
-        ) : (
+        ) : null}
+
+        {isStationMaster && section === "users" ? (
           <p className="panel-desc admin-users-hint">
             管理社区账号池。站长账号由部署 <code>.env</code> 配置（
             <code>CIALLO_MASTER_USERNAME</code> / <code>CIALLO_MASTER_PASSWORD</code>）。
           </p>
+        ) : (
+          connectionStatusRow
         )}
       </section>
 
-      {section === "users" ? (
+      {isStationMaster && section === "users" ? (
         <UserPoolPanel
           communityUser={communityUser}
           communityLoading={communityLoading}
@@ -474,74 +490,76 @@ export function SettingsPage({
             </div>
           </section>
 
-          <section className="panel admin-form-panel">
-            <div className="admin-section admin-section-merged">
-              <div className="admin-section-head">
-                <div>
-                  <div className="section-card-title">Media</div>
-                  <h3 className="admin-section-title">图片存储（CF Worker → Telegram）</h3>
+          {isStationMaster ? (
+            <section className="panel admin-form-panel">
+              <div className="admin-section admin-section-merged">
+                <div className="admin-section-head">
+                  <div>
+                    <div className="section-card-title">Media</div>
+                    <h3 className="admin-section-title">图片存储（CF Worker → Telegram）</h3>
+                  </div>
+                </div>
+                <div className="admin-stack">
+                  <p className="footer-note">
+                    推荐用 Cloudflare <strong>Pages</strong> 上传{" "}
+                    <code>releases/ciallo-telegram-media-pages.zip</code>
+                    。Base 填 <code>https://项目名.pages.dev</code>（须能打开 /healthz）。Bot Token 只放在
+                    CF 环境变量，不要填本页。
+                  </p>
+                  <div className="admin-fields-2">
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="mediaBase">Media Base URL</label>
+                      </div>
+                      <input
+                        id="mediaBase"
+                        className="control mono"
+                        value={mediaBase}
+                        placeholder="https://ciallo-telegram-media.xxx.workers.dev"
+                        onChange={(e) => setMediaBaseDraft(e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="mediaToken">Upload Token（可选）</label>
+                      </div>
+                      <input
+                        id="mediaToken"
+                        className="control mono"
+                        value={mediaToken}
+                        placeholder="与 Worker UPLOAD_TOKEN 相同"
+                        onChange={(e) => setMediaTokenDraft(e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  </div>
+                  <div className="admin-actions admin-actions-inline">
+                    <div className="btn-row">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={mediaBusy}
+                        onClick={() => void handleTestMedia()}
+                      >
+                        {mediaBusy ? "探测中…" : "测试 Worker"}
+                      </button>
+                      <button type="button" className="btn btn-secondary" disabled={mediaBusy} onClick={handleSaveMedia}>
+                        保存媒体配置
+                      </button>
+                    </div>
+                    {mediaMsg ? (
+                      <div className={`status ${mediaOk === true ? "ok" : mediaOk === false ? "err" : ""}`}>
+                        {mediaMsg}
+                      </div>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-              <div className="admin-stack">
-                <p className="footer-note">
-                  推荐用 Cloudflare <strong>Pages</strong> 上传{" "}
-                  <code>releases/ciallo-telegram-media-pages.zip</code>
-                  。Base 填 <code>https://项目名.pages.dev</code>（须能打开 /healthz）。Bot Token 只放在
-                  CF 环境变量，不要填本页。
-                </p>
-                <div className="admin-fields-2">
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="mediaBase">Media Base URL</label>
-                    </div>
-                    <input
-                      id="mediaBase"
-                      className="control mono"
-                      value={mediaBase}
-                      placeholder="https://ciallo-telegram-media.xxx.workers.dev"
-                      onChange={(e) => setMediaBaseDraft(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="mediaToken">Upload Token（可选）</label>
-                    </div>
-                    <input
-                      id="mediaToken"
-                      className="control mono"
-                      value={mediaToken}
-                      placeholder="与 Worker UPLOAD_TOKEN 相同"
-                      onChange={(e) => setMediaTokenDraft(e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                </div>
-                <div className="admin-actions admin-actions-inline">
-                  <div className="btn-row">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={mediaBusy}
-                      onClick={() => void handleTestMedia()}
-                    >
-                      {mediaBusy ? "探测中…" : "测试 Worker"}
-                    </button>
-                    <button type="button" className="btn btn-secondary" disabled={mediaBusy} onClick={handleSaveMedia}>
-                      保存媒体配置
-                    </button>
-                  </div>
-                  {mediaMsg ? (
-                    <div className={`status ${mediaOk === true ? "ok" : mediaOk === false ? "err" : ""}`}>
-                      {mediaMsg}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          </section>
+            </section>
+          ) : null}
 
           <LogPanel />
         </>

@@ -5,10 +5,12 @@ import { log } from "@/lib/logger";
 import { runPool } from "@/lib/runPool";
 import { clampConcurrency, type StudioSettings } from "@/lib/settings";
 import {
+  DEFAULT_VARIANTS,
   clampVariants,
   expandJobs,
   loadDraft,
   loadJobs,
+  planJobCount,
   saveDraft,
   saveJobs,
   splitPrompts,
@@ -47,7 +49,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       promptText: DEFAULT_PROMPT,
       aspectRatio: settings.aspectRatio,
       resolution: settings.resolution,
-      variants: 4,
+      variants: DEFAULT_VARIANTS,
       concurrency: clampConcurrency(settings.concurrency),
       appendResults: false,
     }),
@@ -60,12 +62,14 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const runningRef = useRef(false);
   const draftRef = useRef(draft);
   const settingsRef = useRef(settings);
+  /** 替换模式下，只允许本批 job id 被更新，避免旧 map 回写 */
+  const activeBatchIdsRef = useRef<Set<string>>(new Set());
 
   draftRef.current = draft;
   settingsRef.current = settings;
 
   const prompts = useMemo(() => splitPrompts(draft.promptText), [draft.promptText]);
-  const plannedJobs = prompts.length * clampVariants(draft.variants);
+  const plannedJobs = planJobCount(prompts, draft.variants);
 
   const stats = useMemo(() => {
     const total = jobs.length;
@@ -98,9 +102,13 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       const next: StudioDraft = {
         ...prev,
         ...patch,
-        variants: patch.variants !== undefined ? clampVariants(patch.variants) : prev.variants,
+        variants: patch.variants !== undefined ? clampVariants(Number(patch.variants)) : clampVariants(prev.variants),
         concurrency:
-          patch.concurrency !== undefined ? clampConcurrency(patch.concurrency) : clampConcurrency(prev.concurrency),
+          patch.concurrency !== undefined
+            ? clampConcurrency(Number(patch.concurrency))
+            : clampConcurrency(prev.concurrency),
+        appendResults:
+          patch.appendResults !== undefined ? patch.appendResults === true : prev.appendResults === true,
       };
       draftRef.current = next;
       return next;
@@ -114,6 +122,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
 
   const clear = useCallback(() => {
     if (runningRef.current) return;
+    activeBatchIdsRef.current = new Set();
     setJobs([]);
     saveJobs([]);
   }, []);
@@ -135,6 +144,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     // 强制数字，避免 localStorage / 事件值变成字符串
     const concurrency = clampConcurrency(Number(currentDraft.concurrency));
     const variants = clampVariants(Number(currentDraft.variants));
+    const appendResults = currentDraft.appendResults === true;
     const resolution = normalizeResolutionForModel(currentSettings.model, currentDraft.resolution);
     const aspectRatio = currentDraft.aspectRatio;
 
@@ -155,26 +165,47 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       resolution,
       aspectRatio,
     });
+    const batchIds = new Set(batch.map((j) => j.id));
+    activeBatchIdsRef.current = batchIds;
 
-    // 默认替换结果墙，避免历史累积看起来像“一次出了十几张”
-    if (currentDraft.appendResults) {
-      setJobs((prev) => [...batch, ...prev]);
+    // 默认替换结果墙：整表换成 batch，绝不再 prepend 历史
+    if (appendResults) {
+      setJobs((prev) => [...batch, ...prev].slice(0, 120));
     } else {
       setJobs(batch);
+      saveJobs(batch);
     }
 
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 · worker=${concurrency} · ${currentDraft.appendResults ? "追加" : "替换"}模式`,
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 张/条 · worker=${concurrency} · ${appendResults ? "追加" : "替换"}模式`,
       {
         concurrency,
         variants,
-        appendResults: currentDraft.appendResults,
+        promptCount: currentPrompts.length,
+        batchLength: batch.length,
+        appendResults,
         aspectRatio,
         resolution,
         model: currentSettings.model,
       },
     );
+
+    if (batch.length !== currentPrompts.length * variants) {
+      log("warn", "batch 长度与预期不符", {
+        expected: currentPrompts.length * variants,
+        actual: batch.length,
+      });
+    }
+
+    const patchJob = (jobId: string, patch: Partial<StudioJob>) => {
+      if (!activeBatchIdsRef.current.has(jobId)) return;
+      setJobs((prev) => {
+        // 替换模式：若当前列表意外还含旧 id，只保留 active batch + 更新
+        const base = appendResults ? prev : prev.filter((item) => activeBatchIdsRef.current.has(item.id));
+        return base.map((item) => (item.id === jobId ? { ...item, ...patch } : item));
+      });
+    };
 
     try {
       await runPool(
@@ -185,7 +216,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             throw new DOMException("Aborted", "AbortError");
           }
 
-          setJobs((prev) => prev.map((item) => (item.id === job.id ? { ...item, status: "running" } : item)));
+          patchJob(job.id, { status: "running" });
           log("info", `子任务 ${job.variant}/${job.variants} 开始 ${job.id}`, {
             batchId: job.batchId,
             concurrency,
@@ -204,13 +235,18 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             signal: controller.signal,
           });
 
-          const imageUrl = images[0]?.url;
+          // 只取第一张：即使上游 data[] 多图也不扩成多卡片
+          const first = images[0];
+          const imageUrl = first?.url;
           if (!imageUrl) {
             throw new ApiError(200, "未返回图片 URL", "invalid_response");
           }
+          if (images.length > 1) {
+            log("warn", `上游返回 ${images.length} 张，本任务只采用第 1 张`, { jobId: job.id });
+          }
 
           const openUrl =
-            images[0]?.openUrl ||
+            first?.openUrl ||
             (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
               ? undefined
               : rewriteMediaUrl(imageUrl, currentSettings.baseUrl));
@@ -226,20 +262,14 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
           onLog: (message, detail) => log("info", message, detail),
           onItemSettled: (index, result) => {
             const job = batch[index];
+            if (!job) return;
             if (result.status === "fulfilled") {
-              setJobs((prev) =>
-                prev.map((item) =>
-                  item.id === job.id
-                    ? {
-                        ...item,
-                        status: "done",
-                        imageUrl: result.value.imageUrl,
-                        openUrl: result.value.openUrl,
-                        finishedAt: Date.now(),
-                      }
-                    : item,
-                ),
-              );
+              patchJob(job.id, {
+                status: "done",
+                imageUrl: result.value.imageUrl,
+                openUrl: result.value.openUrl,
+                finishedAt: Date.now(),
+              });
               return;
             }
 
@@ -258,22 +288,18 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
               `子任务 ${job.variant}/${job.variants} 失败 ${job.id}`,
               reason instanceof Error ? reason.message : message,
             );
-            setJobs((prev) =>
-              prev.map((item) =>
-                item.id === job.id
-                  ? {
-                      ...item,
-                      status: "failed",
-                      error: message,
-                      finishedAt: Date.now(),
-                    }
-                  : item,
-              ),
-            );
+            patchJob(job.id, {
+              status: "failed",
+              error: message,
+              finishedAt: Date.now(),
+            });
           },
         },
       );
-      log("ok", "并发生图结束");
+      log(
+        "ok",
+        `并发生图结束：本批 ${batch.length} 张 · 结果墙模式=${appendResults ? "追加" : "替换"}`,
+      );
     } finally {
       runningRef.current = false;
       setRunning(false);

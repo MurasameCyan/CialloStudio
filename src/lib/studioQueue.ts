@@ -29,27 +29,41 @@ export type StudioDraft = {
   appendResults: boolean;
 };
 
-const JOBS_KEY = "ciallo-studio.jobs.v1";
-const DRAFT_KEY = "ciallo-studio.draft.v1";
+// v2：清空旧版结果墙历史（v1 曾默认追加，容易看起来像「点一次出十几张」）
+const JOBS_KEY = "ciallo-studio.jobs.v2";
+const DRAFT_KEY = "ciallo-studio.draft.v2";
 const MAX_JOBS = 120;
+const LEGACY_KEYS = ["ciallo-studio.jobs.v1", "ciallo-studio.draft.v1"] as const;
 
 export const VARIANT_OPTIONS = [1, 2, 3, 4, 6, 8] as const;
 export const CONCURRENCY_OPTIONS = [1, 2, 3, 4, 6, 8] as const;
+/** 默认每条 prompt 只出 1 张，避免用户以为选了 1:1 却生成 4 张 */
+export const DEFAULT_VARIANTS = 1;
 
 export function uid(prefix = ""): string {
   return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 export function clampVariants(value: number): number {
-  if (!Number.isFinite(value)) return 4;
+  if (!Number.isFinite(value)) return DEFAULT_VARIANTS;
   return Math.min(8, Math.max(1, Math.round(value)));
 }
 
+/**
+ * 每行一条 prompt；空行忽略。
+ * 注意：多行文本 = 多条 prompt，总张数 = 行数 × 每条张数。
+ */
 export function splitPrompts(raw: string): string[] {
   return raw
-    .split(/\r?\n+/)
+    .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+/** 本次将生成的张数 = prompt 条数 × 每条 variants */
+export function planJobCount(prompts: string[] | string, variants: number): number {
+  const list = Array.isArray(prompts) ? prompts : splitPrompts(prompts);
+  return list.length * clampVariants(variants);
 }
 
 export function expandJobs(
@@ -79,6 +93,17 @@ export function expandJobs(
   return jobs;
 }
 
+/** 启动时清掉 v1 残留，避免旧结果墙/旧 draft 继续干扰 */
+export function migrateLegacyStorage(): void {
+  try {
+    for (const key of LEGACY_KEYS) {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // ignore
+  }
+}
+
 /** 只持久化可恢复字段，去掉 blob: */
 function serializeJobs(jobs: StudioJob[]): StudioJob[] {
   return jobs.slice(0, MAX_JOBS).map((job) => {
@@ -106,6 +131,7 @@ function serializeJobs(jobs: StudioJob[]): StudioJob[] {
 }
 
 export function loadJobs(): StudioJob[] {
+  migrateLegacyStorage();
   try {
     const raw = localStorage.getItem(JOBS_KEY);
     if (!raw) return [];
@@ -134,14 +160,15 @@ export function saveJobs(jobs: StudioJob[]): void {
 }
 
 export function loadDraft(defaults: StudioDraft): StudioDraft {
+  migrateLegacyStorage();
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
     if (!raw) {
       return {
         ...defaults,
-        variants: clampVariants(defaults.variants),
+        variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
         concurrency: clampConcurrency(defaults.concurrency),
-        appendResults: defaults.appendResults ?? false,
+        appendResults: false,
       };
     }
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
@@ -149,16 +176,17 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       promptText: typeof parsed.promptText === "string" ? parsed.promptText : defaults.promptText,
       aspectRatio: typeof parsed.aspectRatio === "string" ? parsed.aspectRatio : defaults.aspectRatio,
       resolution: typeof parsed.resolution === "string" ? parsed.resolution : defaults.resolution,
-      variants: clampVariants(Number(parsed.variants ?? defaults.variants)),
+      variants: clampVariants(Number(parsed.variants ?? defaults.variants ?? DEFAULT_VARIANTS)),
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
-      appendResults: typeof parsed.appendResults === "boolean" ? parsed.appendResults : false,
+      // 缺省 / 非 boolean 一律 false：替换结果墙
+      appendResults: parsed.appendResults === true,
     };
   } catch {
     return {
       ...defaults,
-      variants: clampVariants(defaults.variants),
+      variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
       concurrency: clampConcurrency(defaults.concurrency),
-      appendResults: defaults.appendResults ?? false,
+      appendResults: false,
     };
   }
 }

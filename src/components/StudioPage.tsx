@@ -161,10 +161,13 @@ export function StudioPage({
               Prompt <strong>{prompts.length}</strong>
             </span>
             <span className="stat-pill">
+              每条 <strong>{draft.variants}</strong> 张
+            </span>
+            <span className="stat-pill" title="总张数 = Prompt 条数 × 每条张数">
               总张数 <strong>{plannedJobs}</strong>
             </span>
             <span className="stat-pill">
-              同时请求 <strong>{draft.concurrency}</strong>
+              并发 <strong>{draft.concurrency}</strong>
             </span>
             {running ? (
               <span className="stat-pill">
@@ -172,12 +175,16 @@ export function StudioPage({
               </span>
             ) : null}
           </div>
+          <div className="field-hint formula-hint">
+            公式：{prompts.length || 0} 条 prompt × {draft.variants} 张/条 = <strong>{plannedJobs}</strong>{" "}
+            张。宽高比「1:1」只控制构图，不会改张数。
+          </div>
         </div>
 
         <div className="studio-options">
           <div className="option-block">
             <div className="field">
-              <label>生成张数（每条 prompt 出几张）</label>
+              <label>每条 prompt 出几张</label>
               <div className="segmented">
                 {VARIANT_OPTIONS.map((n) => (
                   <button
@@ -190,7 +197,9 @@ export function StudioPage({
                   </button>
                 ))}
               </div>
-              <div className="field-hint">这是总产出数量。选 4 = 最终生成 4 张图。</div>
+              <div className="field-hint">
+                只影响「每条」数量。1 条 prompt × 选 1 = 1 张；多行 prompt 会再相乘。
+              </div>
             </div>
           </div>
 
@@ -293,9 +302,15 @@ export function StudioPage({
           </button>
         </div>
         {!draft.appendResults ? (
-          <p className="footer-note">默认会替换结果墙。只保留本次 {plannedJobs} 张，不会和历史混在一起。</p>
+          <p className="footer-note">
+            默认<strong>替换</strong>结果墙：只保留本次 {plannedJobs} 张（{prompts.length}×{draft.variants}
+            ），不会和历史混在一起。
+          </p>
         ) : (
-          <p className="footer-note">追加模式：新图会堆在旧结果上面，总数会越来越多。</p>
+          <p className="footer-note">
+            追加模式：新图会堆在旧结果上面。当前墙里已有 {stats.total} 张，再点生成会变成{" "}
+            {stats.total + plannedJobs} 张。
+          </p>
         )}
       </section>
 
@@ -303,7 +318,7 @@ export function StudioPage({
         <div className="results-toolbar">
           <div>
             <div className="panel-kicker">Gallery</div>
-            <h2 className="panel-title">结果墙</h2>
+            <h2 className="panel-title">结果墙 · {stats.total} 张</h2>
           </div>
           <div className="results-toolbar-actions">
             <div className="connection-chip">

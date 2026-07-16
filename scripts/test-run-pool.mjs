@@ -1,6 +1,4 @@
-import { runPool } from "../src/lib/runPool.ts";
-
-// Node cannot import TS; this file is for reference. Use duplicated logic below for CI-free check.
+/** 纯 JS 并发池自测（不依赖 TS 加载） */
 async function runPoolJs(items, concurrency, worker, onInFlight) {
   const total = items.length;
   const results = new Array(total);
@@ -54,7 +52,6 @@ if (starts.length !== 5) {
   console.error("expected 5 starts, got", starts.length);
   process.exit(3);
 }
-// first two should start almost together
 if (starts[1] - starts[0] > 30) {
   console.error("first two workers did not start concurrently", starts[1] - starts[0]);
   process.exit(4);

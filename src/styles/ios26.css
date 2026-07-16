@@ -1452,6 +1452,17 @@ a {
   gap: 10px;
 }
 
+.option-block-append {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+
+.option-block-append .append-toggle {
+  width: 100%;
+  justify-content: flex-start;
+  box-sizing: border-box;
+}
+
 .append-toggle {
   display: inline-flex;
   align-items: center;

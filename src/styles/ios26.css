@@ -1717,19 +1717,14 @@ a {
   box-sizing: border-box;
 }
 
-/* 第一行：数量 | 并发 | 分辨率，按钮同风格同高 */
+/* 第一行：数量 | 并发 | 分辨率，列间距 20px */
 .studio-params-row {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(0, 0.8fr) minmax(0, 0.8fr);
-  /* 数量↔并发 列间距 26px（原 16 + 10）；并发↔分辨率 仍 16px */
-  column-gap: 16px;
+  column-gap: 20px;
   row-gap: 0;
   align-items: start;
   width: 100%;
-}
-
-.studio-params-row > .field:nth-child(1) {
-  margin-right: 10px;
 }
 
 /* 第二行：宽高比独占整行 */

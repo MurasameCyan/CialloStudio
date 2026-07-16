@@ -943,10 +943,199 @@ a {
   }
 }
 
-/* Settings */
+/* Settings / Admin */
 .settings-grid {
   display: grid;
   gap: 16px;
+}
+
+.admin-layout {
+  gap: 16px;
+}
+
+.admin-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 1fr);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.admin-hero-copy {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+}
+
+.admin-status-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.admin-status-card {
+  border-radius: 20px;
+  padding: 14px 15px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 255, 255, 0.08)),
+    var(--bg-soft-2);
+  border: 1px solid var(--separator);
+  min-width: 0;
+}
+
+.admin-status-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 8px;
+}
+
+.admin-status-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mono-tight {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.admin-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.admin-form-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-section {
+  position: relative;
+  z-index: 1;
+  border-radius: 24px;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.08)),
+    var(--bg-soft-2);
+  border: 1px solid var(--separator);
+}
+
+.admin-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-section-title {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+
+.admin-actions {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.1)),
+    var(--bg-soft-2);
+  border: 1px solid var(--separator);
+}
+
+.admin-actions-hint {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  line-height: 1.45;
+}
+
+.admin-side {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.admin-side-card {
+  padding: 18px;
+}
+
+.admin-tips {
+  margin: 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  line-height: 1.45;
+}
+
+.admin-tips li::marker {
+  color: var(--accent);
+}
+
+.admin-log-panel .panel-title,
+.admin-log-panel .admin-section-title {
+  margin-bottom: 4px;
+}
+
+.admin-log-desc {
+  margin: 0;
+  max-width: none;
+  font-size: 13px;
+}
+
+.admin-log-empty {
+  padding: 28px 16px;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.text-link {
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 720;
+  padding: 0;
+}
+
+.text-link:hover {
+  opacity: 0.85;
+}
+
+.btn-sm {
+  padding: 8px 12px;
+  font-size: 12.5px;
 }
 
 .section-card {
@@ -959,12 +1148,25 @@ a {
 }
 
 .section-card-title {
-  margin: 0 0 12px;
-  font-size: 12px;
-  font-weight: 780;
-  color: var(--text-secondary);
-  letter-spacing: 0.06em;
+  margin: 0 0 6px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+@media (max-width: 1060px) {
+  .admin-hero,
+  .admin-main-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .admin-status-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* Logs */

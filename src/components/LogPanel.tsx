@@ -22,26 +22,24 @@ export function LogPanel() {
   const errorCount = entries.filter((e) => e.level === "error").length;
 
   return (
-    <section className="panel log-panel" aria-label="运行日志">
+    <section className="panel log-panel admin-log-panel" aria-label="运行日志">
       <div className="log-panel-head">
         <div>
-          <div className="panel-kicker">Diagnostics</div>
-          <h2 className="panel-title">运行日志</h2>
-          <p className="panel-desc">
-            仅管理页可见。连接与生图请求会记在这里
+          <div className="section-card-title">Diagnostics</div>
+          <h3 className="admin-section-title">运行日志</h3>
+          <p className="panel-desc admin-log-desc">
             {entries.length > 0
-              ? ` · ${entries.length} 条${errorCount > 0 ? ` / ${errorCount} 错误` : ""}`
-              : ""}
-            。
+              ? `${entries.length} 条记录${errorCount > 0 ? ` · ${errorCount} 错误` : ""}`
+              : "连接与生图请求会出现在这里"}
           </p>
         </div>
         <div className="btn-row">
-          <button type="button" className="btn btn-secondary" onClick={() => setOpen((v) => !v)}>
+          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen((v) => !v)}>
             {open ? "收起" : "展开"}
           </button>
           <button
             type="button"
-            className="btn btn-danger"
+            className="btn btn-danger btn-sm"
             onClick={clearLogs}
             disabled={entries.length === 0}
           >
@@ -52,9 +50,9 @@ export function LogPanel() {
 
       {open ? (
         entries.length === 0 ? (
-          <div className="empty">
+          <div className="empty admin-log-empty">
             <span className="empty-title">暂无日志</span>
-            测试连接，或去生图页发起生成后再回来查看。
+            测试连接或去生图页生成后再回来。
           </div>
         ) : (
           <div className="log-list">

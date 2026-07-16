@@ -1415,15 +1415,15 @@ a {
 .admin-bottom-grid .admin-log-panel,
 .admin-bottom-grid .log-panel {
   margin: 0;
-  max-height: min(420px, 50vh);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
-/* 运行日志单独占满一行时也保持与上方面板同宽 */
+/* 运行日志：不限高、不用容器滚动条（列表内部可滚但隐藏滚动条） */
 .admin-layout > .admin-log-panel.panel,
 .admin-layout > .log-panel.panel {
-  max-height: min(480px, 55vh);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 .admin-tips {
@@ -1539,9 +1539,18 @@ a {
 .log-list {
   display: grid;
   gap: 8px;
-  max-height: min(48vh, 420px);
-  overflow: auto;
-  padding-right: 4px;
+  max-height: none;
+  overflow: visible;
+  padding-right: 0;
+  /* 若内容极长仍允许滚动，但不显示滚动条 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.log-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .log-item {

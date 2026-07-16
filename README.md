@@ -11,7 +11,7 @@ iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接
 
 ## 快速开始（Docker Compose）
 
-> Compose **只拉取镜像**，不再本地 `build`。镜像由 GitHub Actions 推送到 GHCR。
+> Compose **只使用** 固定镜像 `ghcr.io/murasamecyan/ciallostudio:beta`，不本地 `build`、不换镜像名。镜像由 GitHub Actions 推送到 GHCR。
 
 ```bash
 git clone -b beta https://github.com/MurasameCyan/CialloStudio.git
@@ -37,9 +37,9 @@ docker compose up -d
 | `CIALLO_PORT` | `8080` | 宿主机端口 |
 | `CIALLO_UPSTREAM` | `https://your-grok2api.example.com` | 上游网关根地址（可带或不带 `/v1`） |
 | `CIALLO_ADMIN_PASSWORD` | （空） | 管理页解锁密码；**留空关闭门禁**。只写在 `.env`，不要提交 |
-| `CIALLO_IMAGE` | `ghcr.io/murasamecyan/ciallostudio:beta` | 使用的镜像 |
-| `CIALLO_PULL_POLICY` | `always` | compose 拉取策略：`always` / `missing` / `never` |
 | `TZ` | `Asia/Shanghai` | 时区 |
+
+镜像写死在 `docker-compose.yml`：`ghcr.io/murasamecyan/ciallostudio:beta`（`pull_policy: always`）。
 
 示例：
 
@@ -70,7 +70,7 @@ docker compose up -d
 - 密码来自 `.env` 的 `CIALLO_ADMIN_PASSWORD`，由容器 entrypoint 算 **SHA-256** 写入 `/runtime-config.js`（**不写明文**）。
 - 浏览器只比对哈希；解锁状态存在 **sessionStorage**（关标签后需重新输入）。
 - 这是前端门禁，用于挡住随便点进管理页改配置；**不是**完整的服务端鉴权。公网请再加反向代理鉴权 / VPN。
-- 需要本地改代码并构建镜像时，请用 `docker build` / CI，而不是 `docker compose up --build`。
+- 镜像只由 GitHub Actions 构建并推到 GHCR；部署侧只 `docker compose pull && up -d`，不要本地 `build`。
 
 ## 本地开发
 

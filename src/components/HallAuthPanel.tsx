@@ -101,9 +101,6 @@ export function HallAuthPanel({
             </button>
           </div>
         </div>
-        {user.role === "admin" ? (
-          <p className="footer-note">站长可在「管理 → 用户池」管理账号。</p>
-        ) : null}
         {message ? (
           <div className={`status ${ok ? "ok" : "err"}`} role="status">
             {message}

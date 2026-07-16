@@ -68,6 +68,8 @@ export function StudioPage({
   const [downloading, setDownloading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
+  /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
+  const [shareUiRevealed, setShareUiRevealed] = useState(false);
   const [shareNotice, setShareNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
 
@@ -81,6 +83,8 @@ export function StudioPage({
   useEffect(() => {
     if (!isLoggedIn) {
       setShareStatus(null);
+      setShareUiRevealed(false);
+      setShareNotice(null);
       return;
     }
     let cancelled = false;
@@ -98,16 +102,30 @@ export function StudioPage({
   }, [isLoggedIn]);
 
   useEffect(() => {
-    if (!shareStatus || shareStatus.cooldownSec <= 0 || !shareStatus.lastShareAt) return;
+    // 仅在已展示且仍在冷却时跑秒表，避免空闲时多余 tick
+    if (!shareUiRevealed || !shareStatus || shareStatus.cooldownSec <= 0 || !shareStatus.lastShareAt) {
+      return;
+    }
+    if (shareRemainSec <= 0) return;
     const id = window.setInterval(() => setNowMs(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [shareStatus]);
+  }, [shareUiRevealed, shareStatus, shareRemainSec]);
 
   useEffect(() => {
     if (!shareNotice) return;
-    const id = window.setTimeout(() => setShareNotice(null), shareNotice.ok ? 4000 : 8000);
+    // 冷却中的提示跟倒计时走，不自动关掉
+    if (!shareNotice.ok && /冷却/.test(shareNotice.text)) return;
+    const id = window.setTimeout(() => setShareNotice(null), shareNotice.ok ? 2800 : 6000);
     return () => window.clearTimeout(id);
   }, [shareNotice]);
+
+  // 冷却结束：收起冷却条，回到默认不显示
+  useEffect(() => {
+    if (shareUiRevealed && shareStatus && shareStatus.cooldownSec > 0 && shareRemainSec <= 0) {
+      setShareUiRevealed(false);
+      setShareNotice((prev) => (prev && !prev.ok && /冷却/.test(prev.text) ? null : prev));
+    }
+  }, [shareUiRevealed, shareStatus, shareRemainSec]);
 
   const downloadableJobs = useMemo(
     () => jobs.filter((job) => job.status === "done" && Boolean(displayUrl(job) || job.openUrl)),
@@ -203,8 +221,9 @@ export function StudioPage({
   async function handleShareToHall(job: StudioJob) {
     const src = displayUrl(job) || job.openUrl;
     if (!src || job.status !== "done") return;
+    setShareUiRevealed(true);
     if (shareCooldownLocked) {
-      const text = `分享冷却中，请 ${shareRemainSec} 秒后再试`;
+      const text = `分享冷却中：还剩 ${shareRemainSec} 秒`;
       setShareNotice({ ok: false, text });
       log("warn", text);
       return;
@@ -216,6 +235,7 @@ export function StudioPage({
       if (!me) {
         log("warn", "分享大厅需要先登录社区账号");
         setShareNotice({ ok: false, text: "请先登录社区账号再分享到大厅" });
+        setShareUiRevealed(true);
         onNeedLogin?.();
         return;
       }
@@ -253,17 +273,24 @@ export function StudioPage({
       } catch {
         // ignore refresh errors
       }
-      setShareNotice({
-        ok: true,
-        text: "已分享到大厅",
-      });
-      // 稍后再跳转大厅，让工作台先显示冷却倒计时
+      // 有冷却：直接展示倒计时；无冷却：仅短暂成功提示
+      if (nextCooldown && nextCooldown > 0) {
+        setShareNotice({
+          ok: false,
+          text: `分享冷却中：还剩 ${nextCooldown} 秒`,
+        });
+      } else {
+        setShareNotice({ ok: true, text: "已分享到大厅" });
+        setShareUiRevealed(false);
+      }
+      // 稍后再跳转大厅，让工作台先显示反馈
       if (onSharedToHall) {
-        window.setTimeout(() => onSharedToHall(), nextCooldown === 0 ? 900 : 1600);
+        window.setTimeout(() => onSharedToHall(), nextCooldown && nextCooldown > 0 ? 1600 : 900);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log("error", "分享失败", message);
+      setShareUiRevealed(true);
       setShareNotice({ ok: false, text: message });
       // 若是冷却错误，刷新状态以便倒计时同步
       if (/冷却/.test(message)) {
@@ -271,6 +298,10 @@ export function StudioPage({
           const st = await communityApi.getShareStatus();
           setShareStatus(st);
           setNowMs(Date.now());
+          setShareNotice({
+            ok: false,
+            text: `分享冷却中：还剩 ${computeShareRemainSec(st.cooldownSec, st.lastShareAt)} 秒`,
+          });
         } catch {
           // ignore
         }
@@ -290,21 +321,12 @@ export function StudioPage({
           </div>
         </div>
 
-        {isLoggedIn && shareStatus ? (
-          <div
-            className={`status share-cooldown-status ${shareCooldownLocked ? "err" : "ok"}`}
-            role="status"
-            style={{ marginBottom: 14 }}
-          >
-            {shareStatus.cooldownSec <= 0
-              ? "分享冷却：不限"
-              : shareCooldownLocked
-                ? `分享冷却中：还剩 ${shareRemainSec} 秒`
-                : "分享冷却：可分享"}
+        {/* 默认不显示；点过分享后才出现成功/失败/冷却倒计时 */}
+        {shareUiRevealed && shareCooldownLocked ? (
+          <div className="status err share-cooldown-status" role="status" style={{ marginBottom: 14 }}>
+            分享冷却中：还剩 {shareRemainSec} 秒
           </div>
-        ) : null}
-
-        {shareNotice ? (
+        ) : shareNotice ? (
           <div
             className={`status ${shareNotice.ok ? "ok" : "err"}`}
             role="status"

@@ -141,7 +141,7 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 12px 14px 12px 12px;
+  padding: 12px 14px;
   border-radius: 30px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38)),

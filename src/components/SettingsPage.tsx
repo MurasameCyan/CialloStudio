@@ -210,7 +210,9 @@ export function SettingsPage({
   }
 
   async function handleTestMedia() {
-    setMediaBase(mediaBase.trim());
+    const normalized = mediaBase.trim().replace(/\/+$/, "");
+    setMediaBaseDraft(normalized);
+    setMediaBase(normalized);
     setMediaUploadToken(mediaToken.trim());
     setMediaBusy(true);
     setMediaMsg("");
@@ -218,7 +220,7 @@ export function SettingsPage({
     try {
       const res = await pingMediaWorker();
       setMediaOk(res.ok);
-      setMediaMsg(res.ok ? `Worker 正常 · ${res.detail}` : `Worker 异常 · ${res.detail}`);
+      setMediaMsg(res.ok ? `媒体正常 · ${res.detail}` : `媒体异常 · ${res.detail}`);
       log(res.ok ? "ok" : "error", "媒体 Worker 探测", res.detail);
     } finally {
       setMediaBusy(false);
@@ -482,8 +484,10 @@ export function SettingsPage({
               </div>
               <div className="admin-stack">
                 <p className="footer-note">
-                  部署指南见仓库 <code>docs/telegram-media-worker.md</code>。Bot Token 只放在 Cloudflare
-                  Secrets，不要填进本页。
+                  推荐用 Cloudflare <strong>Pages</strong> 上传{" "}
+                  <code>releases/ciallo-telegram-media-pages.zip</code>
+                  。Base 填 <code>https://项目名.pages.dev</code>（须能打开 /healthz）。Bot Token 只放在
+                  CF 环境变量，不要填本页。
                 </p>
                 <div className="admin-fields-2">
                   <div className="field">

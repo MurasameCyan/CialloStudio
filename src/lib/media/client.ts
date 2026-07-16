@@ -27,19 +27,38 @@ function runtimeMedia(): { base?: string; uploadToken?: string } {
   };
 }
 
+/** 规范化媒体基址：补 https、去尾斜杠、去路径后缀 /healthz /v1 */
+export function normalizeMediaBase(raw: string): string {
+  let s = raw.trim().replace(/\/+$/, "");
+  if (!s) return "";
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    const u = new URL(s);
+    // 用户若误填 .../healthz 或 .../v1，剥掉
+    u.pathname = u.pathname
+      .replace(/\/+$/, "")
+      .replace(/\/healthz$/i, "")
+      .replace(/\/v1$/i, "");
+    if (u.pathname === "/") u.pathname = "";
+    return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+  } catch {
+    return s.replace(/\/+$/, "");
+  }
+}
+
 export function getMediaBase(): string {
   try {
     const fromLs = localStorage.getItem(LS_BASE)?.trim() || "";
-    if (fromLs) return fromLs.replace(/\/+$/, "");
+    if (fromLs) return normalizeMediaBase(fromLs);
   } catch {
     // ignore
   }
   const fromRuntime = runtimeMedia().base || "";
-  return fromRuntime.replace(/\/+$/, "");
+  return normalizeMediaBase(fromRuntime);
 }
 
 export function setMediaBase(base: string): void {
-  localStorage.setItem(LS_BASE, base.trim().replace(/\/+$/, ""));
+  localStorage.setItem(LS_BASE, normalizeMediaBase(base));
 }
 
 export function getMediaUploadToken(): string {
@@ -145,16 +164,71 @@ export async function uploadMedia(
   };
 }
 
-/** 探测 Worker 是否在线 */
+/** 探测 Worker / Pages 是否在线 */
 export async function pingMediaWorker(): Promise<{ ok: boolean; detail: string }> {
   const base = getMediaBase();
   if (!base) return { ok: false, detail: "未配置 Media Base" };
-  try {
-    const res = await fetch(`${base}/healthz`, { method: "GET" });
-    const text = await res.text();
-    if (!res.ok) return { ok: false, detail: text || `HTTP ${res.status}` };
-    return { ok: true, detail: text.slice(0, 200) };
-  } catch (e) {
-    return { ok: false, detail: e instanceof Error ? e.message : String(e) };
+
+  const paths = [`${base}/healthz`, `${base}/v1/healthz`];
+  let lastErr = "";
+
+  for (const url of paths) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        mode: "cors",
+        cache: "no-store",
+      });
+      const text = await res.text();
+      if (!res.ok) {
+        lastErr = text || `HTTP ${res.status}`;
+        // 404 可能是静态站没有 _worker，继续试另一路径
+        if (res.status === 404) continue;
+        return { ok: false, detail: lastErr.slice(0, 280) };
+      }
+      // 期望 JSON 含 ok/telegramConfigured
+      try {
+        const j = JSON.parse(text) as { ok?: boolean; telegramConfigured?: boolean };
+        if (j && typeof j === "object") {
+          const tg =
+            j.telegramConfigured === true
+              ? "Telegram 已配置"
+              : j.telegramConfigured === false
+                ? "Telegram 未配置密钥"
+                : "已响应";
+          return { ok: true, detail: `${tg} · ${text.slice(0, 160)}` };
+        }
+      } catch {
+        // 返回了 HTML（常见：Pages 只传了静态页、_worker 未生效）
+        if (/<!doctype html>|<html/i.test(text)) {
+          return {
+            ok: false,
+            detail:
+              "返回了 HTML 而非 API。Pages 请确认上传了 _worker.js，且项目是 Direct Upload；变量在 Settings → Environment variables",
+          };
+        }
+      }
+      return { ok: true, detail: text.slice(0, 200) };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      lastErr = msg;
+      // Failed to fetch：DNS / 断网 / 混合内容 / CORS 预检失败
+      if (/failed to fetch|networkerror|load failed/i.test(msg)) {
+        return {
+          ok: false,
+          detail: [
+            "Failed to fetch（浏览器连不上该地址）",
+            `当前 Base: ${base}`,
+            "排查：",
+            "1) 浏览器新标签打开 Base+/healthz，是否 200 JSON？",
+            "2) Pages 项目名是否对应真实 *.pages.dev（DNS 失败=未部署/名错）",
+            "3) 必须 https:// 开头；不要填 workers 上传失败的错误域名",
+            "4) 本机代理/防火墙是否拦截 Cloudflare",
+          ].join("\n"),
+        };
+      }
+    }
   }
+
+  return { ok: false, detail: lastErr || "探测失败" };
 }

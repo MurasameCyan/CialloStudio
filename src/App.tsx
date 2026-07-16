@@ -30,7 +30,7 @@ export default function App() {
   // 队列挂在 App 层：切页也不会丢任务/结果
   const queue = useStudioQueue(settings);
   const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
-  // 管理页仅站长（role=admin）；无单独管理密码
+  const isLoggedIn = Boolean(community.user);
   const isStationMaster = community.user?.role === "admin";
 
   function openHallAuth() {
@@ -42,21 +42,21 @@ export default function App() {
       setTab("settings");
       return;
     }
-    if (!isStationMaster) {
-      log("warn", "管理页仅站长可进，请先在大厅登录站长账号");
+    if (!isLoggedIn) {
+      log("warn", "配置页需先登录，请先在大厅登录");
       setTab("hall");
       return;
     }
     setTab("settings");
   }
 
-  // 已在管理页时若退出站长身份，立即踢回大厅
+  // 已在配置页时若退出登录，立即踢回大厅
   useEffect(() => {
     if (community.loading) return;
-    if (tab === "settings" && !isStationMaster) {
+    if (tab === "settings" && !isLoggedIn) {
       setTab("hall");
     }
-  }, [tab, isStationMaster, community.loading]);
+  }, [tab, isLoggedIn, community.loading]);
 
   return (
     <div className="app-shell">
@@ -98,9 +98,15 @@ export default function App() {
               type="button"
               className={`nav-pill ${tab === "settings" ? "active" : ""}`}
               onClick={openSettings}
-              title={isStationMaster ? "站长控制台" : "仅站长可进入，请先登录"}
+              title={
+                isStationMaster
+                  ? "站长控制台"
+                  : isLoggedIn
+                    ? "接口与生成设置"
+                    : "登录后可配置接口"
+              }
             >
-              管理{isStationMaster ? "" : " 🔒"}
+              {isStationMaster ? "管理" : isLoggedIn ? "设置" : "管理 🔒"}
             </button>
           </nav>
         </div>
@@ -144,12 +150,12 @@ export default function App() {
           <div className="page">
             <section className="panel">
               <div className="empty empty-compact">
-                <span className="empty-title">校验站长权限…</span>
+                <span className="empty-title">校验登录…</span>
               </div>
             </section>
           </div>
-        ) : isStationMaster ? (
-          <ErrorBoundary label="管理页">
+        ) : isLoggedIn ? (
+          <ErrorBoundary label={isStationMaster ? "管理页" : "设置页"}>
             <SettingsPage
               settings={settings}
               onChange={setSettings}
@@ -161,17 +167,10 @@ export default function App() {
         ) : (
           <div className="page admin-layout">
             <section className="panel admin-hero">
-              <div className="panel-kicker">Admin</div>
-              <h2 className="panel-title">需要站长登录</h2>
+              <div className="panel-kicker">Settings</div>
+              <h2 className="panel-title">需要登录</h2>
               <p className="panel-desc">
-                管理页（接口设置 / 用户池 / 媒体）仅站长可访问。请到「大厅」使用站长账号登录
-                {isMasterConfigured() ? (
-                  <>
-                    （用户名 <code>{getMasterUsername()}</code>，密码见部署 .env）。
-                  </>
-                ) : (
-                  <>。</>
-                )}
+                配置接口与生成参数前请先到「大厅」登录。登录后普通用户可配置接口；站长还可管理用户池与媒体。
               </p>
               <div className="btn-row" style={{ marginTop: 14 }}>
                 <button type="button" className="btn btn-primary" onClick={openHallAuth}>

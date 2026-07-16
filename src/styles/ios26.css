@@ -1187,7 +1187,12 @@ a {
 }
 
 .admin-section-merged {
+  /* 四边内边距一致，保证 Base/Key 到卡片左右边框对称 */
   padding: 18px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .admin-block-label {
@@ -1232,19 +1237,23 @@ a {
   letter-spacing: -0.03em;
 }
 
-/* 管理页两列：严格 50/50（避免 1fr 被内容撑偏、避免 960 断点误拆列） */
+/* 管理页两列：等分 + gap，左右到卡片边框的间距一致 */
 .admin-fields-2 {
   display: grid;
-  grid-template-columns: 50% 50%;
-  column-gap: 14px;
+  /* 用 1fr 1fr，不要 50% 50% + gap（会超宽导致右侧贴边） */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  column-gap: 16px;
   row-gap: 12px;
   align-items: stretch;
   width: 100%;
+  max-width: 100%;
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 .admin-fields-2 > .field {
-  margin-bottom: 0;
+  margin: 0;
   min-width: 0;
   max-width: 100%;
   width: 100%;
@@ -1254,6 +1263,7 @@ a {
   grid-template-rows: 20px auto;
   gap: 8px;
   align-content: start;
+  padding: 0;
 }
 
 .admin-fields-2 > .field > label,
@@ -1263,6 +1273,8 @@ a {
   display: flex;
   align-items: center;
   margin: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-fields-2 > .field > .control,
@@ -1271,9 +1283,10 @@ a {
   max-width: 100%;
   box-sizing: border-box;
   min-width: 0;
+  margin: 0;
 }
 
-/* 模型输入 / 并发数字：同高，尽量紧凑 */
+/* 模型输入 / 并发数字 / Base / Key：同高 */
 .admin-fields-2 > .field > .control {
   min-height: 40px;
   height: 40px;

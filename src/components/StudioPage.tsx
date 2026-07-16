@@ -254,7 +254,7 @@ export function StudioPage({
             <div className="studio-params-grid">
               <div className="studio-params-row">
                 <div className="field">
-                  <label>生图数量</label>
+                  <label>数量</label>
                   <div className="segmented">
                     {VARIANT_OPTIONS.map((n) => (
                       <button

@@ -128,11 +128,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
           <div>
             <div className="panel-kicker">Hall</div>
             <h2 className="panel-title">分享大厅</h2>
-            <p className="panel-desc">
-              浏览大家分享的作品，点赞与点评。当前为{" "}
-              <strong>{communityApi.mode() === "mock" ? "Mock（本地）" : "HTTP API"}</strong>{" "}
-              模式。
-            </p>
+            <p className="panel-desc">浏览大家分享的作品，点赞与点评。</p>
           </div>
           <div className="hall-search">
             <input

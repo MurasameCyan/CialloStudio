@@ -37,7 +37,11 @@ export default function App() {
         <div className="header-right">
           <div className="connection-chip" title={ready ? "API Key 已配置" : "尚未配置 API Key"}>
             <span className={`live-dot ${ready ? "" : "off"}`} />
-            {queue.running ? `生成中 ${queue.stats.active}` : ready ? "Ready" : "Setup"}
+            {queue.running
+              ? `在飞 ${queue.inFlight}/${queue.draft.concurrency}`
+              : ready
+                ? "Ready"
+                : "Setup"}
           </div>
           <nav className="nav-pills" aria-label="主导航">
             <button
@@ -67,6 +71,7 @@ export default function App() {
             setDraft={queue.setDraft}
             jobs={queue.jobs}
             running={queue.running}
+            inFlight={queue.inFlight}
             prompts={queue.prompts}
             plannedJobs={queue.plannedJobs}
             stats={queue.stats}

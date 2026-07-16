@@ -723,6 +723,87 @@ a {
   background: rgba(48, 209, 88, 0.88);
 }
 
+.selection-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid var(--separator);
+}
+
+@media (prefers-color-scheme: dark) {
+  .selection-bar {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.select-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.select-all input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.selection-meta {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+  margin-right: auto;
+}
+
+.selection-meta strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.card.selected {
+  outline: 2px solid rgba(0, 113, 227, 0.55);
+  outline-offset: 1px;
+  box-shadow: 0 14px 34px rgba(0, 113, 227, 0.16);
+}
+
+.card-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 3;
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(15, 23, 42, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.card-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.card-media {
+  cursor: pointer;
+}
+
 .skeleton {
   width: 100%;
   aspect-ratio: 1;

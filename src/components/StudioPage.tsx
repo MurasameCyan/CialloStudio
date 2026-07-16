@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
+import { downloadJobs } from "@/lib/download";
 import { log } from "@/lib/logger";
 import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
 import {
@@ -9,7 +11,7 @@ import {
   type StudioJob,
 } from "@/lib/studioQueue";
 
-type Stats = { total: number; done: number; failed: number; active: number };
+type Stats = { total: number; done: number; failed: number; active: number; running: number; queued: number };
 
 type Props = {
   settings: StudioSettings;
@@ -18,6 +20,7 @@ type Props = {
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
   running: boolean;
+  inFlight: number;
   prompts: string[];
   plannedJobs: number;
   stats: Stats;
@@ -34,6 +37,7 @@ export function StudioPage({
   setDraft,
   jobs,
   running,
+  inFlight,
   prompts,
   plannedJobs,
   stats,
@@ -43,6 +47,68 @@ export function StudioPage({
   onClear,
 }: Props) {
   const configured = Boolean(settings.apiKey.trim());
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadableJobs = useMemo(
+    () => jobs.filter((job) => job.status === "done" && Boolean(displayUrl(job) || job.openUrl)),
+    [jobs],
+  );
+  const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
+
+  // 清理已不存在或不可下载的勾选
+  useEffect(() => {
+    setSelected((prev) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of prev) {
+        if (downloadableIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      return changed || next.size !== prev.size ? next : prev;
+    });
+  }, [downloadableIds]);
+
+  const selectedCount = selected.size;
+  const allSelected = downloadableJobs.length > 0 && selectedCount === downloadableJobs.length;
+
+  function toggleOne(id: string) {
+    if (!downloadableIds.has(id)) return;
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelected(new Set(downloadableJobs.map((j) => j.id)));
+  }
+
+  function clearSelection() {
+    setSelected(new Set());
+  }
+
+  function toggleSelectAll() {
+    if (allSelected) clearSelection();
+    else selectAll();
+  }
+
+  async function handleDownloadSelected() {
+    const targets = downloadableJobs.filter((j) => selected.has(j.id));
+    if (targets.length === 0 || downloading) return;
+    setDownloading(true);
+    log("info", `开始下载 ${targets.length} 张已选图片`);
+    try {
+      const result = await downloadJobs(targets, { apiKey: settings.apiKey });
+      log("ok", `下载完成：成功 ${result.ok} · 失败 ${result.failed}`);
+    } catch (error) {
+      log("error", "批量下载失败", error instanceof Error ? error.message : String(error));
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   async function handleGenerate() {
     if (!configured) {
@@ -55,6 +121,11 @@ export function StudioPage({
       const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "启动失败";
       log("error", "启动生成失败", message);
     }
+  }
+
+  function handleClear() {
+    clearSelection();
+    onClear();
   }
 
   return (
@@ -88,21 +159,23 @@ export function StudioPage({
               Prompt <strong>{prompts.length}</strong>
             </span>
             <span className="stat-pill">
-              每条 <strong>{draft.variants}</strong> 张
+              总张数 <strong>{plannedJobs}</strong>
             </span>
             <span className="stat-pill">
-              并发 <strong>{draft.concurrency}</strong>
+              同时请求 <strong>{draft.concurrency}</strong>
             </span>
-            <span className="stat-pill">
-              子任务 <strong>{plannedJobs}</strong>
-            </span>
+            {running ? (
+              <span className="stat-pill">
+                在飞 <strong>{inFlight}</strong>
+              </span>
+            ) : null}
           </div>
         </div>
 
         <div className="studio-options">
           <div className="option-block">
             <div className="field">
-              <label>每条张数</label>
+              <label>生成张数（每条 prompt 出几张）</label>
               <div className="segmented">
                 {VARIANT_OPTIONS.map((n) => (
                   <button
@@ -115,12 +188,13 @@ export function StudioPage({
                   </button>
                 ))}
               </div>
+              <div className="field-hint">这是总产出数量。选 4 = 最终生成 4 张图。</div>
             </div>
           </div>
 
           <div className="option-block">
             <div className="field">
-              <label>并发数</label>
+              <label>同时请求数（并发）</label>
               <div className="segmented">
                 {CONCURRENCY_OPTIONS.map((n) => (
                   <button
@@ -133,7 +207,9 @@ export function StudioPage({
                   </button>
                 ))}
               </div>
-              <div className="field-hint">同时最多跑几个请求。例如 4 张 × 并发 3 = 先跑 3 张，完成后再补第 4 张。</div>
+              <div className="field-hint">
+                不是张数倍数。例：生成 4 张 + 同时 2 路 = 先跑 2 张，完成后再跑剩下 2 张。生成中看「在飞」。
+              </div>
             </div>
           </div>
 
@@ -187,7 +263,7 @@ export function StudioPage({
             <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
               停止
             </button>
-            <button type="button" className="btn btn-danger" disabled={running || jobs.length === 0} onClick={onClear}>
+            <button type="button" className="btn btn-danger" disabled={running || jobs.length === 0} onClick={handleClear}>
               清空
             </button>
           </div>
@@ -205,7 +281,11 @@ export function StudioPage({
           </div>
           <div className="connection-chip">
             <span className={`live-dot ${running ? "" : "off"}`} />
-            {running ? `并行中 · 并发 ${draft.concurrency}` : stats.total ? "空闲" : "等待开始"}
+            {running
+              ? `在飞 ${inFlight}/${draft.concurrency} · 排队 ${stats.queued}`
+              : stats.total
+                ? "空闲"
+                : "等待开始"}
           </div>
         </div>
 
@@ -221,7 +301,7 @@ export function StudioPage({
           <>
             <div className="kpi-row">
               <div className="kpi">
-                <div className="kpi-label">子任务</div>
+                <div className="kpi-label">总数</div>
                 <div className="kpi-value">{stats.total}</div>
               </div>
               <div className="kpi">
@@ -229,9 +309,9 @@ export function StudioPage({
                 <div className="kpi-value">{stats.done}</div>
               </div>
               <div className="kpi">
-                <div className="kpi-label">失败 / 进行中</div>
+                <div className="kpi-label">在飞 / 排队</div>
                 <div className="kpi-value">
-                  {stats.failed}/{stats.active}
+                  {running ? inFlight : stats.running}/{stats.queued}
                 </div>
               </div>
             </div>
@@ -240,11 +320,46 @@ export function StudioPage({
               <div className="progress-fill" style={{ width: `${progress}%` }} />
             </div>
 
+            <div className="selection-bar">
+              <label className="select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  disabled={downloadableJobs.length === 0 || downloading}
+                  onChange={toggleSelectAll}
+                />
+                <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+              </label>
+              <div className="selection-meta">
+                已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+              </div>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={selectedCount === 0 || downloading}
+                  onClick={clearSelection}
+                >
+                  清除勾选
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={selectedCount === 0 || downloading}
+                  onClick={handleDownloadSelected}
+                >
+                  {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+                </button>
+              </div>
+            </div>
+
             <div className="gallery">
               {jobs.map((job) => {
                 const src = displayUrl(job);
+                const canSelect = job.status === "done" && Boolean(src || job.openUrl);
+                const isSelected = selected.has(job.id);
                 return (
-                  <article key={job.id} className="card">
+                  <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
                     <span
                       className={`badge ${
                         job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
@@ -252,12 +367,34 @@ export function StudioPage({
                     >
                       #{job.variant}/{job.variants}
                     </span>
-                    <div className="card-media">
+
+                    {canSelect ? (
+                      <label className="card-check" title="勾选下载">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          disabled={downloading}
+                          onChange={() => toggleOne(job.id)}
+                        />
+                      </label>
+                    ) : null}
+
+                    <div
+                      className="card-media"
+                      onClick={() => {
+                        if (canSelect) toggleOne(job.id);
+                      }}
+                    >
                       {job.status === "done" && src ? (
                         <>
                           <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
                           <div className="card-overlay">
-                            <a href={job.openUrl || src} target="_blank" rel="noreferrer">
+                            <a
+                              href={job.openUrl || src}
+                              target="_blank"
+                              rel="noreferrer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               打开原图
                             </a>
                           </div>

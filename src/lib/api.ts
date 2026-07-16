@@ -465,14 +465,31 @@ export async function runPool<T, R>(
   concurrency: number,
   worker: (item: T, index: number) => Promise<R>,
   onItemSettled?: (index: number, result: PromiseSettledResult<R>) => void,
+  onInFlightChange?: (inFlight: number) => void,
 ): Promise<PromiseSettledResult<R>[]> {
   const results: PromiseSettledResult<R>[] = new Array(items.length);
-  let nextIndex = 0;
+  let cursor = 0;
+  let inFlight = 0;
 
-  async function runOne(): Promise<void> {
-    while (nextIndex < items.length) {
-      const current = nextIndex;
-      nextIndex += 1;
+  const takeNext = (): number | null => {
+    if (cursor >= items.length) return null;
+    const current = cursor;
+    cursor += 1;
+    return current;
+  };
+
+  async function runWorker(workerId: number): Promise<void> {
+    for (;;) {
+      const current = takeNext();
+      if (current === null) return;
+
+      inFlight += 1;
+      onInFlightChange?.(inFlight);
+      log("info", `并发槽 #${workerId + 1} 领取任务 ${current + 1}/${items.length}`, {
+        inFlight,
+        concurrency,
+      });
+
       try {
         const value = await worker(items[current], current);
         results[current] = { status: "fulfilled", value };
@@ -480,11 +497,15 @@ export async function runPool<T, R>(
       } catch (error) {
         results[current] = { status: "rejected", reason: error };
         onItemSettled?.(current, results[current]);
+      } finally {
+        inFlight -= 1;
+        onInFlightChange?.(inFlight);
       }
     }
   }
 
-  const size = Math.max(1, Math.min(concurrency, items.length || 1));
-  await Promise.all(Array.from({ length: size }, () => runOne()));
+  const size = Math.max(1, Math.min(Math.floor(concurrency) || 1, items.length || 1));
+  log("info", `启动并发池：workers=${size} · tasks=${items.length}`);
+  await Promise.all(Array.from({ length: size }, (_, workerId) => runWorker(workerId)));
   return results;
 }

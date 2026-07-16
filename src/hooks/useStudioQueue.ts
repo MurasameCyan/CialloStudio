@@ -20,9 +20,11 @@ type QueueApi = {
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
   running: boolean;
+  /** 当前真正在飞的请求数（用于验证并发是否生效） */
+  inFlight: number;
   prompts: string[];
   plannedJobs: number;
-  stats: { total: number; done: number; failed: number; active: number };
+  stats: { total: number; done: number; failed: number; active: number; running: number; queued: number };
   progress: number;
   start: () => Promise<void>;
   stop: () => void;
@@ -43,9 +45,9 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   );
   const [jobs, setJobs] = useState<StudioJob[]>(() => loadJobs());
   const [running, setRunning] = useState(false);
+  const [inFlight, setInFlight] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
-  const jobsRef = useRef(jobs);
-  jobsRef.current = jobs;
+  const runningRef = useRef(false);
 
   const prompts = useMemo(() => splitPrompts(draft.promptText), [draft.promptText]);
   const plannedJobs = prompts.length * clampVariants(draft.variants);
@@ -54,8 +56,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const total = jobs.length;
     const done = jobs.filter((j) => j.status === "done").length;
     const failed = jobs.filter((j) => j.status === "failed").length;
-    const active = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
-    return { total, done, failed, active };
+    const runningCount = jobs.filter((j) => j.status === "running").length;
+    const queued = jobs.filter((j) => j.status === "queued").length;
+    const active = runningCount + queued;
+    return { total, done, failed, active, running: runningCount, queued };
   }, [jobs]);
 
   const progress = stats.total === 0 ? 0 : Math.round(((stats.done + stats.failed) / stats.total) * 100);
@@ -92,13 +96,15 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     if (!settings.apiKey.trim()) {
       throw new ApiError(401, "请先在管理页填写 API Key", "missing_api_key");
     }
-    if (prompts.length === 0 || running) return;
+    if (prompts.length === 0 || runningRef.current) return;
 
     const concurrency = clampConcurrency(draft.concurrency);
     const variants = clampVariants(draft.variants);
     const controller = new AbortController();
     abortRef.current = controller;
+    runningRef.current = true;
     setRunning(true);
+    setInFlight(0);
 
     const batch = expandJobs(prompts, variants, {
       resolution: draft.resolution,
@@ -106,13 +112,18 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     });
     setJobs((prev) => [...batch, ...prev]);
 
-    log("info", `并发生图开始：${prompts.length} 条 × ${variants} 张 = ${batch.length} 子任务`, {
-      model: settings.model,
-      concurrency,
-      aspectRatio: draft.aspectRatio,
-      resolution: draft.resolution,
-      mode: "fan-out-subagents",
-    });
+    log(
+      "info",
+      `并发生图开始：共 ${batch.length} 张（每条 ${variants} 张）· 同时最多 ${concurrency} 路请求`,
+      {
+        model: settings.model,
+        concurrency,
+        variants,
+        aspectRatio: draft.aspectRatio,
+        resolution: draft.resolution,
+        note: "并发=同时请求数，不是总张数倍数",
+      },
+    );
 
     try {
       await runPool(
@@ -148,7 +159,6 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
               ? undefined
               : rewriteMediaUrl(imageUrl, settings.baseUrl));
 
-          // 展示优先用可持久化的 openUrl（同源 /v1/media/...）
           const persistable = openUrl || (!imageUrl.startsWith("blob:") ? imageUrl : undefined);
           const display = persistable || imageUrl;
 
@@ -201,19 +211,23 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             );
           }
         },
+        (nextInFlight) => setInFlight(nextInFlight),
       );
       log("ok", "并发生图结束");
     } finally {
+      runningRef.current = false;
       setRunning(false);
+      setInFlight(0);
       abortRef.current = null;
     }
-  }, [draft, prompts, running, settings.apiKey, settings.baseUrl, settings.model]);
+  }, [draft, prompts, settings.apiKey, settings.baseUrl, settings.model]);
 
   return {
     draft,
     setDraft,
     jobs,
     running,
+    inFlight,
     prompts,
     plannedJobs,
     stats,
@@ -221,7 +235,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     start,
     stop,
     clear: () => {
-      if (running) return;
+      if (runningRef.current) return;
       clear();
     },
   };

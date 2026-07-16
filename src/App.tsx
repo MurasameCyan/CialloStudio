@@ -1,0 +1,52 @@
+import { useMemo, useState } from "react";
+import { SettingsPage } from "@/components/SettingsPage";
+import { StudioPage } from "@/components/StudioPage";
+import { loadSettings, type StudioSettings } from "@/lib/settings";
+
+type Tab = "studio" | "settings";
+
+export default function App() {
+  const [tab, setTab] = useState<Tab>("studio");
+  const [settings, setSettings] = useState<StudioSettings>(() => loadSettings());
+
+  const connectionLabel = useMemo(() => {
+    if (!settings.apiKey.trim()) return "未配置 API Key";
+    return `${settings.model} · ${settings.baseUrl}`;
+  }, [settings]);
+
+  return (
+    <div className="app-shell">
+      <header className="glass-bar">
+        <div className="brand">
+          <div className="brand-mark" aria-hidden />
+          <div className="brand-text">
+            <div className="brand-title">Ciallo Studio</div>
+            <div className="brand-sub">{connectionLabel}</div>
+          </div>
+        </div>
+        <nav className="nav-pills" aria-label="主导航">
+          <button
+            type="button"
+            className={`nav-pill ${tab === "studio" ? "active" : ""}`}
+            onClick={() => setTab("studio")}
+          >
+            生图
+          </button>
+          <button
+            type="button"
+            className={`nav-pill ${tab === "settings" ? "active" : ""}`}
+            onClick={() => setTab("settings")}
+          >
+            管理
+          </button>
+        </nav>
+      </header>
+
+      {tab === "studio" ? (
+        <StudioPage settings={settings} onOpenSettings={() => setTab("settings")} />
+      ) : (
+        <SettingsPage settings={settings} onChange={setSettings} />
+      )}
+    </div>
+  );
+}

@@ -135,12 +135,6 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
     setMessage(`已保存 · 模型 ${normalized.model} · 并发 ${normalized.concurrency}`);
   }
 
-  function useExampleAbsolute() {
-    update("baseUrl", "https://");
-    setMessage("请补全你的网关域名，例如 https://grokb.example.com/v1，然后保存并测试。");
-    setOk(null);
-  }
-
   function handleReset() {
     setDraft({ ...DEFAULT_SETTINGS });
     setModels([]);
@@ -198,9 +192,6 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
               <div className="section-card-title">Settings</div>
               <h3 className="admin-section-title">接口与生成</h3>
             </div>
-            <button type="button" className="btn btn-secondary btn-sm" onClick={useExampleAbsolute}>
-              填 https://
-            </button>
           </div>
 
           <div className="admin-stack">

@@ -16,10 +16,12 @@ import type {
   LoginInput,
   RegisterInput,
   ShareCooldownConfig,
+  ShareStatus,
   UserRole,
 } from "./types";
 import {
   DEFAULT_SHARE_COOLDOWN,
+  computeShareRemainSec,
   normalizeShareCooldown,
   shareCooldownForRole,
 } from "./types";
@@ -386,12 +388,11 @@ export const mockCommunity = {
     const cooldownCfg = loadShareCooldown();
     const role = normalizeRole(user.role);
     const cooldownSec = shareCooldownForRole(role, cooldownCfg);
-    if (cooldownSec > 0 && typeof user.lastShareAt === "number" && user.lastShareAt > 0) {
-      const elapsed = (Date.now() - user.lastShareAt) / 1000;
-      const remain = Math.ceil(cooldownSec - elapsed);
-      if (remain > 0) {
-        throw new Error(`分享冷却中，请 ${remain} 秒后再试（${role === "vip" ? "VIP" : "普通用户"}间隔 ${cooldownSec} 秒）`);
-      }
+    const remain = computeShareRemainSec(cooldownSec, user.lastShareAt);
+    if (remain > 0) {
+      throw new Error(
+        `分享冷却中，请 ${remain} 秒后再试（${role === "vip" ? "VIP" : "普通用户"}间隔 ${cooldownSec} 秒）`,
+      );
     }
 
     const post: GalleryPost = {
@@ -523,6 +524,25 @@ export const mockCommunity = {
     });
     saveShareCooldown(next);
     return next;
+  },
+
+  /** 当前用户分享冷却状态（登录即可；供工作台展示倒计时） */
+  async getShareStatus(token: string | null): Promise<ShareStatus> {
+    if (!token) throw new Error("请先登录");
+    const store = load();
+    const userId = store.sessions[token];
+    if (!userId) throw new Error("请先登录");
+    const user = store.users.find((u) => u.id === userId);
+    if (!user || user.banned) throw new Error("请先登录");
+    const role = normalizeRole(user.role);
+    const cooldownSec = shareCooldownForRole(role, loadShareCooldown());
+    const lastShareAt = typeof user.lastShareAt === "number" ? user.lastShareAt : undefined;
+    return {
+      role,
+      cooldownSec,
+      lastShareAt,
+      remainSec: computeShareRemainSec(cooldownSec, lastShareAt),
+    };
   },
 
   /** 删除用户：吊销会话、移除账号；保留其帖子/评论（作者名仍可见） */

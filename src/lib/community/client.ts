@@ -17,6 +17,7 @@ import type {
   LoginInput,
   RegisterInput,
   ShareCooldownConfig,
+  ShareStatus,
   UserRole,
 } from "./types";
 
@@ -250,6 +251,14 @@ export const communityApi = {
       });
     }
     return mockCommunity.setShareCooldown(cfg, getToken());
+  },
+
+  /** 当前登录用户的分享冷却（任意登录用户） */
+  async getShareStatus(): Promise<ShareStatus> {
+    if (getCommunityMode() === "http") {
+      return http<ShareStatus>("/me/share-status");
+    }
+    return mockCommunity.getShareStatus(getToken());
   },
 
   async deleteUser(userId: string): Promise<void> {

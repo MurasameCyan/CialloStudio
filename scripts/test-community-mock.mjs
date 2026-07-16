@@ -131,8 +131,9 @@ const endpoints = [
   "DELETE /admin/users/:id",
   "GET /admin/share-cooldown",
   "PUT /admin/share-cooldown",
+  "GET /me/share-status",
 ];
-assert(endpoints.length >= 13, "endpoint list");
+assert(endpoints.length >= 14, "endpoint list");
 
 // 用户管理路径
 {
@@ -191,7 +192,7 @@ assert(endpoints.length >= 13, "endpoint list");
   assert(listUsers(store, admin.token).length === 1, "only admin left");
 }
 
-// 分享冷却秒数语义
+// 分享冷却秒数语义 + share-status 形状
 {
   function remain(cooldownSec, lastShareAt, now) {
     if (cooldownSec <= 0 || !lastShareAt) return 0;
@@ -200,6 +201,17 @@ assert(endpoints.length >= 13, "endpoint list");
   assert(remain(60, Date.now() - 10_000, Date.now()) === 50, "user cooldown remain");
   assert(remain(15, Date.now() - 20_000, Date.now()) === 0, "vip cooldown done");
   assert(remain(0, Date.now(), Date.now()) === 0, "admin no cooldown");
+
+  // 模拟 createPost 后的 share-status（普通用户 60s）
+  const lastShareAt = Date.now() - 5_000;
+  const status = {
+    role: "user",
+    cooldownSec: 60,
+    lastShareAt,
+    remainSec: remain(60, lastShareAt, Date.now()),
+  };
+  assert(status.remainSec >= 54 && status.remainSec <= 56, "share-status remain ~55");
+  assert(status.cooldownSec === 60, "share-status cooldown");
 }
 
 console.log("community mock user-admin ok:", endpoints.length, "routes + ban/delete/vip/cooldown");

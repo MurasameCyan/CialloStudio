@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
+import {
+  computeShareRemainSec,
+  roleLabel,
+  type ShareStatus,
+} from "@/lib/community/types";
 import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
@@ -63,6 +68,47 @@ export function StudioPage({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
+  const [shareNotice, setShareNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  const shareRemainSec = useMemo(() => {
+    if (!shareStatus) return 0;
+    return computeShareRemainSec(shareStatus.cooldownSec, shareStatus.lastShareAt, nowMs);
+  }, [shareStatus, nowMs]);
+
+  const shareCooldownLocked = shareRemainSec > 0;
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setShareStatus(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const st = await communityApi.getShareStatus();
+        if (!cancelled) setShareStatus(st);
+      } catch {
+        if (!cancelled) setShareStatus(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    if (!shareStatus || shareStatus.cooldownSec <= 0 || !shareStatus.lastShareAt) return;
+    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [shareStatus]);
+
+  useEffect(() => {
+    if (!shareNotice) return;
+    const id = window.setTimeout(() => setShareNotice(null), shareNotice.ok ? 4000 : 8000);
+    return () => window.clearTimeout(id);
+  }, [shareNotice]);
 
   const downloadableJobs = useMemo(
     () => jobs.filter((job) => job.status === "done" && Boolean(displayUrl(job) || job.openUrl)),
@@ -158,11 +204,19 @@ export function StudioPage({
   async function handleShareToHall(job: StudioJob) {
     const src = displayUrl(job) || job.openUrl;
     if (!src || job.status !== "done") return;
+    if (shareCooldownLocked) {
+      const text = `分享冷却中，请 ${shareRemainSec} 秒后再试`;
+      setShareNotice({ ok: false, text });
+      log("warn", text);
+      return;
+    }
     setSharingId(job.id);
+    setShareNotice(null);
     try {
       const me = await communityApi.me();
       if (!me) {
         log("warn", "分享大厅需要先登录社区账号");
+        setShareNotice({ ok: false, text: "请先登录社区账号再分享到大厅" });
         onNeedLogin?.();
         return;
       }
@@ -191,9 +245,40 @@ export function StudioPage({
         resolution: job.resolution || draft.resolution,
       });
       log("ok", "已分享到大厅");
-      onSharedToHall?.();
+      let nextCooldown = shareStatus?.cooldownSec;
+      try {
+        const st = await communityApi.getShareStatus();
+        setShareStatus(st);
+        setNowMs(Date.now());
+        nextCooldown = st.cooldownSec;
+      } catch {
+        // ignore refresh errors
+      }
+      setShareNotice({
+        ok: true,
+        text:
+          me.role === "admin" || nextCooldown === 0
+            ? "已分享到大厅（站长无冷却）"
+            : `已分享到大厅 · 下次分享冷却 ${nextCooldown ?? 60} 秒`,
+      });
+      // 稍后再跳转大厅，让工作台先显示冷却倒计时
+      if (onSharedToHall) {
+        window.setTimeout(() => onSharedToHall(), nextCooldown === 0 ? 900 : 1600);
+      }
     } catch (error) {
-      log("error", "分享失败", error instanceof Error ? error.message : String(error));
+      const message = error instanceof Error ? error.message : String(error);
+      log("error", "分享失败", message);
+      setShareNotice({ ok: false, text: message });
+      // 若是冷却错误，刷新状态以便倒计时同步
+      if (/冷却/.test(message)) {
+        try {
+          const st = await communityApi.getShareStatus();
+          setShareStatus(st);
+          setNowMs(Date.now());
+        } catch {
+          // ignore
+        }
+      }
     } finally {
       setSharingId(null);
     }
@@ -208,6 +293,30 @@ export function StudioPage({
             <h2 className="panel-title">灵感工作台</h2>
           </div>
         </div>
+
+        {isLoggedIn && shareStatus ? (
+          <div
+            className={`status share-cooldown-status ${shareCooldownLocked ? "err" : "ok"}`}
+            role="status"
+            style={{ marginBottom: 14 }}
+          >
+            {shareStatus.cooldownSec <= 0
+              ? `分享冷却：${roleLabel(shareStatus.role)}不限`
+              : shareCooldownLocked
+                ? `分享冷却中：还剩 ${shareRemainSec} 秒（${roleLabel(shareStatus.role)}间隔 ${shareStatus.cooldownSec} 秒）`
+                : `分享冷却：可分享 · ${roleLabel(shareStatus.role)}间隔 ${shareStatus.cooldownSec} 秒`}
+          </div>
+        ) : null}
+
+        {shareNotice ? (
+          <div
+            className={`status ${shareNotice.ok ? "ok" : "err"}`}
+            role="status"
+            style={{ marginBottom: 14 }}
+          >
+            {shareNotice.text}
+          </div>
+        ) : null}
 
         {!configured ? (
           <div className="status err" style={{ marginBottom: 14 }}>
@@ -497,13 +606,22 @@ export function StudioPage({
                             <button
                               type="button"
                               className="btn btn-primary btn-sm"
-                              disabled={sharingId === job.id}
+                              disabled={sharingId === job.id || shareCooldownLocked}
+                              title={
+                                shareCooldownLocked
+                                  ? `冷却中，${shareRemainSec} 秒后可分享`
+                                  : "分享到大厅"
+                              }
                               onClick={(e) => {
                                 e.stopPropagation();
                                 void handleShareToHall(job);
                               }}
                             >
-                              {sharingId === job.id ? "分享中…" : "分享到大厅"}
+                              {sharingId === job.id
+                                ? "分享中…"
+                                : shareCooldownLocked
+                                  ? `冷却 ${shareRemainSec}s`
+                                  : "分享到大厅"}
                             </button>
                           </div>
                         </>

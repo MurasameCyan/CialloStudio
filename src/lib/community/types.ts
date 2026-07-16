@@ -20,6 +20,25 @@ export type ShareCooldownConfig = {
   vip: number;
 };
 
+/** 当前登录用户的分享冷却状态（任意登录用户可读） */
+export type ShareStatus = {
+  role: UserRole;
+  /** 本组配置的间隔秒数；站长为 0 */
+  cooldownSec: number;
+  lastShareAt?: number;
+  /** 还需等待的秒数；0 表示可立即分享 */
+  remainSec: number;
+};
+
+export function computeShareRemainSec(
+  cooldownSec: number,
+  lastShareAt: number | undefined,
+  now = Date.now(),
+): number {
+  if (cooldownSec <= 0 || typeof lastShareAt !== "number" || lastShareAt <= 0) return 0;
+  return Math.max(0, Math.ceil(cooldownSec - (now - lastShareAt) / 1000));
+}
+
 export const DEFAULT_SHARE_COOLDOWN: ShareCooldownConfig = {
   user: 60,
   vip: 15,

@@ -223,6 +223,14 @@ export const communityApi = {
     return mockCommunity.setBanned(userId, banned, getToken());
   },
 
+  async deleteUser(userId: string): Promise<void> {
+    if (getCommunityMode() === "http") {
+      await http(`/admin/users/${encodeURIComponent(userId)}`, { method: "DELETE" });
+      return;
+    }
+    return mockCommunity.deleteUser(userId, getToken());
+  },
+
   async deletePost(postId: string): Promise<void> {
     if (getCommunityMode() === "http") {
       await http(`/posts/${encodeURIComponent(postId)}`, { method: "DELETE" });

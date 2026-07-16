@@ -2170,6 +2170,15 @@ a {
   border: 1px solid var(--separator);
 }
 
+.user-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 .user-row-banned {
   opacity: 0.78;
   border-color: rgba(255, 69, 58, 0.22);

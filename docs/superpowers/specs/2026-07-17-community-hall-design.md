@@ -51,6 +51,7 @@ Base：`/api/community`
 | POST | `/posts/:id/comments` | body: `{ body, rating? }` |
 | GET | `/admin/users` | 仅 admin |
 | POST | `/admin/users/:id/ban` | body: `{ banned: boolean }` |
+| DELETE | `/admin/users/:id` | 仅 admin；不可删站长/自己 |
 
 类型定义：`src/lib/community/types.ts`。
 
@@ -90,10 +91,11 @@ Base：`/api/community`
 
 ## 用户池管理（Mock 已落地，入口在管理页）
 
-- **管理 → 用户池**：统计、搜索、筛选、禁用/解禁（需社区 admin 角色，如 `admin/admin123`）
+- **管理 → 用户池**：统计、搜索、筛选、禁用/解禁、删除（需站长 / admin）
 - **用户** 页仅负责注册 / 登录 / 当前账号
 - `POST /admin/users/:id/ban`：`banned=true` 时吊销该用户全部 session；`me` 对已禁用会话返回 null
-- 不能禁用管理员或自己；禁用后无法登录 / 发帖 / 评论 / 点赞
+- `DELETE /admin/users/:id`：删除用户并吊销会话；不能删站长或自己
+- 不能禁用/删除管理员或自己；禁用后无法登录 / 发帖 / 评论 / 点赞
 
 ## 验收（Mock）
 

@@ -31,6 +31,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
   const [userQuery, setUserQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "banned">("all");
   const [banBusyId, setBanBusyId] = useState<string | null>(null);
+  const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
   const [ok, setOk] = useState<boolean | null>(null);
 
@@ -101,6 +102,30 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       setMessage(e instanceof Error ? e.message : "操作失败");
     } finally {
       setBanBusyId(null);
+    }
+  }
+
+  async function removeUser(u: CommunityUser) {
+    if (u.role === "admin") return;
+    if (u.id === communityUser?.id) return;
+    const okConfirm = window.confirm(
+      `确定删除用户 @${u.username}（${u.displayName}）？\n删除后无法登录，会话立即失效。`,
+    );
+    if (!okConfirm) return;
+    setDeleteBusyId(u.id);
+    setMessage("");
+    setOk(null);
+    try {
+      await communityApi.deleteUser(u.id);
+      setUsers((prev) => prev.filter((x) => x.id !== u.id));
+      setOk(true);
+      setMessage(`已删除 @${u.username}`);
+      log("ok", `已删除用户 ${u.username}`);
+    } catch (e) {
+      setOk(false);
+      setMessage(e instanceof Error ? e.message : "删除失败");
+    } finally {
+      setDeleteBusyId(null);
     }
   }
 
@@ -270,7 +295,8 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         <div className="user-table" role="list">
           {filteredUsers.map((u) => {
             const isSelf = u.id === communityUser.id;
-            const canBan = u.role !== "admin" && !isSelf;
+            const canManage = u.role !== "admin" && !isSelf;
+            const rowBusy = banBusyId === u.id || deleteBusyId === u.id;
             return (
               <div
                 key={u.id}
@@ -282,7 +308,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                     <strong>{u.displayName}</strong>
                     <span className="user-badges">
                       <span className={`user-badge ${u.role === "admin" ? "admin" : "user"}`}>
-                        {u.role === "admin" ? "管理员" : "用户"}
+                        {u.role === "admin" ? "站长" : "用户"}
                       </span>
                       {u.banned ? <span className="user-badge banned">已禁用</span> : null}
                       {isSelf ? <span className="user-badge self">我</span> : null}
@@ -292,17 +318,27 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                     @{u.username} · 加入 {formatJoined(u.createdAt)}
                   </div>
                 </div>
-                {canBan ? (
-                  <button
-                    type="button"
-                    className={`btn btn-sm ${u.banned ? "btn-secondary" : "btn-danger"}`}
-                    disabled={banBusyId === u.id}
-                    onClick={() => void toggleBan(u)}
-                  >
-                    {banBusyId === u.id ? "处理中…" : u.banned ? "解禁" : "禁用"}
-                  </button>
+                {canManage ? (
+                  <div className="user-row-actions">
+                    <button
+                      type="button"
+                      className={`btn btn-sm ${u.banned ? "btn-secondary" : "btn-ghost"}`}
+                      disabled={rowBusy}
+                      onClick={() => void toggleBan(u)}
+                    >
+                      {banBusyId === u.id ? "处理中…" : u.banned ? "解禁" : "禁用"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-danger"
+                      disabled={rowBusy}
+                      onClick={() => void removeUser(u)}
+                    >
+                      {deleteBusyId === u.id ? "删除中…" : "删除"}
+                    </button>
+                  </div>
                 ) : (
-                  <span className="footer-note">{u.role === "admin" ? "管理员" : "当前账号"}</span>
+                  <span className="footer-note">{u.role === "admin" ? "站长" : "当前账号"}</span>
                 )}
               </div>
             );

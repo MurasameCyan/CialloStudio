@@ -441,6 +441,27 @@ export const mockCommunity = {
     return publicUser(user);
   },
 
+  /** 删除用户：吊销会话、移除账号；保留其帖子/评论（作者名仍可见） */
+  async deleteUser(userId: string, token: string | null): Promise<void> {
+    const store = load();
+    const adminId = token ? store.sessions[token] : null;
+    const admin = store.users.find((u) => u.id === adminId);
+    if (!admin || admin.role !== "admin" || admin.banned) throw new Error("需要管理员权限");
+    const user = store.users.find((u) => u.id === userId);
+    if (!user) throw new Error("用户不存在");
+    if (user.role === "admin") throw new Error("不能删除站长/管理员");
+    if (user.id === admin.id) throw new Error("不能删除自己");
+    for (const [tok, uid] of Object.entries(store.sessions)) {
+      if (uid === user.id) delete store.sessions[tok];
+    }
+    // 点赞关系去掉该用户
+    for (const postId of Object.keys(store.likes)) {
+      store.likes[postId] = (store.likes[postId] ?? []).filter((id) => id !== user.id);
+    }
+    store.users = store.users.filter((u) => u.id !== user.id);
+    save(store);
+  },
+
   async deletePost(postId: string, token: string | null): Promise<void> {
     const store = load();
     const userId = token ? store.sessions[token] : null;

@@ -101,6 +101,20 @@ function setBanned(store, targetId, banned, token) {
   return publicUser(user);
 }
 
+function deleteUser(store, targetId, token) {
+  const adminId = store.sessions[token];
+  const admin = store.users.find((u) => u.id === adminId);
+  if (!admin || admin.role !== "admin" || admin.banned) throw new Error("需要管理员权限");
+  const user = store.users.find((u) => u.id === targetId);
+  if (!user) throw new Error("用户不存在");
+  if (user.role === "admin") throw new Error("不能删除站长/管理员");
+  if (user.id === admin.id) throw new Error("不能删除自己");
+  for (const [tok, uidVal] of Object.entries(store.sessions)) {
+    if (uidVal === user.id) delete store.sessions[tok];
+  }
+  store.users = store.users.filter((u) => u.id !== user.id);
+}
+
 // 契约形状冒烟
 const endpoints = [
   "POST /auth/register",
@@ -113,8 +127,9 @@ const endpoints = [
   "POST /posts/:id/comments",
   "GET /admin/users",
   "POST /admin/users/:id/ban",
+  "DELETE /admin/users/:id",
 ];
-assert(endpoints.length >= 10, "endpoint list");
+assert(endpoints.length >= 11, "endpoint list");
 
 // 用户管理路径
 {
@@ -152,6 +167,19 @@ assert(endpoints.length >= 10, "endpoint list");
   assert(!unbanned.banned, "demo unbanned");
   const again = login(store, "demo", "demo123");
   assert(me(store, again.token)?.username === "demo", "unbanned can login");
+
+  let delAdminBlocked = false;
+  try {
+    deleteUser(store, admin.user.id, admin.token);
+  } catch {
+    delAdminBlocked = true;
+  }
+  assert(delAdminBlocked, "cannot delete admin");
+
+  deleteUser(store, demo.user.id, admin.token);
+  assert(!store.users.some((u) => u.username === "demo"), "demo removed");
+  assert(me(store, again.token) === null, "deleted user session gone");
+  assert(listUsers(store, admin.token).length === 1, "only admin left");
 }
 
-console.log("community mock user-admin ok:", endpoints.length, "routes + ban/session flows");
+console.log("community mock user-admin ok:", endpoints.length, "routes + ban/delete flows");

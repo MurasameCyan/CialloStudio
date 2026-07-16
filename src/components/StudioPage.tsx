@@ -21,6 +21,8 @@ type Props = {
   onOpenSettings: () => void;
   /** 未登录时跳转账号页 */
   onNeedLogin?: () => void;
+  /** 是否已登录社区账号（未配置 Key 时决定去登录还是去设置） */
+  isLoggedIn?: boolean;
   /** 分享成功后可选跳转大厅 */
   onSharedToHall?: () => void;
   draft: StudioDraft;
@@ -41,6 +43,7 @@ export function StudioPage({
   settings,
   onOpenSettings,
   onNeedLogin,
+  isLoggedIn = false,
   onSharedToHall,
   draft,
   setDraft,
@@ -126,9 +129,17 @@ export function StudioPage({
     }
   }
 
+  function openConfigOrLogin() {
+    if (!isLoggedIn) {
+      onNeedLogin?.();
+      return;
+    }
+    onOpenSettings();
+  }
+
   async function handleGenerate() {
     if (!configured) {
-      onOpenSettings();
+      openConfigOrLogin();
       return;
     }
     try {
@@ -200,7 +211,9 @@ export function StudioPage({
 
         {!configured ? (
           <div className="status err" style={{ marginBottom: 14 }}>
-            还没有 API Key。请先到「管理」页填写接口与密钥。
+            {isLoggedIn
+              ? "还没有 API Key。请到「设置」页填写接口与密钥。"
+              : "还没有 API Key。请先登录，再到「设置」页填写接口与密钥。"}
           </div>
         ) : null}
 
@@ -253,7 +266,7 @@ export function StudioPage({
                   停止
                 </button>
               </div>
-              <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
+              <button type="button" className="btn btn-ghost" onClick={openConfigOrLogin}>
                 模型 {settings.model || "未选择"} →
               </button>
             </div>

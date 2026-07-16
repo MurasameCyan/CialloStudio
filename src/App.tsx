@@ -37,7 +37,7 @@ export default function App() {
           </div>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div className="header-right">
           <div className="connection-chip" title={ready ? "API Key 已配置" : "尚未配置 API Key"}>
             <span className={`live-dot ${ready ? "" : "off"}`} />
             {ready ? "Ready" : "Setup"}

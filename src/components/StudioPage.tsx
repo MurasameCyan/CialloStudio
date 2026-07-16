@@ -249,51 +249,55 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           </div>
         </div>
 
-        <div className="field">
-          <label>每条张数</label>
-          <div className="segmented">
-            {VARIANT_OPTIONS.map((n) => (
-              <button
-                key={n}
-                type="button"
-                className={`chip ${variants === n ? "active" : ""}`}
-                onClick={() => setVariants(n)}
-              >
-                {n}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="row">
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>宽高比</label>
+        <div className="option-block">
+          <div className="field">
+            <label>每条张数</label>
             <div className="segmented">
-              {ASPECT_RATIOS.map((ratio) => (
+              {VARIANT_OPTIONS.map((n) => (
                 <button
-                  key={ratio}
+                  key={n}
                   type="button"
-                  className={`chip ${aspectRatio === ratio ? "active" : ""}`}
-                  onClick={() => setAspectRatio(ratio)}
+                  className={`chip ${variants === n ? "active" : ""}`}
+                  onClick={() => setVariants(n)}
                 >
-                  {ratio}
+                  {n}
                 </button>
               ))}
             </div>
           </div>
-          <div className="field" style={{ marginBottom: 0 }}>
-            <label>分辨率</label>
-            <div className="segmented">
-              {RESOLUTIONS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`chip ${resolution === item ? "active" : ""}`}
-                  onClick={() => setResolution(item)}
-                >
-                  {item}
-                </button>
-              ))}
+        </div>
+
+        <div className="option-block">
+          <div className="row">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>宽高比</label>
+              <div className="segmented">
+                {ASPECT_RATIOS.map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    className={`chip ${aspectRatio === ratio ? "active" : ""}`}
+                    onClick={() => setAspectRatio(ratio)}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>分辨率</label>
+              <div className="segmented">
+                {RESOLUTIONS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`chip ${resolution === item ? "active" : ""}`}
+                    onClick={() => setResolution(item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -383,30 +387,32 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 >
                   #{job.variant}/{job.variants}
                 </span>
-                {job.status === "done" && job.imageUrl ? (
-                  <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
-                    <img src={job.imageUrl} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
-                  </a>
-                ) : job.status === "failed" ? (
-                  <div
-                    className="skeleton"
-                    style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
-                  >
-                    <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
-                  </div>
-                ) : (
-                  <div className="skeleton" />
-                )}
+                <div className="card-media">
+                  {job.status === "done" && job.imageUrl ? (
+                    <>
+                      <img src={job.imageUrl} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
+                      <div className="card-overlay">
+                        <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
+                          打开原图
+                        </a>
+                      </div>
+                    </>
+                  ) : job.status === "failed" ? (
+                    <div
+                      className="skeleton"
+                      style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+                    >
+                      <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
+                    </div>
+                  ) : (
+                    <div className="skeleton" />
+                  )}
+                </div>
                 <div className="card-body">
                   <div className="card-meta">
                     <strong>#{job.variant}</strong>
                     {job.prompt}
                   </div>
-                  {job.imageUrl ? (
-                    <a className="mono" href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
-                      打开原图
-                    </a>
-                  ) : null}
                 </div>
               </article>
             ))}

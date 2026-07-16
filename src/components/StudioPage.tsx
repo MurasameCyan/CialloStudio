@@ -371,7 +371,7 @@ export function StudioPage({
             </span>
             {running ? (
               <span className="stat-pill">
-                在飞 <strong>{inFlight}</strong>/{effectiveConcurrency}
+                生成中 <strong>{inFlight}</strong>/{effectiveConcurrency}
               </span>
             ) : null}
           </div>

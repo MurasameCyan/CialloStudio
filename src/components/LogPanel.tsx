@@ -15,7 +15,7 @@ function levelClass(level: LogEntry["level"]): string {
 /** 仅在管理页展示的运行日志面板 */
 export function LogPanel() {
   const [entries, setEntries] = useState<LogEntry[]>([]);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => subscribeLogs(setEntries), []);
 

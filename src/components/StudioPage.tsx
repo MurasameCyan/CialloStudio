@@ -177,7 +177,6 @@ export function StudioPage({
           <div>
             <div className="panel-kicker">Create</div>
             <h2 className="panel-title">灵感工作台</h2>
-            <p className="panel-desc">每行一个提示词。张数 × 并发池同时出图，切到管理页也不会丢队列和结果。</p>
           </div>
         </div>
 

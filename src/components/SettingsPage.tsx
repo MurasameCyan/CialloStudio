@@ -173,7 +173,6 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
         <div className="admin-hero-top">
           <div className="panel-kicker">Admin</div>
           <h2 className="panel-title">控制台</h2>
-          <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
           {adminGateEnabled && onLockAdmin ? (
             <div className="btn-row" style={{ marginTop: 12 }}>
               <button type="button" className="btn btn-ghost btn-sm" onClick={onLockAdmin}>

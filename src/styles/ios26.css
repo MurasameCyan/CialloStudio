@@ -1154,6 +1154,25 @@ a {
   align-items: start;
 }
 
+/* Base URL | API Key 同一行，Key 在右侧，省纵向空间 */
+.admin-fields-url-key {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: 12px 14px;
+  align-items: start;
+}
+
+.admin-fields-url-key > .field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-fields-url-key {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 管理页统一纵向堆叠：避免左右两列高度不一致造成「一上一下」 */
 .admin-stack {
   display: grid;

@@ -197,41 +197,41 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           </div>
 
           <div className="admin-stack">
-            <div className="field">
-              <label htmlFor="baseUrl">API Base URL</label>
-              <input
-                id="baseUrl"
-                className="control mono"
-                value={draft.baseUrl}
-                placeholder="https://your-gateway/v1"
-                onChange={(e) => update("baseUrl", e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <div className="field-hint">
-                填<strong>完整上游</strong>（如 <code>https://your-gateway/v1</code>）。浏览器实际请求同源{" "}
-                <code>/v1</code>，由 Vite/Docker 按此地址转发（免 CORS，不写进 .env）。
+            <div className="admin-fields-url-key">
+              <div className="field">
+                <label htmlFor="baseUrl">API Base URL</label>
+                <input
+                  id="baseUrl"
+                  className="control mono"
+                  value={draft.baseUrl}
+                  placeholder="https://your-gateway/v1"
+                  onChange={(e) => update("baseUrl", e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+              </div>
+              <div className="field">
+                <div className="label-row">
+                  <label htmlFor="apiKey">API Key</label>
+                  <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
+                    {showKey ? "隐藏" : "显示"}
+                  </button>
+                </div>
+                <input
+                  id="apiKey"
+                  className="control mono"
+                  type={showKey ? "text" : "password"}
+                  value={draft.apiKey}
+                  placeholder="g2a_..."
+                  onChange={(e) => update("apiKey", e.target.value)}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
               </div>
             </div>
-
-            <div className="field">
-              <div className="label-row">
-                <label htmlFor="apiKey">API Key</label>
-                <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
-                  {showKey ? "隐藏" : "显示"}
-                </button>
-              </div>
-              <input
-                id="apiKey"
-                className="control mono"
-                type={showKey ? "text" : "password"}
-                value={draft.apiKey}
-                placeholder="g2a_..."
-                onChange={(e) => update("apiKey", e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-              <div className="field-hint">仅保存在本机浏览器，不会进入镜像或仓库。</div>
+            <div className="field-hint">
+              上游与 Key 仅保存在本机浏览器。填完整 Base（如 <code>https://your-gateway/v1</code>
+              ），请求经同源 <code>/v1</code> 代理转发。
             </div>
           </div>
         </div>

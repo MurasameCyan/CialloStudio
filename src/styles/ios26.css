@@ -100,13 +100,17 @@ a {
   min-height: 100dvh;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  /* 左右内边距对称，避免右侧贴边比左侧更紧 */
   padding:
     calc(18px + var(--safe-top))
     20px
-    calc(20px + var(--safe-bottom));
+    calc(20px + var(--safe-bottom))
+    20px;
   gap: 18px;
   max-width: 1400px;
   margin: 0 auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .app-main {
@@ -114,7 +118,10 @@ a {
   overflow: auto;
   display: grid;
   align-content: start;
-  scrollbar-gutter: stable;
+  /* 不用 stable gutter，否则右侧多出一条空白导致贴边不对称 */
+  scrollbar-gutter: auto;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Header */
@@ -1050,6 +1057,21 @@ a {
 
 .admin-layout {
   gap: 16px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+/* 管理页各卡片与日志：宽度与左右边距一致 */
+.admin-layout > .panel,
+.admin-layout > .admin-log-panel,
+.admin-layout > .log-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin-inline: 0;
 }
 
 .admin-hero {
@@ -1326,6 +1348,13 @@ a {
 .admin-bottom-grid .log-panel {
   margin: 0;
   max-height: min(420px, 50vh);
+  overflow: auto;
+}
+
+/* 运行日志单独占满一行时也保持与上方面板同宽 */
+.admin-layout > .admin-log-panel.panel,
+.admin-layout > .log-panel.panel {
+  max-height: min(480px, 55vh);
   overflow: auto;
 }
 

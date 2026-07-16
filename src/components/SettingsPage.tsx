@@ -79,9 +79,9 @@ export function SettingsPage({ settings, onChange }: Props) {
       );
     } catch (error) {
       setOk(false);
-      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
-      log("error", "管理页：测试连接失败", message);
-      setMessage(message);
+      const text = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
+      log("error", "管理页：测试连接失败", text);
+      setMessage(text);
     } finally {
       setBusy(false);
     }
@@ -115,117 +115,122 @@ export function SettingsPage({ settings, onChange }: Props) {
   }
 
   return (
-    <div className="page">
+    <div className="page settings-grid">
       <section className="panel">
-        <h2 className="panel-title">管理</h2>
-        <p className="panel-desc">
-          填写 OpenAI 兼容接口的 Base URL 与 API Key。推荐使用同源代理路径 <span className="mono">/v1</span>
-          ；也可直接填写完整地址，例如 <span className="mono">https://your-host/v1</span>。
-        </p>
-
-        <div className="field">
-          <label htmlFor="baseUrl">API Base URL</label>
-          <input
-            id="baseUrl"
-            className="control mono"
-            value={draft.baseUrl}
-            placeholder="/v1 或 https://host/v1"
-            onChange={(e) => update("baseUrl", e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <div className="field-hint">
-            推荐填 <span className="mono">/v1</span>（同源代理，可避开 CORS）。
-            若填完整域名，前端也会自动改走 <span className="mono">/v1</span>。
-            本页下方有运行日志（生图页不显示）。
+        <div className="panel-head">
+          <div>
+            <div className="panel-kicker">Settings</div>
+            <h2 className="panel-title">连接与默认值</h2>
+            <p className="panel-desc">
+              配置 OpenAI 兼容接口。推荐 Base URL 使用 <span className="mono">/v1</span> 同源代理。
+            </p>
           </div>
         </div>
 
-        <div className="field">
-          <label htmlFor="apiKey">API Key</label>
-          <input
-            id="apiKey"
-            className="control mono"
-            type="password"
-            value={draft.apiKey}
-            placeholder="g2a_..."
-            onChange={(e) => update("apiKey", e.target.value)}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          <div className="field-hint">仅保存在浏览器 localStorage，不会写入镜像或仓库。</div>
-        </div>
-
-        <div className="row">
+        <div className="section-card">
+          <div className="section-card-title">API</div>
           <div className="field">
-            <label htmlFor="model">模型</label>
+            <label htmlFor="baseUrl">API Base URL</label>
             <input
-              id="model"
+              id="baseUrl"
               className="control mono"
-              list="model-options"
-              value={draft.model}
-              onChange={(e) => update("model", e.target.value)}
-              placeholder="grok-imagine-image"
+              value={draft.baseUrl}
+              placeholder="/v1 或 https://host/v1"
+              onChange={(e) => update("baseUrl", e.target.value)}
+              autoComplete="off"
               spellCheck={false}
             />
-            <datalist id="model-options">
-              {imageModels.map((id) => (
-                <option key={id} value={id} />
-              ))}
-            </datalist>
-          </div>
-          <div className="field">
-            <label htmlFor="concurrency">多并发数</label>
-            <input
-              id="concurrency"
-              className="control"
-              type="number"
-              min={1}
-              max={8}
-              value={draft.concurrency}
-              onChange={(e) => update("concurrency", Number(e.target.value))}
-            />
             <div className="field-hint">
-              1–8。全局并发槽：同一时间最多多少个「子任务」在请求上游。
-              生图页「每条张数」会 fan-out 出多个子任务。
+              推荐 <span className="mono">/v1</span>。填写完整域名时也会自动改走同源代理。
+            </div>
+          </div>
+
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label htmlFor="apiKey">API Key</label>
+            <input
+              id="apiKey"
+              className="control mono"
+              type="password"
+              value={draft.apiKey}
+              placeholder="g2a_..."
+              onChange={(e) => update("apiKey", e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <div className="field-hint">仅保存在浏览器 localStorage，不会写入镜像或仓库。</div>
+          </div>
+        </div>
+
+        <div className="section-card" style={{ marginTop: 14 }}>
+          <div className="section-card-title">模型与并发</div>
+          <div className="row">
+            <div className="field">
+              <label htmlFor="model">模型</label>
+              <input
+                id="model"
+                className="control mono"
+                list="model-options"
+                value={draft.model}
+                onChange={(e) => update("model", e.target.value)}
+                placeholder="grok-imagine-image"
+                spellCheck={false}
+              />
+              <datalist id="model-options">
+                {imageModels.map((id) => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+            </div>
+            <div className="field">
+              <label htmlFor="concurrency">全局并发槽</label>
+              <input
+                id="concurrency"
+                className="control"
+                type="number"
+                min={1}
+                max={8}
+                value={draft.concurrency}
+                onChange={(e) => update("concurrency", Number(e.target.value))}
+              />
+              <div className="field-hint">1–8。同一时间最多多少个子任务在请求上游。</div>
+            </div>
+          </div>
+
+          <div className="row" style={{ marginTop: 4 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>默认宽高比</label>
+              <div className="segmented">
+                {ASPECT_RATIOS.map((ratio) => (
+                  <button
+                    key={ratio}
+                    type="button"
+                    className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                    onClick={() => update("aspectRatio", ratio)}
+                  >
+                    {ratio}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>默认分辨率</label>
+              <div className="segmented">
+                {RESOLUTIONS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`chip ${draft.resolution === item ? "active" : ""}`}
+                    onClick={() => update("resolution", item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        <div className="row">
-          <div className="field">
-            <label>默认宽高比</label>
-            <div className="chip-row">
-              {ASPECT_RATIOS.map((ratio) => (
-                <button
-                  key={ratio}
-                  type="button"
-                  className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                  onClick={() => update("aspectRatio", ratio)}
-                >
-                  {ratio}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="field">
-            <label>默认分辨率</label>
-            <div className="chip-row">
-              {RESOLUTIONS.map((item) => (
-                <button
-                  key={item}
-                  type="button"
-                  className={`chip ${draft.resolution === item ? "active" : ""}`}
-                  onClick={() => update("resolution", item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        <div className="btn-row">
+        <div className="btn-row" style={{ marginTop: 16 }}>
           <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
             {busy ? "测试中…" : "测试连接并拉取模型"}
           </button>
@@ -233,19 +238,23 @@ export function SettingsPage({ settings, onChange }: Props) {
             保存设置
           </button>
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={useSameOriginProxy}>
-            使用同源代理 /v1
+            使用 /v1
           </button>
           <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
             恢复默认
           </button>
         </div>
 
-        {message ? <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div> : null}
+        {message ? (
+          <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`} style={{ marginTop: 14 }}>
+            {message}
+          </div>
+        ) : null}
 
         {models.length > 0 ? (
           <div className="field" style={{ marginTop: 16, marginBottom: 0 }}>
             <label>已拉取模型</label>
-            <div className="chip-row">
+            <div className="segmented">
               {models.map((model) => (
                 <button
                   key={model.id}
@@ -261,9 +270,7 @@ export function SettingsPage({ settings, onChange }: Props) {
         ) : null}
 
         <p className="footer-note">
-          目标接口：OpenAI 兼容 <span className="mono">GET /models</span> 与{" "}
-          <span className="mono">POST /images/generations</span>。默认模型{" "}
-          <span className="mono">grok-imagine-image</span>。
+          接口：<span className="mono">GET /models</span> · <span className="mono">POST /images/generations</span>
         </p>
       </section>
 

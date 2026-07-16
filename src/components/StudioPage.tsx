@@ -7,11 +7,8 @@ type JobStatus = "queued" | "running" | "done" | "failed";
 
 type Job = {
   id: string;
-  /** 同一条 prompt 拆出的并发组 */
   batchId: string;
-  /** 在组内序号，从 1 开始 */
   variant: number;
-  /** 该 prompt 共拆出几张 */
   variants: number;
   prompt: string;
   status: JobStatus;
@@ -45,10 +42,6 @@ function clampVariants(value: number): number {
   return Math.min(8, Math.max(1, Math.round(value)));
 }
 
-/**
- * 把「提示词列表 × 每条张数」展开成并行子任务（类似 sub-agent）。
- * 每个子任务独立请求一次 /images/generations，由全局并发池调度。
- */
 function expandJobs(prompts: string[], variants: number): Job[] {
   const count = clampVariants(variants);
   const now = Date.now();
@@ -86,10 +79,10 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
     const done = jobs.filter((j) => j.status === "done").length;
     const failed = jobs.filter((j) => j.status === "failed").length;
     const active = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
-    const batches = new Set(jobs.map((j) => j.batchId)).size;
-    return { total, done, failed, active, batches };
+    return { total, done, failed, active };
   }, [jobs]);
 
+  const progress = stats.total === 0 ? 0 : Math.round(((stats.done + stats.failed) / stats.total) * 100);
   const configured = Boolean(settings.apiKey.trim());
 
   async function handleGenerate() {
@@ -126,7 +119,6 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             batchId: job.batchId,
             prompt: job.prompt,
           });
-          // 每个子任务独立 n=1，真正并行；比单请求 n=N 更稳，也更像 sub-agent
           const images = await generateImage({
             baseUrl: settings.baseUrl,
             apiKey: settings.apiKey,
@@ -174,7 +166,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                   ? reason.message
                   : "生成失败";
             if (message.length > 280) {
-              message = `${message.slice(0, 280)}…（完整内容见底部运行日志）`;
+              message = `${message.slice(0, 280)}…（完整内容见管理页运行日志）`;
             }
             log(
               "error",
@@ -196,10 +188,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           }
         },
       );
-      log("ok", "并发生图结束", {
-        total: batch.length,
-        done: batch.length, // 结束态在 UI 统计
-      });
+      log("ok", "并发生图结束");
     } finally {
       setRunning(false);
       abortRef.current = null;
@@ -219,12 +208,15 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
   return (
     <div className="page grid-2">
       <section className="panel">
-        <h2 className="panel-title">生图</h2>
-        <p className="panel-desc">
-          每行一个 prompt。设置「每条张数」后，会拆成多个并发子任务（类似 sub-agent），由全局并发池调度。
-          当前模型：
-          <span className="mono"> {settings.model || "未选择"}</span>
-        </p>
+        <div className="panel-head">
+          <div>
+            <div className="panel-kicker">Create</div>
+            <h2 className="panel-title">灵感工作台</h2>
+            <p className="panel-desc">
+              每行一个提示词。设置张数后会拆成并发子任务，完成后逐张出现。
+            </p>
+          </div>
+        </div>
 
         {!configured ? (
           <div className="status err" style={{ marginBottom: 14 }}>
@@ -233,7 +225,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
         ) : null}
 
         <div className="field">
-          <label htmlFor="prompts">Prompt 列表</label>
+          <label htmlFor="prompts">Prompt</label>
           <textarea
             id="prompts"
             className="textarea"
@@ -241,15 +233,25 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             onChange={(e) => setPromptText(e.target.value)}
             placeholder={"每行一个 prompt\n例如：cyberpunk city at night\na watercolor fox"}
           />
-          <div className="field-hint">
-            {prompts.length} 条 prompt × {variants} 张 = <strong>{plannedJobs}</strong> 个子任务 · 全局并发槽{" "}
-            {settings.concurrency}
+          <div className="composer-stats">
+            <span className="stat-pill">
+              Prompt <strong>{prompts.length}</strong>
+            </span>
+            <span className="stat-pill">
+              每条 <strong>{variants}</strong> 张
+            </span>
+            <span className="stat-pill">
+              子任务 <strong>{plannedJobs}</strong>
+            </span>
+            <span className="stat-pill">
+              并发槽 <strong>{settings.concurrency}</strong>
+            </span>
           </div>
         </div>
 
         <div className="field">
-          <label>每条生成张数（并发 fan-out）</label>
-          <div className="chip-row">
+          <label>每条张数</label>
+          <div className="segmented">
             {VARIANT_OPTIONS.map((n) => (
               <button
                 key={n}
@@ -257,79 +259,88 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 className={`chip ${variants === n ? "active" : ""}`}
                 onClick={() => setVariants(n)}
               >
-                {n} 张
-              </button>
-            ))}
-          </div>
-          <div className="field-hint">
-            同一提示词会同时派出 {variants} 个独立请求；失败互不影响，完成一张就显示一张。
-          </div>
-        </div>
-
-        <div className="field">
-          <label>宽高比</label>
-          <div className="chip-row">
-            {ASPECT_RATIOS.map((ratio) => (
-              <button
-                key={ratio}
-                type="button"
-                className={`chip ${aspectRatio === ratio ? "active" : ""}`}
-                onClick={() => setAspectRatio(ratio)}
-              >
-                {ratio}
+                {n}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="field">
-          <label>分辨率</label>
-          <div className="chip-row">
-            {RESOLUTIONS.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={`chip ${resolution === item ? "active" : ""}`}
-                onClick={() => setResolution(item)}
-              >
-                {item}
-              </button>
-            ))}
+        <div className="row">
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>宽高比</label>
+            <div className="segmented">
+              {ASPECT_RATIOS.map((ratio) => (
+                <button
+                  key={ratio}
+                  type="button"
+                  className={`chip ${aspectRatio === ratio ? "active" : ""}`}
+                  onClick={() => setAspectRatio(ratio)}
+                >
+                  {ratio}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="field" style={{ marginBottom: 0 }}>
+            <label>分辨率</label>
+            <div className="segmented">
+              {RESOLUTIONS.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  className={`chip ${resolution === item ? "active" : ""}`}
+                  onClick={() => setResolution(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn btn-primary"
-            disabled={running || prompts.length === 0}
-            onClick={handleGenerate}
-          >
-            {running ? "生成中…" : `开始生成 (${plannedJobs})`}
-          </button>
-          <button type="button" className="btn btn-secondary" disabled={!running} onClick={handleStop}>
-            停止
-          </button>
-          <button type="button" className="btn btn-danger" disabled={running || jobs.length === 0} onClick={handleClear}>
-            清空结果
-          </button>
-          <button type="button" className="btn btn-secondary" onClick={onOpenSettings}>
-            管理
+        <div className="action-bar">
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={running || prompts.length === 0}
+              onClick={handleGenerate}
+            >
+              {running ? "生成中…" : `开始生成 · ${plannedJobs}`}
+            </button>
+            <button type="button" className="btn btn-secondary" disabled={!running} onClick={handleStop}>
+              停止
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={running || jobs.length === 0}
+              onClick={handleClear}
+            >
+              清空
+            </button>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onOpenSettings}>
+            模型 {settings.model || "未选择"} →
           </button>
         </div>
 
         <p className="footer-note">
-          Base: <span className="mono">{settings.baseUrl}</span>
-          {" · "}
-          全局并发可在「管理」里调（1–8）
+          Base <span className="mono">{settings.baseUrl}</span>
         </p>
       </section>
 
       <section className="panel">
-        <h2 className="panel-title">结果</h2>
-        <p className="panel-desc">
-          子任务并行展示。同一 prompt 的多张图会标 <span className="mono">#1/#2…</span>。
-        </p>
+        <div className="results-toolbar">
+          <div>
+            <div className="panel-kicker">Gallery</div>
+            <h2 className="panel-title">结果墙</h2>
+          </div>
+          <div className="connection-chip">
+            <span className={`live-dot ${running ? "" : "off"}`} />
+            {running ? "并行中" : stats.total ? "空闲" : "等待开始"}
+          </div>
+        </div>
 
         <div className="kpi-row">
           <div className="kpi">
@@ -348,8 +359,19 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           </div>
         </div>
 
+        {stats.total > 0 ? (
+          <div className="progress-track" aria-hidden>
+            <div className="progress-fill" style={{ width: `${progress}%` }} />
+          </div>
+        ) : null}
+
         {jobs.length === 0 ? (
-          <div className="empty">还没有任务。输入 prompt，选择「每条张数」，点「开始生成」。</div>
+          <div className="empty">
+            <span className="empty-title">还没有画面</span>
+            输入提示词，选好张数，点「开始生成」。
+            <br />
+            同一提示词会拆成多个并发子任务，像 sub-agent 一样同时出图。
+          </div>
         ) : (
           <div className="gallery">
             {jobs.map((job) => (
@@ -359,7 +381,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                     job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
                   }`}
                 >
-                  {job.status} · #{job.variant}/{job.variants}
+                  #{job.variant}/{job.variants}
                 </span>
                 {job.status === "done" && job.imageUrl ? (
                   <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
@@ -377,7 +399,8 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 )}
                 <div className="card-body">
                   <div className="card-meta">
-                    <strong>#{job.variant}</strong> {job.prompt}
+                    <strong>#{job.variant}</strong>
+                    {job.prompt}
                   </div>
                   {job.imageUrl ? (
                     <a className="mono" href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">

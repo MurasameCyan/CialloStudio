@@ -25,13 +25,12 @@ export function LogPanel() {
     <section className="panel log-panel" aria-label="运行日志">
       <div className="log-panel-head">
         <div>
-          <h2 className="panel-title" style={{ marginBottom: 0 }}>
-            运行日志
-          </h2>
-          <p className="panel-desc" style={{ marginBottom: 0 }}>
-            仅管理页可见。生图/连接时的请求与错误会记在这里
+          <div className="panel-kicker">Diagnostics</div>
+          <h2 className="panel-title">运行日志</h2>
+          <p className="panel-desc">
+            仅管理页可见。连接与生图请求会记在这里
             {entries.length > 0
-              ? ` · 当前 ${entries.length} 条${errorCount > 0 ? `（${errorCount} 错误）` : ""}`
+              ? ` · ${entries.length} 条${errorCount > 0 ? ` / ${errorCount} 错误` : ""}`
               : ""}
             。
           </p>
@@ -53,7 +52,10 @@ export function LogPanel() {
 
       {open ? (
         entries.length === 0 ? (
-          <div className="empty">还没有日志。测试连接或回到生图页发起生成后，再来这里查看。</div>
+          <div className="empty">
+            <span className="empty-title">暂无日志</span>
+            测试连接，或去生图页发起生成后再回来查看。
+          </div>
         ) : (
           <div className="log-list">
             {entries.map((entry) => (

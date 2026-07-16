@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, generateImage, rewriteMediaUrl, runPool } from "@/lib/api";
 import { log } from "@/lib/logger";
+import { normalizeResolutionForModel } from "@/lib/imageModels";
 import { clampConcurrency, type StudioSettings } from "@/lib/settings";
 import {
   clampVariants,
@@ -100,6 +101,13 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
 
     const concurrency = clampConcurrency(draft.concurrency);
     const variants = clampVariants(draft.variants);
+    const resolution = normalizeResolutionForModel(settings.model, draft.resolution);
+    if (resolution !== draft.resolution) {
+      log("warn", `分辨率已按模型能力纠正：${draft.resolution} → ${resolution}`, {
+        model: settings.model,
+      });
+      setDraftState((prev) => ({ ...prev, resolution }));
+    }
     const controller = new AbortController();
     abortRef.current = controller;
     runningRef.current = true;
@@ -107,7 +115,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     setInFlight(0);
 
     const batch = expandJobs(prompts, variants, {
-      resolution: draft.resolution,
+      resolution,
       aspectRatio: draft.aspectRatio,
     });
     setJobs((prev) => [...batch, ...prev]);
@@ -120,8 +128,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         concurrency,
         variants,
         aspectRatio: draft.aspectRatio,
-        resolution: draft.resolution,
-        note: "并发=同时请求数，不是总张数倍数",
+        resolution,
+        note: "并发=同时请求数；lite 模型可能忽略 resolution",
       },
     );
 
@@ -135,6 +143,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             batchId: job.batchId,
             prompt: job.prompt,
             concurrency,
+            resolution,
+            model: settings.model,
           });
 
           const images = await generateImage({
@@ -144,7 +154,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             prompt: job.prompt,
             n: 1,
             aspectRatio: draft.aspectRatio,
-            resolution: draft.resolution,
+            resolution,
             signal: controller.signal,
           });
 

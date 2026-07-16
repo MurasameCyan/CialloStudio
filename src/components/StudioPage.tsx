@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { downloadJobs } from "@/lib/download";
+import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
 import {
@@ -47,6 +48,7 @@ export function StudioPage({
   onClear,
 }: Props) {
   const configured = Boolean(settings.apiKey.trim());
+  const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
 
@@ -235,16 +237,28 @@ export function StudioPage({
             <div className="field">
               <label>分辨率</label>
               <div className="segmented">
-                {RESOLUTIONS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`chip ${draft.resolution === item ? "active" : ""}`}
-                    onClick={() => setDraft({ resolution: item })}
-                  >
-                    {item}
-                  </button>
-                ))}
+                {RESOLUTIONS.map((item) => {
+                  const allowed = modelCap.allowedResolutions.includes(item);
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`chip ${draft.resolution === item ? "active" : ""}`}
+                      disabled={!allowed}
+                      title={allowed ? item : `${settings.model} 不支持 ${item}`}
+                      onClick={() => {
+                        if (allowed) setDraft({ resolution: item });
+                      }}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="field-hint">
+                {modelCap.supportsResolution
+                  ? `当前模型支持 ${modelCap.allowedResolutions.join(" / ")}。${modelCap.note}`
+                  : `当前模型「${settings.model}」为 Fast/Lite，resolution 不会改变像素（常见约 1K）。要更高清需上游开放 quality 模型。`}
               </div>
             </div>
           </div>

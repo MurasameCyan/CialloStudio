@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { LogPanel } from "@/components/LogPanel";
 import { ApiError, listModels, resolveBrowserApiBase, type OpenAIModel } from "@/lib/api";
+import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
   ASPECT_RATIOS,
@@ -35,6 +36,7 @@ export function SettingsPage({ settings, onChange }: Props) {
 
   const hasKey = Boolean(draft.apiKey.trim());
   const requestBase = resolveBrowserApiBase(draft.baseUrl);
+  const modelCap = useMemo(() => getImageModelCapability(draft.model), [draft.model]);
 
   function update<K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -260,17 +262,24 @@ export function SettingsPage({ settings, onChange }: Props) {
             <div className="field">
               <label>默认分辨率</label>
               <div className="segmented">
-                {RESOLUTIONS.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`chip ${draft.resolution === item ? "active" : ""}`}
-                    onClick={() => update("resolution", item)}
-                  >
-                    {item}
-                  </button>
-                ))}
+                {RESOLUTIONS.map((item) => {
+                  const allowed = modelCap.allowedResolutions.includes(item);
+                  return (
+                    <button
+                      key={item}
+                      type="button"
+                      className={`chip ${draft.resolution === item ? "active" : ""}`}
+                      disabled={!allowed}
+                      onClick={() => {
+                        if (allowed) update("resolution", item);
+                      }}
+                    >
+                      {item}
+                    </button>
+                  );
+                })}
               </div>
+              <div className="field-hint">{modelCap.note}</div>
             </div>
           </div>
         </div>

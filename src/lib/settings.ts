@@ -24,11 +24,14 @@ export function loadSettings(): StudioSettings {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return { ...DEFAULT_SETTINGS };
     const parsed = JSON.parse(raw) as Partial<StudioSettings>;
+    const resolutionRaw = (parsed.resolution ?? DEFAULT_SETTINGS.resolution).toLowerCase();
+    const resolution = resolutionRaw === "2k" ? "2k" : "1k";
     return {
       ...DEFAULT_SETTINGS,
       ...parsed,
       baseUrl: normalizeBaseUrl(parsed.baseUrl ?? DEFAULT_SETTINGS.baseUrl),
       concurrency: clampConcurrency(parsed.concurrency ?? DEFAULT_SETTINGS.concurrency),
+      resolution,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -71,4 +74,5 @@ export function clampConcurrency(value: number): number {
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
-export const RESOLUTIONS = ["1k", "2k", "4k"] as const;
+/** grok2api 图片接口实际只认 1k / 2k；4k 会被拒绝或被 lite 模型忽略 */
+export const RESOLUTIONS = ["1k", "2k"] as const;

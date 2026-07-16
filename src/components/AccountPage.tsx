@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { getCommunityMode, setCommunityMode } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
+import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 
 type Props = {
   user: CommunityUser | null;
@@ -69,8 +70,18 @@ export function AccountPage({ user, loading, onLogin, onRegister, onLogout }: Pr
         <div className="panel-kicker">Account</div>
         <h2 className="panel-title">用户</h2>
         <p className="panel-desc">
-          注册 / 登录后可分享到大厅、点赞与点评。用户池管理请到「管理 → 用户池」。Mock 演示{" "}
-          <code>demo / demo123</code>，管理员 <code>admin / admin123</code>。
+          注册 / 登录后可分享到大厅、点赞与点评。站长登录后可在「管理 → 用户池」管理账号。
+          {isMasterConfigured() ? (
+            <>
+              {" "}
+              站长账号 <code>{getMasterUsername()}</code>（密码见部署 .env）。
+            </>
+          ) : (
+            <>
+              {" "}
+              本地 Mock：站长 <code>admin / admin123</code>，演示 <code>demo / demo123</code>。
+            </>
+          )}
         </p>
       </section>
 
@@ -120,7 +131,7 @@ export function AccountPage({ user, loading, onLogin, onRegister, onLogout }: Pr
           </div>
           {user.role === "admin" ? (
             <p className="footer-note" style={{ marginTop: 12 }}>
-              管理员可在「管理 → 用户池」禁用 / 解禁用户。
+              你是站长：可直接进入「管理 → 用户池」与接口设置（无需单独管理密码）。
             </p>
           ) : null}
           <div className="btn-row" style={{ marginTop: 16 }}>

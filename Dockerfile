@@ -26,7 +26,9 @@ RUN chmod +x /entrypoint.sh \
 
 COPY --from=frontend-builder /src/dist /usr/share/nginx/html
 
-ENV CIALLO_ADMIN_PASSWORD= \
+ENV CIALLO_MASTER_USERNAME=admin \
+    CIALLO_MASTER_PASSWORD= \
+    CIALLO_ADMIN_PASSWORD= \
     TZ=Asia/Shanghai
 
 EXPOSE 8080

@@ -75,12 +75,18 @@ Base：`/api/community`
 3. Worker 发到 Telegram 私人频道，返回 `mediaId` + 可访问 URL
 4. `POST /posts` 只存元数据 + media 引用
 
+## 站长账号（.env）
+
+- `CIALLO_MASTER_USERNAME` + `CIALLO_MASTER_PASSWORD`（兼容旧 `CIALLO_ADMIN_PASSWORD`）
+- Docker entrypoint 只把 **用户名 + 密码 sha256** 写入 `runtime-config.js`
+- 站长登录后 `role=admin`：管理页接口设置 + 用户池；**无单独管理解锁密码**
+- 本地未配置时 Mock 回退 `admin` / `admin123`
+
 ## 非目标（本阶段不做）
 
 - 真实 Docker API / Postgres
 - CF Worker / Telegram 实现
 - 邮箱验证、OAuth
-- 服务端管理门禁替代（现有 `CIALLO_ADMIN_PASSWORD` 仍只管「管理」页配置）
 
 ## 用户池管理（Mock 已落地，入口在管理页）
 
@@ -94,5 +100,5 @@ Base：`/api/community`
 1. 打开应用 → **用户** → `demo` / `demo123` 登录  
 2. **生图** 出图后点「分享到大厅」  
 3. **大厅** 可见新帖，可点赞、写点评  
-4. **用户** 退出 → 用 `admin` / `admin123` 登录 → **管理 → 用户池** 可禁用 demo  
+4. **用户** 退出 → 用站长（本地 `admin` / `admin123`，或 `.env` 账号）登录 → **管理 → 用户池** 可禁用 demo  
 5. demo 会话失效、无法再登录；解禁后可重新登录

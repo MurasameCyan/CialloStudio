@@ -1,3 +1,9 @@
+import {
+  getMasterPasswordSha256,
+  getMasterUsername,
+  isMasterConfigured,
+  verifyMasterPassword,
+} from "@/lib/runtimeConfig";
 import type {
   AuthSession,
   Comment,
@@ -12,9 +18,15 @@ import type {
 } from "./types";
 
 const STORAGE_KEY = "ciallo-studio.community.mock.v1";
+/** 密码由 .env 哈希校验，不存明文 */
+const ENV_PASSWORD_MARKER = "__env_master__";
+/** 本地未配置 .env 时的 Mock 站长密码 */
+const FALLBACK_MASTER_PASSWORD = "admin123";
+
+type StoreUser = CommunityUser & { password: string };
 
 type Store = {
-  users: Array<CommunityUser & { password: string }>;
+  users: StoreUser[];
   sessions: Record<string, string>; // token -> userId
   posts: GalleryPost[];
   comments: Comment[];
@@ -25,16 +37,22 @@ function uid(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function masterUsername(): string {
+  return getMasterUsername().trim().toLowerCase() || "admin";
+}
+
 function seed(): Store {
   const adminId = "user-admin";
   const demoId = "user-demo";
   const postId = "post-seed-1";
+  const masterUser = masterUsername();
+  const useEnv = isMasterConfigured();
   return {
     users: [
       {
         id: adminId,
-        username: "admin",
-        password: "admin123",
+        username: masterUser,
+        password: useEnv ? ENV_PASSWORD_MARKER : FALLBACK_MASTER_PASSWORD,
         displayName: "站长",
         role: "admin",
         createdAt: Date.now() - 86400000 * 30,
@@ -93,15 +111,71 @@ function seed(): Store {
   };
 }
 
+/** 把 .env 站长同步进 mock 用户表（改用户名 / 提权 / 密码标记） */
+function syncMasterUser(store: Store): boolean {
+  const name = masterUsername();
+  const useEnv = isMasterConfigured();
+  let changed = false;
+
+  // 只有一个 admin：非站长用户名的 admin 降级
+  for (const u of store.users) {
+    if (u.role === "admin" && u.username !== name) {
+      u.role = "user";
+      changed = true;
+    }
+  }
+
+  let master = store.users.find((u) => u.username === name);
+  if (!master) {
+    // 优先复用 id=user-admin，避免旧会话断掉
+    const legacy = store.users.find((u) => u.id === "user-admin");
+    if (legacy) {
+      legacy.username = name;
+      legacy.displayName = legacy.displayName || "站长";
+      legacy.role = "admin";
+      legacy.password = useEnv ? ENV_PASSWORD_MARKER : FALLBACK_MASTER_PASSWORD;
+      master = legacy;
+      changed = true;
+    } else {
+      store.users.unshift({
+        id: "user-admin",
+        username: name,
+        password: useEnv ? ENV_PASSWORD_MARKER : FALLBACK_MASTER_PASSWORD,
+        displayName: "站长",
+        role: "admin",
+        createdAt: Date.now() - 86400000 * 30,
+      });
+      changed = true;
+    }
+  } else {
+    if (master.role !== "admin") {
+      master.role = "admin";
+      changed = true;
+    }
+    const nextPass = useEnv ? ENV_PASSWORD_MARKER : FALLBACK_MASTER_PASSWORD;
+    if (useEnv && master.password !== ENV_PASSWORD_MARKER) {
+      master.password = ENV_PASSWORD_MARKER;
+      changed = true;
+    } else if (!useEnv && master.password === ENV_PASSWORD_MARKER) {
+      master.password = nextPass;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 function load(): Store {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
+    let store: Store;
     if (!raw) {
-      const s = seed();
-      save(s);
-      return s;
+      store = seed();
+      save(store);
+      return store;
     }
-    return JSON.parse(raw) as Store;
+    store = JSON.parse(raw) as Store;
+    if (syncMasterUser(store)) save(store);
+    return store;
   } catch {
     const s = seed();
     save(s);
@@ -146,9 +220,12 @@ export const mockCommunity = {
     if (!/^[a-z0-9_]{3,20}$/.test(username)) {
       throw new Error("用户名需 3–20 位字母数字或下划线");
     }
+    if (username === masterUsername()) {
+      throw new Error("该用户名为站长保留，请换一个");
+    }
     if (input.password.length < 6) throw new Error("密码至少 6 位");
     if (store.users.some((u) => u.username === username)) throw new Error("用户名已存在");
-    const user: CommunityUser & { password: string } = {
+    const user: StoreUser = {
       id: uid("user-"),
       username,
       password: input.password,
@@ -166,8 +243,38 @@ export const mockCommunity = {
   async login(input: LoginInput): Promise<AuthSession> {
     const store = load();
     const username = input.username.trim().toLowerCase();
-    const user = store.users.find((u) => u.username === username && u.password === input.password);
-    if (!user) throw new Error("用户名或密码错误");
+    const master = masterUsername();
+    let user = store.users.find((u) => u.username === username);
+
+    if (username === master) {
+      // 站长：优先 .env 密码哈希；未配置时用 mock 明文 admin123
+      const envHash = getMasterPasswordSha256();
+      let ok = false;
+      if (envHash) {
+        ok = await verifyMasterPassword(input.password);
+      } else {
+        ok = input.password === FALLBACK_MASTER_PASSWORD || user?.password === input.password;
+      }
+      if (!ok) throw new Error("用户名或密码错误");
+      if (!user) {
+        user = {
+          id: "user-admin",
+          username: master,
+          password: envHash ? ENV_PASSWORD_MARKER : FALLBACK_MASTER_PASSWORD,
+          displayName: "站长",
+          role: "admin",
+          createdAt: Date.now(),
+        };
+        store.users.unshift(user);
+      } else {
+        user.role = "admin";
+        if (envHash) user.password = ENV_PASSWORD_MARKER;
+      }
+    } else {
+      user = store.users.find((u) => u.username === username && u.password === input.password);
+      if (!user) throw new Error("用户名或密码错误");
+    }
+
     if (user.banned) throw new Error("账号已被禁用");
     const token = uid("tok-");
     store.sessions[token] = user.id;

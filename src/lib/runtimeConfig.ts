@@ -1,25 +1,38 @@
 export type CialloRuntime = {
-  adminGateEnabled: boolean;
-  adminPasswordSha256: string;
+  /** 站长用户名（社区 admin）；空 = 使用 Mock 默认 admin */
+  masterUsername: string;
+  /** 站长密码 SHA-256 hex；空 = 未从 .env 注入 */
+  masterPasswordSha256: string;
 };
 
 declare global {
   interface Window {
-    __CIALLO_RUNTIME__?: Partial<CialloRuntime>;
+    __CIALLO_RUNTIME__?: Partial<CialloRuntime> & {
+      /** 旧字段兼容，已废弃 */
+      adminGateEnabled?: boolean;
+      adminPasswordSha256?: string;
+    };
   }
 }
 
-const SESSION_KEY = "ciallo-studio.adminUnlocked.v1";
+function isSha256Hex(value: string): boolean {
+  return value.length === 64 && /^[a-f0-9]+$/i.test(value);
+}
 
 function readRuntime(): CialloRuntime {
   const raw = typeof window !== "undefined" ? window.__CIALLO_RUNTIME__ : undefined;
-  const hash = typeof raw?.adminPasswordSha256 === "string" ? raw.adminPasswordSha256.trim() : "";
-  const enabled =
-    raw?.adminGateEnabled === true ||
-    (raw?.adminGateEnabled !== false && hash.length === 64 && /^[a-f0-9]+$/i.test(hash));
+  const username =
+    typeof raw?.masterUsername === "string" ? raw.masterUsername.trim().toLowerCase() : "";
+  let hash = typeof raw?.masterPasswordSha256 === "string" ? raw.masterPasswordSha256.trim() : "";
+  // 兼容旧 Docker runtime：adminPasswordSha256 → 站长密码哈希，用户名默认 admin
+  if (!hash && typeof raw?.adminPasswordSha256 === "string") {
+    hash = raw.adminPasswordSha256.trim();
+  }
+  hash = hash.toLowerCase();
+  if (hash && !isSha256Hex(hash)) hash = "";
   return {
-    adminGateEnabled: Boolean(enabled && hash),
-    adminPasswordSha256: hash.toLowerCase(),
+    masterUsername: username || (hash ? "admin" : ""),
+    masterPasswordSha256: hash,
   };
 }
 
@@ -27,26 +40,20 @@ export function getRuntimeConfig(): CialloRuntime {
   return readRuntime();
 }
 
-export function isAdminGateEnabled(): boolean {
-  return readRuntime().adminGateEnabled;
+/** 是否配置了 .env 站长账号（密码哈希） */
+export function isMasterConfigured(): boolean {
+  const r = readRuntime();
+  return Boolean(r.masterUsername && r.masterPasswordSha256);
 }
 
-export function isAdminUnlocked(): boolean {
-  if (!isAdminGateEnabled()) return true;
-  try {
-    return sessionStorage.getItem(SESSION_KEY) === "1";
-  } catch {
-    return false;
-  }
+export function getMasterUsername(): string {
+  const r = readRuntime();
+  if (r.masterUsername) return r.masterUsername;
+  return "admin";
 }
 
-export function setAdminUnlocked(unlocked: boolean): void {
-  try {
-    if (unlocked) sessionStorage.setItem(SESSION_KEY, "1");
-    else sessionStorage.removeItem(SESSION_KEY);
-  } catch {
-    // ignore
-  }
+export function getMasterPasswordSha256(): string {
+  return readRuntime().masterPasswordSha256;
 }
 
 export async function sha256Hex(text: string): Promise<string> {
@@ -57,23 +64,12 @@ export async function sha256Hex(text: string): Promise<string> {
     .join("");
 }
 
-/** 校验管理密码；成功则写入 session 解锁 */
-export async function tryUnlockAdmin(password: string): Promise<boolean> {
-  const runtime = readRuntime();
-  if (!runtime.adminGateEnabled) {
-    setAdminUnlocked(true);
-    return true;
-  }
+/** 校验明文密码是否匹配 .env 站长密码 */
+export async function verifyMasterPassword(password: string): Promise<boolean> {
+  const expected = getMasterPasswordSha256();
+  if (!expected) return false;
   const input = password.trim();
   if (!input) return false;
   const hash = await sha256Hex(input);
-  if (hash === runtime.adminPasswordSha256) {
-    setAdminUnlocked(true);
-    return true;
-  }
-  return false;
-}
-
-export function lockAdmin(): void {
-  setAdminUnlocked(false);
+  return hash === expected;
 }

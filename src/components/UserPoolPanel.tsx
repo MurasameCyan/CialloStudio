@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { communityApi } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
 import { log } from "@/lib/logger";
+import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 
 type Props = {
   /** 社区登录用户；管理员可管用户池，非管理员显示引导 */
@@ -124,7 +125,11 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           </div>
         </div>
         <div className="status err" role="status">
-          请先在「用户」页以管理员账号登录（Mock：admin / admin123）。
+          请先在「用户」页以站长账号登录
+          {isMasterConfigured()
+            ? `（.env：${getMasterUsername()}）`
+            : "（Mock：admin / admin123）"}
+          。
         </div>
         {onNeedLogin ? (
           <div className="btn-row" style={{ marginTop: 12 }}>
@@ -149,7 +154,19 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         </div>
         <div className="status" role="status">
           已登录 <strong>@{communityUser.username}</strong>（{communityUser.displayName}），角色为用户。
-          Mock 可用 <code>admin / admin123</code>。
+          请改用站长账号
+          {isMasterConfigured() ? (
+            <>
+              {" "}
+              <code>{getMasterUsername()}</code>
+            </>
+          ) : (
+            <>
+              {" "}
+              <code>admin / admin123</code>
+            </>
+          )}
+          。
         </div>
         {onNeedLogin ? (
           <div className="btn-row" style={{ marginTop: 12 }}>

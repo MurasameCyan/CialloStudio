@@ -26,9 +26,8 @@ type AdminSection = "api" | "users";
 type Props = {
   settings: StudioSettings;
   onChange: (next: StudioSettings) => void;
-  /** Docker 部署时若设置了 CIALLO_ADMIN_PASSWORD */
-  adminGateEnabled?: boolean;
-  onLockAdmin?: () => void;
+  /** 是否为站长（社区 admin）；用户池需站长登录 */
+  isStationMaster?: boolean;
   /** 社区账号（用户池管理需要 admin 角色） */
   communityUser?: CommunityUser | null;
   communityLoading?: boolean;
@@ -38,8 +37,7 @@ type Props = {
 export function SettingsPage({
   settings,
   onChange,
-  adminGateEnabled,
-  onLockAdmin,
+  isStationMaster = false,
   communityUser = null,
   communityLoading = false,
   onNeedLogin,
@@ -191,12 +189,12 @@ export function SettingsPage({
           <div>
             <div className="panel-kicker">Admin</div>
             <h2 className="panel-title">控制台</h2>
+            <p className="panel-desc" style={{ marginTop: 6 }}>
+              {isStationMaster
+                ? `站长 @${communityUser?.username ?? ""} · 接口与用户池可用`
+                : "接口设置对所有人开放；用户池需站长登录（.env 账号）"}
+            </p>
           </div>
-          {adminGateEnabled && onLockAdmin ? (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={onLockAdmin}>
-              锁定管理
-            </button>
-          ) : null}
         </div>
 
         {/* 分区切换：独立大号 Tab，避免被缓存旧包/样式淹没 */}
@@ -249,7 +247,9 @@ export function SettingsPage({
           </div>
         ) : (
           <p className="panel-desc admin-users-hint">
-            管理社区账号池。需先在「用户」页以管理员登录（Mock：admin / admin123）。
+            管理社区账号池。站长账号由部署 <code>.env</code> 配置（
+            <code>CIALLO_MASTER_USERNAME</code> / <code>CIALLO_MASTER_PASSWORD</code>
+            ）；本地未配置时可用 mock <code>admin / admin123</code>。
           </p>
         )}
       </section>

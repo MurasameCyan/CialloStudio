@@ -9,7 +9,10 @@ services:
     ports:
       - "${CIALLO_PORT:-8080}:8080"
     environment:
-      # 管理页解锁密码（.env）。留空 = 不设门禁
+      # 站长账号（.env）。密码明文仅容器环境；前端只拿 sha256
+      CIALLO_MASTER_USERNAME: ${CIALLO_MASTER_USERNAME:-admin}
+      CIALLO_MASTER_PASSWORD: ${CIALLO_MASTER_PASSWORD:-${CIALLO_ADMIN_PASSWORD:-}}
+      # 兼容旧 compose
       CIALLO_ADMIN_PASSWORD: ${CIALLO_ADMIN_PASSWORD:-}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped

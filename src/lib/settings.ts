@@ -9,8 +9,8 @@ export type StudioSettings = {
 };
 
 export const DEFAULT_SETTINGS: StudioSettings = {
-  // 部署：在管理页填完整上游，如 https://your-gateway/v1
-  // 本地 Vite：可填 /v1 走开发代理，或同样填绝对 URL
+  // 管理页填写完整上游，如 https://your-gateway/v1
+  // 浏览器实际请求走同源 /v1 + 头 X-Ciallo-Upstream（免 CORS，不写 .env）
   baseUrl: "",
   apiKey: "",
   model: "grok-imagine-image",
@@ -18,6 +18,18 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   resolution: "1k",
   concurrency: 3,
 };
+
+/** 从 Base URL 得到上游根 origin（https://host），用于代理头 X-Ciallo-Upstream */
+export function upstreamOrigin(baseUrl: string): string {
+  const trimmed = baseUrl.trim().replace(/\/+$/, "");
+  if (!trimmed || trimmed.startsWith("/")) return "";
+  try {
+    const withScheme = trimmed.includes("://") ? trimmed : `https://${trimmed}`;
+    return new URL(withScheme).origin;
+  } catch {
+    return trimmed.replace(/\/v1$/i, "").replace(/\/+$/, "");
+  }
+}
 
 const STORAGE_KEY = "ciallo-studio.settings.v1";
 

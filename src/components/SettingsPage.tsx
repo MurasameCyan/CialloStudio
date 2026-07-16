@@ -87,18 +87,17 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
     } catch (error) {
       setOk(false);
       let text = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
-      if (/CORS|Failed to fetch|network|Load failed|NetworkError/i.test(text)) {
+      if (/CORS|Failed to fetch|network|Load failed|NetworkError|proxy|502|503|504/i.test(text)) {
         text = [
           text,
           "",
           "排查：",
-          "1) Base URL 填完整上游，例如 https://your-gateway/v1（不要只填 /v1，Docker 镜像不再反代）",
-          "2) 上游需允许浏览器跨域（CORS），或你在上游/网关侧处理 CORS",
-          "3) 本地 npm run dev 可用 /v1 + VITE_DEV_PROXY_TARGET 走 Vite 代理",
-          "4) 确认 API Key 正确，上游 /v1/models 可访问",
+          "1) Base URL 填完整上游，如 https://your-gateway/v1（会经同源 /v1 代理，免 CORS）",
+          "2) Docker：pull 最新镜像后 recreate；本地 dev 需 npm run dev",
+          "3) 确认上游可访问、API Key 正确",
         ].join("\n");
-      } else if (/missing_base_url|填写 API Base/i.test(text)) {
-        text = `${text}\n\n在管理页「API Base URL」填：https://你的网关/v1`;
+      } else if (/missing_base_url|填写 API Base|缺少上游/i.test(text)) {
+        text = `${text}\n\n在管理页「API Base URL」填：https://你的网关/v1 后保存再测`;
       }
       log("error", "管理页：测试连接失败", text);
       setMessage(text);
@@ -210,8 +209,8 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 spellCheck={false}
               />
               <div className="field-hint">
-                在网页里配置上游（不写进 .env）。Docker 部署请填<strong>完整 URL</strong>，例如{" "}
-                <code>https://your-gateway/v1</code>。仅本地 Vite 开发可用 <code>/v1</code> 走代理。
+                填<strong>完整上游</strong>（如 <code>https://your-gateway/v1</code>）。浏览器实际请求同源{" "}
+                <code>/v1</code>，由 Vite/Docker 按此地址转发（免 CORS，不写进 .env）。
               </div>
             </div>
 

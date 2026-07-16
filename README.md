@@ -1,92 +1,58 @@
 # Ciallo Studio
 
-iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接口（已验证 grok2api），支持：
+iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接口。
 
-- 管理页配置 **Base URL + API Key**（浏览器 localStorage）
-- 拉取 `/v1/models` 并选择模型（默认 `grok-imagine-image`）
-- 多行 prompt **多并发**生图
-- 分享大厅 / 用户 / 点评（前端 + Mock 契约，后端可后续对接）
-- Docker 一键部署静态镜像（GHCR multi-arch）
+- 管理页配置 **Base URL + API Key**（浏览器 localStorage，不写 `.env`）
+- 浏览器只访问同源 **`/v1`**，由 Vite / Nginx 按请求头转发到真实上游（**免 CORS**）
+- 多并发生图、分享大厅（Mock 契约）
+- Docker 仅拉 GHCR 镜像
 
-> API Key 与上游地址只保存在浏览器，**不进** `.env` / 镜像 / Git。
+## 快速开始（Docker）
 
-## 快速开始（Docker Compose）
+`.env` **只保留**：
 
-Compose **只拉取** `ghcr.io/murasamecyan/ciallostudio:beta`，不本地 build。
+```env
+CIALLO_PORT=8080
+CIALLO_ADMIN_PASSWORD=可选管理页密码
+```
 
 ```bash
-git clone -b beta https://github.com/MurasameCyan/CialloStudio.git
-cd CialloStudio
 cp .env.example .env
-# 只需改：CIALLO_PORT、CIALLO_ADMIN_PASSWORD
 docker compose pull
 docker compose up -d
 ```
 
-浏览器：`http://127.0.0.1:8080`
+打开 `http://127.0.0.1:8080` → **管理**：
 
-1. **管理**（若配置了管理密码需先解锁）
-2. **API Base URL** 填完整上游，例如 `https://your-gateway/v1`
-3. 填 **API Key** → 保存 → 测试连接
-4. 回 **生图** 出图
+1. API Base URL：`https://你的网关/v1`（完整 URL）
+2. API Key
+3. 保存 → 测试连接
 
-### `.env` 仅两项
-
-| 变量 | 默认 | 说明 |
-| --- | --- | --- |
-| `CIALLO_PORT` | `8080` | 宿主机端口 |
-| `CIALLO_ADMIN_PASSWORD` | （空） | 管理页解锁密码；留空关闭门禁 |
-
-上游、Key、模型、并发等 **全部在网页配置**。
-
-### 管理密码
-
-- entrypoint 将密码的 SHA-256 写入 `/runtime-config.js`（不写明文）
-- 解锁状态在 sessionStorage
-- 仅为前端门禁，公网请再加反代鉴权 / VPN
+请求路径：浏览器 → `http://本站/v1/models` + 头 `X-Ciallo-Upstream: https://你的网关` → Nginx 反代到上游。
 
 ## 本地开发
 
 ```bash
 npm install
-# 可选：.env.local 里 VITE_DEV_PROXY_TARGET=https://your-gateway 以便使用 Base=/v1
 npm run dev
 ```
 
-- 地址：`http://127.0.0.1:5173`
-- Base 可填绝对 URL，或 `/v1`（走 Vite 代理）
+管理页同样填完整 `https://网关/v1`；Vite 代理读取 `X-Ciallo-Upstream`。  
+可选：`.env.local` 里 `VITE_DEV_PROXY_TARGET` 仅作无请求头时的回退。
 
-## 接口约定
+## `.env` 变量
 
-- `GET {base}/models`
-- `POST {base}/images/generations`
+| 变量 | 说明 |
+| --- | --- |
+| `CIALLO_PORT` | 映射端口，默认 8080 |
+| `CIALLO_ADMIN_PASSWORD` | 管理页解锁；留空关闭 |
 
-```json
-{
-  "model": "grok-imagine-image",
-  "prompt": "a cute cat",
-  "n": 1,
-  "aspect_ratio": "1:1",
-  "resolution": "1k",
-  "response_format": "url",
-  "stream": false
-}
-```
+镜像固定：`ghcr.io/murasamecyan/ciallostudio:beta`
 
-## 社区契约
+## 接口
 
-见 `docs/superpowers/specs/2026-07-17-community-hall-design.md`。
-
-## 镜像发布
-
-推送 `main` / `beta` 或 `v*.*.*` tag → GitHub Actions 构建并推送 GHCR。
-
-镜像：`ghcr.io/murasamecyan/ciallostudio:beta`
-
-## 安全
-
-- 不要把 API Key / 真实管理密码写进仓库
-- 上游需允许浏览器 CORS（Docker 镜像不再反代上游）
+- `GET /v1/models`（经代理）
+- `POST /v1/images/generations`
 
 ## License
 

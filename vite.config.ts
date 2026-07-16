@@ -1,72 +1,109 @@
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import { fileURLToPath, URL } from "node:url";
+import type { IncomingMessage, ServerResponse } from "node:http";
+import http from "node:http";
+import https from "node:https";
 
-export default defineConfig(({ mode }) => {
-  // 读取 .env / .env.local / 系统环境变量（不入库）
-  const env = loadEnv(mode, process.cwd(), "");
-  const proxyTarget = (
-    env.VITE_DEV_PROXY_TARGET ||
-    process.env.VITE_DEV_PROXY_TARGET ||
-    "https://your-grok2api.example.com"
-  )
-    .trim()
-    .replace(/\/+$/, "")
-    .replace(/\/v1$/i, "");
-
-  const isPlaceholder = /your-grok2api\.example\.com|your-host/i.test(proxyTarget);
-  if (isPlaceholder) {
-    console.warn(
-      `[ciallo] 开发代理仍指向占位上游: ${proxyTarget}\n` +
-        `  请先设置真实 grok2api 地址后再 npm run dev，例如 PowerShell:\n` +
-        `  $env:VITE_DEV_PROXY_TARGET="https://你的网关"\n` +
-        `  或写入 .env.local: VITE_DEV_PROXY_TARGET=https://你的网关`,
-    );
-  } else {
-    console.log(`[ciallo] 开发代理 /v1 → ${proxyTarget}`);
-  }
-
+/**
+ * 开发态：同源 /v1 → 按请求头 X-Ciallo-Upstream 转发（与 Docker nginx 行为一致）。
+ * 管理页配置的 Base URL 决定上游，不写死在 .env。
+ */
+function cialloV1ProxyPlugin(): Plugin {
   return {
-    plugins: [react()],
-    resolve: {
-      alias: {
-        "@": fileURLToPath(new URL("./src", import.meta.url)),
-      },
-    },
-    server: {
-      host: "127.0.0.1",
-      port: 5173,
-      proxy: {
-        // 本地开发：同源代理，绕过浏览器 CORS
-        "/v1": {
-          target: proxyTarget,
-          changeOrigin: true,
-          secure: true,
-          configure: (proxy) => {
-            proxy.on("error", (err, _req, res) => {
-              const message =
-                `[ciallo] 代理上游失败: ${err.message}\n` +
-                `target=${proxyTarget}\n` +
-                (isPlaceholder
-                  ? "当前是占位域名。请设置 VITE_DEV_PROXY_TARGET 为真实 grok2api 根地址后重启 npm run dev。"
-                  : "请检查上游是否在线、DNS/证书/防火墙是否正常。");
-              console.error(message);
-              if (res && "writeHead" in res && typeof res.writeHead === "function" && !res.headersSent) {
-                res.writeHead(502, { "Content-Type": "application/json; charset=utf-8" });
-                res.end(
-                  JSON.stringify({
-                    error: {
-                      message,
-                      code: "proxy_upstream_unreachable",
-                      target: proxyTarget,
-                    },
-                  }),
-                );
-              }
-            });
-          },
-        },
-      },
+    name: "ciallo-v1-dynamic-proxy",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = req.url || "";
+        if (!url.startsWith("/v1")) {
+          next();
+          return;
+        }
+        void proxyToUpstream(req as IncomingMessage, res as ServerResponse).catch((err: unknown) => {
+          const message = err instanceof Error ? err.message : String(err);
+          console.error("[ciallo] proxy error", message);
+          if (!res.headersSent) {
+            res.statusCode = 502;
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.end(JSON.stringify({ error: { message, code: "proxy_upstream_unreachable" } }));
+          }
+        });
+      });
     },
   };
+}
+
+function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const raw = req.headers["x-ciallo-upstream"];
+    const header = Array.isArray(raw) ? raw[0] : raw;
+    if (!header || !/^https?:\/\//i.test(header)) {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(
+        JSON.stringify({
+          error: {
+            message: "缺少上游。请在管理页填写 API Base URL（https://你的网关/v1）并保存。",
+            code: "missing_upstream_header",
+          },
+        }),
+      );
+      resolve();
+      return;
+    }
+
+    let origin: string;
+    try {
+      origin = new URL(header).origin;
+    } catch {
+      res.statusCode = 400;
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.end(JSON.stringify({ error: { message: "无效的 X-Ciallo-Upstream", code: "bad_upstream" } }));
+      resolve();
+      return;
+    }
+
+    const path = req.url || "/v1/";
+    const targetUrl = new URL(path, origin.endsWith("/") ? origin : `${origin}/`);
+    const lib = targetUrl.protocol === "https:" ? https : http;
+
+    console.log(`[ciallo] proxy ${req.method} ${path} → ${targetUrl.origin}`);
+
+    const headers: Record<string, string | string[] | undefined> = { ...req.headers };
+    delete headers.host;
+    delete headers["x-ciallo-upstream"];
+    headers.host = targetUrl.host;
+
+    const proxyReq = lib.request(
+      {
+        protocol: targetUrl.protocol,
+        hostname: targetUrl.hostname,
+        port: targetUrl.port || (targetUrl.protocol === "https:" ? 443 : 80),
+        path: targetUrl.pathname + targetUrl.search,
+        method: req.method,
+        headers,
+      },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+        proxyRes.pipe(res);
+        proxyRes.on("end", () => resolve());
+      },
+    );
+
+    proxyReq.on("error", reject);
+    req.pipe(proxyReq);
+  });
+}
+
+export default defineConfig({
+  plugins: [react(), cialloV1ProxyPlugin()],
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+    },
+  },
+  server: {
+    host: "127.0.0.1",
+    port: 5173,
+  },
 });

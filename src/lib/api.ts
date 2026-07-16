@@ -1,5 +1,5 @@
 import { log } from "./logger";
-import { normalizeBaseUrl } from "./settings";
+import { normalizeBaseUrl, upstreamOrigin } from "./settings";
 
 export type OpenAIModel = {
   id: string;
@@ -31,13 +31,22 @@ export class ApiError extends Error {
 }
 
 /**
- * 浏览器侧请求基址。
- * - 绝对 URL（https://host/v1）：浏览器直连上游（部署形态：Web 配置，无容器内反代）
- * - 相对路径 /v1：仅本地 Vite dev 同源代理（见 vite.config.ts）
- * 不再把跨域绝对 URL 强行改写为 /v1。
+ * 浏览器侧实际请求基址：始终走同源 /v1 代理，避免 CORS。
+ * 真实上游由管理页 Base URL 决定，经请求头 X-Ciallo-Upstream 传给 Vite/Nginx。
  */
 export function resolveBrowserApiBase(baseUrl: string): string {
-  return normalizeBaseUrl(baseUrl);
+  const configured = normalizeBaseUrl(baseUrl);
+  if (!configured) return "";
+  // 相对路径已是同源
+  if (configured.startsWith("/")) return configured.startsWith("/v1") ? "/v1" : configured;
+  // 绝对上游 → 同源代理
+  if (typeof window !== "undefined") return "/v1";
+  return configured;
+}
+
+/** 代理用：上游根 origin（https://host），空表示未配置 */
+export function resolveUpstreamOrigin(baseUrl: string): string {
+  return upstreamOrigin(normalizeBaseUrl(baseUrl));
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -56,10 +65,9 @@ function describeFetchError(error: unknown, url: string): string {
   const message = error instanceof Error ? error.message : String(error);
   if (/failed to fetch|networkerror|load failed/i.test(message)) {
     return [
-      `网络/CORS 失败: ${message}`,
+      `网络失败: ${message}`,
       `URL: ${url}`,
-      "原因通常是浏览器直连上游且上游未开 CORS。",
-      "请把 Base URL 设为 /v1（同源代理），并确保 Vite/Docker 代理可用。",
+      "请确认：1) 管理页已填完整上游 https://网关/v1  2) 本机 Vite/Docker 在跑  3) 上游可访问",
     ].join("\n");
   }
   return `${message}\nURL: ${url}`;
@@ -192,6 +200,10 @@ export async function materializeImageUrl(input: {
   if (input.apiKey.trim()) {
     headers.set("Authorization", `Bearer ${input.apiKey.trim()}`);
   }
+  const origin = resolveUpstreamOrigin(input.baseUrl);
+  if (origin && (rewritten.startsWith("/v1") || rewritten.startsWith("/media"))) {
+    headers.set("X-Ciallo-Upstream", origin);
+  }
 
   let response: Response;
   try {
@@ -245,10 +257,12 @@ async function apiRequest(
     );
   }
   const requestBase = resolveBrowserApiBase(baseUrl);
+  const origin = resolveUpstreamOrigin(baseUrl);
   const url = joinUrl(baseUrl, path);
   log("info", "请求基址", {
     configuredBase,
     requestBase,
+    upstreamOrigin: origin || "(relative)",
     pageOrigin: typeof window !== "undefined" ? window.location.origin : "(ssr)",
   });
 
@@ -256,6 +270,10 @@ async function apiRequest(
     Accept: "application/json",
     Authorization: `Bearer ${apiKey.trim()}`,
   });
+  // 同源代理根据此头转发到真实上游（不写进 .env）
+  if (origin) {
+    headers.set("X-Ciallo-Upstream", origin);
+  }
 
   let body: string | undefined;
   if (init.body) {

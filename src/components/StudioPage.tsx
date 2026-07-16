@@ -53,7 +53,6 @@ export function StudioPage({
   setDraft,
   jobs,
   running,
-  inFlight,
   prompts,
   plannedJobs,
   stats,
@@ -132,11 +131,6 @@ export function StudioPage({
     [jobs],
   );
   const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
-  /** 总张数 = Prompt × 生图数量 × 并发，故 worker 上限通常等于设定并发 */
-  const effectiveConcurrency = useMemo(() => {
-    if (plannedJobs <= 0) return 0;
-    return Math.max(1, Math.min(draft.concurrency, plannedJobs));
-  }, [draft.concurrency, plannedJobs]);
 
   // 清理已不存在或不可下载的勾选
   useEffect(() => {
@@ -369,11 +363,7 @@ export function StudioPage({
             >
               总张数 <strong>{plannedJobs}</strong>
             </span>
-            {running ? (
-              <span className="stat-pill">
-                生成中 <strong>{inFlight}</strong>/{effectiveConcurrency}
-              </span>
-            ) : null}
+            {running ? <span className="stat-pill">生成中</span> : null}
           </div>
         </div>
 

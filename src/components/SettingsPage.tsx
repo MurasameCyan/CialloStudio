@@ -117,12 +117,15 @@ export function SettingsPage({ settings, onChange }: Props) {
   return (
     <div className="page admin-layout">
       <section className="panel admin-hero">
-        <div className="admin-hero-copy">
-          <div className="panel-kicker">Admin</div>
-          <h2 className="panel-title">控制台</h2>
-          <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
+        <div className="admin-hero-top">
+          <div>
+            <div className="panel-kicker">Admin</div>
+            <h2 className="panel-title">控制台</h2>
+            <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
+          </div>
         </div>
-        <div className="admin-status-grid">
+
+        <div className="admin-status-row">
           <div className="admin-status-card">
             <span className="admin-status-label">连接</span>
             <strong className="admin-status-value">
@@ -132,7 +135,9 @@ export function SettingsPage({ settings, onChange }: Props) {
           </div>
           <div className="admin-status-card">
             <span className="admin-status-label">模型</span>
-            <strong className="admin-status-value mono-tight">{draft.model || "—"}</strong>
+            <strong className="admin-status-value mono-tight" title={draft.model}>
+              {draft.model || "—"}
+            </strong>
           </div>
           <div className="admin-status-card">
             <span className="admin-status-label">并发</span>
@@ -140,25 +145,27 @@ export function SettingsPage({ settings, onChange }: Props) {
           </div>
           <div className="admin-status-card">
             <span className="admin-status-label">请求通道</span>
-            <strong className="admin-status-value mono-tight">{requestBase}</strong>
+            <strong className="admin-status-value mono-tight" title={requestBase}>
+              {requestBase}
+            </strong>
           </div>
         </div>
       </section>
 
-      <div className="admin-main-grid">
-        <section className="panel admin-form-panel">
-          <div className="admin-section">
-            <div className="admin-section-head">
-              <div>
-                <div className="section-card-title">Connection</div>
-                <h3 className="admin-section-title">接口连接</h3>
-              </div>
-              <button type="button" className="btn btn-secondary btn-sm" onClick={useSameOriginProxy}>
-                使用 /v1
-              </button>
+      <section className="panel admin-form-panel">
+        <div className="admin-section">
+          <div className="admin-section-head">
+            <div>
+              <div className="section-card-title">Connection</div>
+              <h3 className="admin-section-title">接口连接</h3>
             </div>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={useSameOriginProxy}>
+              使用 /v1
+            </button>
+          </div>
 
-            <div className="field">
+          <div className="admin-fields-2">
+            <div className="field" style={{ marginBottom: 0 }}>
               <label htmlFor="baseUrl">API Base URL</label>
               <input
                 id="baseUrl"
@@ -192,139 +199,140 @@ export function SettingsPage({ settings, onChange }: Props) {
               <div className="field-hint">仅保存在本机浏览器，不会进入镜像或仓库。</div>
             </div>
           </div>
+        </div>
 
-          <div className="admin-section">
-            <div className="admin-section-head">
-              <div>
-                <div className="section-card-title">Generation</div>
-                <h3 className="admin-section-title">生成默认值</h3>
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="field">
-                <label htmlFor="model">模型</label>
-                <input
-                  id="model"
-                  className="control mono"
-                  list="model-options"
-                  value={draft.model}
-                  onChange={(e) => update("model", e.target.value)}
-                  placeholder="grok-imagine-image"
-                  spellCheck={false}
-                />
-                <datalist id="model-options">
-                  {imageModels.map((id) => (
-                    <option key={id} value={id} />
-                  ))}
-                </datalist>
-              </div>
-              <div className="field">
-                <label htmlFor="concurrency">全局并发槽</label>
-                <input
-                  id="concurrency"
-                  className="control"
-                  type="number"
-                  min={1}
-                  max={8}
-                  value={draft.concurrency}
-                  onChange={(e) => update("concurrency", Number(e.target.value))}
-                />
-                <div className="field-hint">1–8，同时最多多少个子任务请求上游。</div>
-              </div>
-            </div>
-
-            <div className="row">
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>默认宽高比</label>
-                <div className="segmented">
-                  {ASPECT_RATIOS.map((ratio) => (
-                    <button
-                      key={ratio}
-                      type="button"
-                      className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                      onClick={() => update("aspectRatio", ratio)}
-                    >
-                      {ratio}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field" style={{ marginBottom: 0 }}>
-                <label>默认分辨率</label>
-                <div className="segmented">
-                  {RESOLUTIONS.map((item) => (
-                    <button
-                      key={item}
-                      type="button"
-                      className={`chip ${draft.resolution === item ? "active" : ""}`}
-                      onClick={() => update("resolution", item)}
-                    >
-                      {item}
-                    </button>
-                  ))}
-                </div>
-              </div>
+        <div className="admin-section">
+          <div className="admin-section-head">
+            <div>
+              <div className="section-card-title">Generation</div>
+              <h3 className="admin-section-title">生成默认值</h3>
             </div>
           </div>
 
-          {models.length > 0 ? (
-            <div className="admin-section">
-              <div className="admin-section-head">
-                <div>
-                  <div className="section-card-title">Models</div>
-                  <h3 className="admin-section-title">可用模型</h3>
-                </div>
-              </div>
+          <div className="admin-fields-2">
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="model">模型</label>
+              <input
+                id="model"
+                className="control mono"
+                list="model-options"
+                value={draft.model}
+                onChange={(e) => update("model", e.target.value)}
+                placeholder="grok-imagine-image"
+                spellCheck={false}
+              />
+              <datalist id="model-options">
+                {imageModels.map((id) => (
+                  <option key={id} value={id} />
+                ))}
+              </datalist>
+            </div>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label htmlFor="concurrency">全局并发槽</label>
+              <input
+                id="concurrency"
+                className="control"
+                type="number"
+                min={1}
+                max={8}
+                value={draft.concurrency}
+                onChange={(e) => update("concurrency", Number(e.target.value))}
+              />
+              <div className="field-hint">1–8，同时最多多少个子任务请求上游。</div>
+            </div>
+          </div>
+
+          <div className="admin-fields-2" style={{ marginTop: 14 }}>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>默认宽高比</label>
               <div className="segmented">
-                {models.map((model) => (
+                {ASPECT_RATIOS.map((ratio) => (
                   <button
-                    key={model.id}
+                    key={ratio}
                     type="button"
-                    className={`chip ${draft.model === model.id ? "active" : ""}`}
-                    onClick={() => update("model", model.id)}
+                    className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                    onClick={() => update("aspectRatio", ratio)}
                   >
-                    {model.id}
+                    {ratio}
                   </button>
                 ))}
               </div>
             </div>
-          ) : null}
-
-          <div className="admin-actions">
-            <div className="btn-row">
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
-                {busy ? "测试中…" : "测试连接"}
-              </button>
-              <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
-                保存设置
-              </button>
-              <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
-                恢复默认
-              </button>
+            <div className="field" style={{ marginBottom: 0 }}>
+              <label>默认分辨率</label>
+              <div className="segmented">
+                {RESOLUTIONS.map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`chip ${draft.resolution === item ? "active" : ""}`}
+                    onClick={() => update("resolution", item)}
+                  >
+                    {item}
+                  </button>
+                ))}
+              </div>
             </div>
-            {message ? (
-              <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
-            ) : (
-              <div className="admin-actions-hint">先测试连接，确认模型列表后再回生图页使用。</div>
-            )}
           </div>
-        </section>
+        </div>
 
-        <aside className="admin-side">
-          <section className="panel admin-side-card">
-            <div className="section-card-title">Quick Tips</div>
-            <ul className="admin-tips">
-              <li>
-                Base 优先填 <span className="mono">/v1</span>
-              </li>
-              <li>Key 只存浏览器本地</li>
-              <li>并发槽控制 fan-out 同时请求数</li>
-              <li>生图失败细节看下方日志</li>
-            </ul>
-          </section>
-          <LogPanel />
-        </aside>
+        {models.length > 0 ? (
+          <div className="admin-section">
+            <div className="admin-section-head">
+              <div>
+                <div className="section-card-title">Models</div>
+                <h3 className="admin-section-title">可用模型</h3>
+              </div>
+            </div>
+            <div className="segmented">
+              {models.map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  className={`chip ${draft.model === model.id ? "active" : ""}`}
+                  onClick={() => update("model", model.id)}
+                >
+                  {model.id}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="admin-actions">
+          <div className="btn-row">
+            <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
+              {busy ? "测试中…" : "测试连接"}
+            </button>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
+              保存设置
+            </button>
+            <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
+              恢复默认
+            </button>
+          </div>
+          {message ? (
+            <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
+          ) : (
+            <div className="admin-actions-hint">先测试连接，确认模型列表后再回生图页使用。</div>
+          )}
+        </div>
+      </section>
+
+      <div className="admin-bottom-grid">
+        <section className="panel admin-side-card">
+          <div className="section-card-title">Quick Tips</div>
+          <h3 className="admin-section-title">使用提示</h3>
+          <ul className="admin-tips">
+            <li>
+              Base 优先填 <span className="mono">/v1</span>
+            </li>
+            <li>Key 只存浏览器本地</li>
+            <li>并发槽控制 fan-out 同时请求数</li>
+            <li>生图失败细节看右侧日志</li>
+          </ul>
+        </section>
+        <LogPanel />
       </div>
     </div>
   );

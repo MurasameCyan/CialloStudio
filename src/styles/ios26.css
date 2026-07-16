@@ -879,7 +879,7 @@ a {
   }
 }
 
-/* Settings / Admin */
+/* Settings / Admin — straight, full-width, grid aligned */
 .settings-grid {
   display: grid;
   gap: 16px;
@@ -891,36 +891,30 @@ a {
 
 .admin-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 1fr);
-  gap: 20px;
-  align-items: center;
+  gap: 18px;
 }
 
-.admin-hero-copy {
+.admin-hero-top {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  min-width: 0;
 }
 
-.admin-hero-copy .panel-desc {
-  max-width: 36ch;
+.admin-hero-top .panel-desc {
+  max-width: 48ch;
 }
 
-.admin-status-grid {
+.admin-status-row {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
 }
 
 .admin-status-card {
   border-radius: 18px;
   padding: 14px 15px;
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.5);
   border: 1px solid var(--separator);
   min-width: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
@@ -963,13 +957,6 @@ a {
   font-weight: 700;
 }
 
-.admin-main-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 0.9fr);
-  gap: 16px;
-  align-items: start;
-}
-
 .admin-form-panel {
   display: grid;
   gap: 14px;
@@ -980,7 +967,7 @@ a {
   z-index: 1;
   border-radius: 22px;
   padding: 16px;
-  background: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.4);
   border: 1px solid var(--separator);
 }
 
@@ -992,7 +979,7 @@ a {
 
 .admin-section-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
@@ -1005,6 +992,12 @@ a {
   letter-spacing: -0.03em;
 }
 
+.admin-fields-2 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
 .admin-actions {
   position: relative;
   z-index: 1;
@@ -1012,7 +1005,7 @@ a {
   gap: 12px;
   padding: 14px;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.4);
   border: 1px solid var(--separator);
 }
 
@@ -1028,10 +1021,11 @@ a {
   line-height: 1.45;
 }
 
-.admin-side {
+.admin-bottom-grid {
   display: grid;
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
   gap: 16px;
-  align-content: start;
+  align-items: start;
 }
 
 .admin-side-card {
@@ -1039,7 +1033,7 @@ a {
 }
 
 .admin-tips {
-  margin: 0;
+  margin: 12px 0 0;
   padding-left: 18px;
   display: grid;
   gap: 10px;
@@ -1094,9 +1088,7 @@ a {
 
 .section-card {
   border-radius: 24px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0.08)),
-    var(--bg-soft-2);
+  background: rgba(255, 255, 255, 0.34);
   border: 1px solid var(--separator);
   padding: 16px;
 }
@@ -1110,15 +1102,19 @@ a {
   text-transform: uppercase;
 }
 
-@media (max-width: 1060px) {
-  .admin-hero,
-  .admin-main-grid {
+@media (max-width: 960px) {
+  .admin-status-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-bottom-grid,
+  .admin-fields-2 {
     grid-template-columns: 1fr;
   }
 }
 
-@media (max-width: 640px) {
-  .admin-status-grid {
+@media (max-width: 560px) {
+  .admin-status-row {
     grid-template-columns: 1fr;
   }
 }

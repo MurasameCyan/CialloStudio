@@ -253,71 +253,75 @@ export function StudioPage({
 
           <div className="option-block option-block-params">
             <div className="studio-params-grid">
-              <div className="field">
-                <label>生图数量</label>
-                <div className="segmented">
-                  {VARIANT_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className={`chip ${draft.variants === n ? "active" : ""}`}
-                      onClick={() => setDraft({ variants: n })}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <label>并发数（同时请求）</label>
-                <div className="segmented">
-                  {CONCURRENCY_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className={`chip ${draft.concurrency === n ? "active" : ""}`}
-                      onClick={() => setDraft({ concurrency: n })}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <label>宽高比</label>
-                <div className="segmented">
-                  {ASPECT_RATIOS.map((ratio) => (
-                    <button
-                      key={ratio}
-                      type="button"
-                      className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                      onClick={() => setDraft({ aspectRatio: ratio })}
-                    >
-                      {ratio}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="field">
-                <label>分辨率</label>
-                <div className="segmented">
-                  {RESOLUTIONS.map((item) => {
-                    const allowed = modelCap.allowedResolutions.includes(item);
-                    return (
+              <div className="studio-params-row">
+                <div className="field">
+                  <label>生图数量</label>
+                  <div className="segmented">
+                    {VARIANT_OPTIONS.map((n) => (
                       <button
-                        key={item}
+                        key={n}
                         type="button"
-                        className={`chip ${draft.resolution === item ? "active" : ""}`}
-                        disabled={!allowed}
-                        title={allowed ? item : `${settings.model} 不支持 ${item}`}
-                        onClick={() => {
-                          if (allowed) setDraft({ resolution: item });
-                        }}
+                        className={`chip ${draft.variants === n ? "active" : ""}`}
+                        onClick={() => setDraft({ variants: n })}
                       >
-                        {item}
+                        {n}
                       </button>
-                    );
-                  })}
+                    ))}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>并发数（同时请求）</label>
+                  <div className="segmented">
+                    {CONCURRENCY_OPTIONS.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        className={`chip ${draft.concurrency === n ? "active" : ""}`}
+                        onClick={() => setDraft({ concurrency: n })}
+                      >
+                        {n}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              <div className="studio-params-row">
+                <div className="field">
+                  <label>宽高比</label>
+                  <div className="segmented">
+                    {ASPECT_RATIOS.map((ratio) => (
+                      <button
+                        key={ratio}
+                        type="button"
+                        className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                        onClick={() => setDraft({ aspectRatio: ratio })}
+                      >
+                        {ratio}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="field">
+                  <label>分辨率</label>
+                  <div className="segmented">
+                    {RESOLUTIONS.map((item) => {
+                      const allowed = modelCap.allowedResolutions.includes(item);
+                      return (
+                        <button
+                          key={item}
+                          type="button"
+                          className={`chip ${draft.resolution === item ? "active" : ""}`}
+                          disabled={!allowed}
+                          title={allowed ? item : `${settings.model} 不支持 ${item}`}
+                          onClick={() => {
+                            if (allowed) setDraft({ resolution: item });
+                          }}
+                        >
+                          {item}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>

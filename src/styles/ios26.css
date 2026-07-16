@@ -1641,25 +1641,49 @@ a {
 
 .studio-params-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 14px 16px;
+  gap: 14px;
   width: 100%;
   box-sizing: border-box;
 }
 
-.studio-params-grid > .field {
+/* 每行左右 50/50，同排按钮顶对齐（宽高比 ↔ 分辨率 第一排同高） */
+.studio-params-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 16px;
+  align-items: start;
+  width: 100%;
+}
+
+.studio-params-row > .field {
   margin-bottom: 0;
   min-width: 0;
+  display: grid;
+  grid-template-rows: 18px auto;
+  gap: 8px;
+  align-content: start;
 }
 
-.studio-params-grid .segmented {
+.studio-params-row > .field > label {
+  height: 18px;
+  line-height: 18px;
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.studio-params-row .segmented {
+  display: flex;
   flex-wrap: wrap;
-  align-items: stretch;
+  align-items: center;
+  align-content: flex-start;
+  gap: 8px;
   min-height: 40px;
+  width: 100%;
 }
 
-/* 同一卡片内所有 chip 同高，分辨率与宽高比对齐 */
-.studio-params-grid .chip {
+/* 同一卡片内所有 chip 同高同内边距 */
+.studio-params-row .chip {
   min-height: 40px;
   height: 40px;
   padding: 0 14px;
@@ -1668,11 +1692,13 @@ a {
   justify-content: center;
   box-sizing: border-box;
   line-height: 1;
+  flex: 0 0 auto;
 }
 
 @media (max-width: 560px) {
-  .studio-params-grid {
+  .studio-params-row {
     grid-template-columns: 1fr;
+    gap: 14px 0;
   }
 }
 

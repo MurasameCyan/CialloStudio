@@ -3,19 +3,15 @@ export type CialloRuntime = {
   masterUsername: string;
   /** 站长密码 SHA-256 hex；空 = 未从 .env 注入 */
   masterPasswordSha256: string;
-  /** CF Worker 媒体基址，如 https://ciallo-media.xxx.workers.dev */
+  /** CF Worker / Pages 媒体基址 */
   mediaBase: string;
-  /** 可选：Worker 上传 Bearer token（非 Bot Token） */
+  /** 可选：媒体上传 Bearer token（非 Bot Token） */
   mediaUploadToken: string;
 };
 
 declare global {
   interface Window {
-    __CIALLO_RUNTIME__?: Partial<CialloRuntime> & {
-      /** 旧字段兼容，已废弃 */
-      adminGateEnabled?: boolean;
-      adminPasswordSha256?: string;
-    };
+    __CIALLO_RUNTIME__?: Partial<CialloRuntime>;
   }
 }
 
@@ -28,10 +24,6 @@ function readRuntime(): CialloRuntime {
   const username =
     typeof raw?.masterUsername === "string" ? raw.masterUsername.trim().toLowerCase() : "";
   let hash = typeof raw?.masterPasswordSha256 === "string" ? raw.masterPasswordSha256.trim() : "";
-  // 兼容旧 Docker runtime：adminPasswordSha256 → 站长密码哈希，用户名默认 admin
-  if (!hash && typeof raw?.adminPasswordSha256 === "string") {
-    hash = raw.adminPasswordSha256.trim();
-  }
   hash = hash.toLowerCase();
   if (hash && !isSha256Hex(hash)) hash = "";
   const mediaBase = typeof raw?.mediaBase === "string" ? raw.mediaBase.trim() : "";

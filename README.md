@@ -5,8 +5,8 @@ iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接
 - 管理页配置 **Base URL + API Key**（浏览器 localStorage，不写 `.env`）
 - 浏览器只访问同源 **`/v1`**，由 Vite / Nginx 按请求头转发到真实上游（**免 CORS**）
 - 多并发生图、分享大厅（Mock 契约）
-- **站长账号**由 `.env` 配置，管理权限与站长登录合一（无单独管理密码）
-- **图片存储**：Cloudflare Worker → Telegram（见 [docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
+- **站长账号**由 `.env` 配置；**管理页仅站长可进**（接口 / 用户池 / 媒体）
+- **图片存储**：Cloudflare Pages/Worker → Telegram（见 [docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
 - Docker 仅拉 GHCR 镜像
 
 ## 快速开始（Docker）
@@ -52,11 +52,10 @@ npm run dev
 | `CIALLO_PORT` | 映射端口，默认 8080 |
 | `CIALLO_MASTER_USERNAME` | 站长用户名（社区 admin），默认 `admin` |
 | `CIALLO_MASTER_PASSWORD` | 站长密码（仅容器环境；前端只拿 sha256） |
-| `CIALLO_ADMIN_PASSWORD` | **兼容旧名**：未设 `CIALLO_MASTER_PASSWORD` 时当作站长密码 |
-| `CIALLO_MEDIA_BASE` | CF Worker 公网根 URL（Telegram 存图反代） |
-| `CIALLO_MEDIA_UPLOAD_TOKEN` | 与 Worker `UPLOAD_TOKEN` 一致（可选） |
+| `CIALLO_MEDIA_BASE` | CF 媒体公网根 URL（Telegram 存图反代） |
+| `CIALLO_MEDIA_UPLOAD_TOKEN` | 与媒体 `UPLOAD_TOKEN` 一致（可选） |
 
-不再使用单独的「管理页解锁密码」：登录站长即拥有接口设置 + 用户池权限。  
+管理页**只**认站长登录（`role=admin`）；游客/普通用户点「管理」会跳转大厅登录。  
 Bot Token **只**放在 Cloudflare Secrets，见媒体部署文档。
 
 镜像固定：`ghcr.io/murasamecyan/ciallostudio:beta`

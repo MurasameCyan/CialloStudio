@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HallPage } from "@/components/HallPage";
 import { SettingsPage } from "@/components/SettingsPage";
@@ -27,19 +27,36 @@ export default function App() {
   });
   const community = useCommunityAuth();
 
-  // 队列挂在 App 层：切到管理页也不会丢任务/结果，生成可继续跑
+  // 队列挂在 App 层：切页也不会丢任务/结果
   const queue = useStudioQueue(settings);
   const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
-  // 管理权限 = 社区站长（admin 角色），无单独管理密码
+  // 管理页仅站长（role=admin）；无单独管理密码
   const isStationMaster = community.user?.role === "admin";
-
-  function openSettings() {
-    setTab("settings");
-  }
 
   function openHallAuth() {
     setTab("hall");
   }
+
+  function openSettings() {
+    if (community.loading) {
+      setTab("settings");
+      return;
+    }
+    if (!isStationMaster) {
+      log("warn", "管理页仅站长可进，请先在大厅登录站长账号");
+      setTab("hall");
+      return;
+    }
+    setTab("settings");
+  }
+
+  // 已在管理页时若退出站长身份，立即踢回大厅
+  useEffect(() => {
+    if (community.loading) return;
+    if (tab === "settings" && !isStationMaster) {
+      setTab("hall");
+    }
+  }, [tab, isStationMaster, community.loading]);
 
   return (
     <div className="app-shell">
@@ -81,8 +98,9 @@ export default function App() {
               type="button"
               className={`nav-pill ${tab === "settings" ? "active" : ""}`}
               onClick={openSettings}
+              title={isStationMaster ? "站长控制台" : "仅站长可进入，请先登录"}
             >
-              管理
+              管理{isStationMaster ? "" : " 🔒"}
             </button>
           </nav>
         </div>
@@ -122,17 +140,51 @@ export default function App() {
               await community.logout();
             }}
           />
-        ) : (
+        ) : community.loading ? (
+          <div className="page">
+            <section className="panel">
+              <div className="empty empty-compact">
+                <span className="empty-title">校验站长权限…</span>
+              </div>
+            </section>
+          </div>
+        ) : isStationMaster ? (
           <ErrorBoundary label="管理页">
             <SettingsPage
               settings={settings}
               onChange={setSettings}
-              isStationMaster={isStationMaster}
               communityUser={community.user}
               communityLoading={community.loading}
               onNeedLogin={openHallAuth}
             />
           </ErrorBoundary>
+        ) : (
+          <div className="page admin-layout">
+            <section className="panel admin-hero">
+              <div className="panel-kicker">Admin</div>
+              <h2 className="panel-title">需要站长登录</h2>
+              <p className="panel-desc">
+                管理页（接口设置 / 用户池 / 媒体）仅站长可访问。请到「大厅」使用站长账号登录
+                {isMasterConfigured() ? (
+                  <>
+                    （用户名 <code>{getMasterUsername()}</code>，密码见部署 .env）。
+                  </>
+                ) : (
+                  <>
+                    （本地 Mock：<code>admin / admin123</code>）。
+                  </>
+                )}
+              </p>
+              <div className="btn-row" style={{ marginTop: 14 }}>
+                <button type="button" className="btn btn-primary" onClick={openHallAuth}>
+                  去大厅登录
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setTab("studio")}>
+                  返回生图
+                </button>
+              </div>
+            </section>
+          </div>
         )}
       </main>
     </div>

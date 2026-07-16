@@ -81,9 +81,9 @@ Base：`/api/community`
 
 ## 站长账号（.env）
 
-- `CIALLO_MASTER_USERNAME` + `CIALLO_MASTER_PASSWORD`（兼容旧 `CIALLO_ADMIN_PASSWORD`）
+- `CIALLO_MASTER_USERNAME` + `CIALLO_MASTER_PASSWORD`（仅此二变量；已移除旧管理密码变量）
 - Docker entrypoint 只把 **用户名 + 密码 sha256** 写入 `runtime-config.js`
-- 站长登录后 `role=admin`：管理页接口设置 + 用户池；**无单独管理解锁密码**
+- 站长登录后 `role=admin`：**唯一**可进入管理页（接口 / 用户池 / 媒体）；游客不可见内容
 - 本地未配置时 Mock 回退 `admin` / `admin123`
 
 ## 非目标（本阶段不做）

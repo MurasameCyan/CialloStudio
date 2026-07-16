@@ -10,9 +10,9 @@ if [ -f /etc/nginx/nginx.conf.template ]; then
 fi
 
 # 站长账号：.env 注入用户名 + 密码哈希（不把明文密码写进前端）
-# 兼容旧变量 CIALLO_ADMIN_PASSWORD → 站长密码，用户名默认 admin
+# 管理页仅该账号（role=admin）可进入；无单独管理密码
 MASTER_USER="$(printf '%s' "${CIALLO_MASTER_USERNAME:-}" | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
-MASTER_PASSWORD="$(printf '%s' "${CIALLO_MASTER_PASSWORD:-${CIALLO_ADMIN_PASSWORD:-}}" | tr -d '\r')"
+MASTER_PASSWORD="$(printf '%s' "${CIALLO_MASTER_PASSWORD:-}" | tr -d '\r')"
 MASTER_HASH=""
 
 if [ -z "$MASTER_USER" ]; then

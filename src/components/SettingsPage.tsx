@@ -18,6 +18,7 @@ import {
   setMediaBase,
   setMediaUploadToken,
 } from "@/lib/media/client";
+import { getMasterUsername } from "@/lib/runtimeConfig";
 import {
   ASPECT_RATIOS,
   DEFAULT_SETTINGS,
@@ -33,9 +34,7 @@ type AdminSection = "api" | "users";
 type Props = {
   settings: StudioSettings;
   onChange: (next: StudioSettings) => void;
-  /** 是否为站长（社区 admin）；用户池需站长登录 */
-  isStationMaster?: boolean;
-  /** 社区账号（用户池管理需要 admin 角色） */
+  /** 社区站长账号（由 App 门禁保证已是 admin） */
   communityUser?: CommunityUser | null;
   communityLoading?: boolean;
   onNeedLogin?: () => void;
@@ -44,7 +43,6 @@ type Props = {
 export function SettingsPage({
   settings,
   onChange,
-  isStationMaster = false,
   communityUser = null,
   communityLoading = false,
   onNeedLogin,
@@ -235,9 +233,7 @@ export function SettingsPage({
             <div className="panel-kicker">Admin</div>
             <h2 className="panel-title">控制台</h2>
             <p className="panel-desc" style={{ marginTop: 6 }}>
-              {isStationMaster
-                ? `站长 @${communityUser?.username ?? ""} · 接口与用户池可用`
-                : "接口设置对所有人开放；用户池需在「大厅」用站长账号登录"}
+              站长 @{communityUser?.username ?? getMasterUsername()} · 接口 / 用户池 / 媒体
             </p>
           </div>
         </div>

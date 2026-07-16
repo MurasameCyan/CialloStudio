@@ -249,27 +249,27 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           </div>
         </div>
 
-        <div className="option-block">
-          <div className="field">
-            <label>每条张数</label>
-            <div className="segmented">
-              {VARIANT_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`chip ${variants === n ? "active" : ""}`}
-                  onClick={() => setVariants(n)}
-                >
-                  {n}
-                </button>
-              ))}
+        <div className="studio-options">
+          <div className="option-block">
+            <div className="field">
+              <label>每条张数</label>
+              <div className="segmented">
+                {VARIANT_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`chip ${variants === n ? "active" : ""}`}
+                    onClick={() => setVariants(n)}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
-        </div>
 
-        <div className="option-block">
-          <div className="row">
-            <div className="field" style={{ marginBottom: 0 }}>
+          <div className="option-block">
+            <div className="field">
               <label>宽高比</label>
               <div className="segmented">
                 {ASPECT_RATIOS.map((ratio) => (
@@ -284,7 +284,10 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 ))}
               </div>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
+          </div>
+
+          <div className="option-block">
+            <div className="field">
               <label>分辨率</label>
               <div className="segmented">
                 {RESOLUTIONS.map((item) => (

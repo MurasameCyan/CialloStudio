@@ -118,11 +118,9 @@ export function SettingsPage({ settings, onChange }: Props) {
     <div className="page admin-layout">
       <section className="panel admin-hero">
         <div className="admin-hero-top">
-          <div>
-            <div className="panel-kicker">Admin</div>
-            <h2 className="panel-title">控制台</h2>
-            <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
-          </div>
+          <div className="panel-kicker">Admin</div>
+          <h2 className="panel-title">控制台</h2>
+          <p className="panel-desc">管理接口连接、默认生成参数，以及查看运行日志。</p>
         </div>
 
         <div className="admin-status-row">
@@ -164,8 +162,8 @@ export function SettingsPage({ settings, onChange }: Props) {
             </button>
           </div>
 
-          <div className="admin-fields-2">
-            <div className="field" style={{ marginBottom: 0 }}>
+          <div className="admin-stack">
+            <div className="field">
               <label htmlFor="baseUrl">API Base URL</label>
               <input
                 id="baseUrl"
@@ -179,7 +177,7 @@ export function SettingsPage({ settings, onChange }: Props) {
               <div className="field-hint">推荐同源代理 `/v1`，可避免浏览器 CORS 问题。</div>
             </div>
 
-            <div className="field" style={{ marginBottom: 0 }}>
+            <div className="field">
               <div className="label-row">
                 <label htmlFor="apiKey">API Key</label>
                 <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
@@ -209,8 +207,8 @@ export function SettingsPage({ settings, onChange }: Props) {
             </div>
           </div>
 
-          <div className="admin-fields-2">
-            <div className="field" style={{ marginBottom: 0 }}>
+          <div className="admin-stack">
+            <div className="field">
               <label htmlFor="model">模型</label>
               <input
                 id="model"
@@ -226,8 +224,10 @@ export function SettingsPage({ settings, onChange }: Props) {
                   <option key={id} value={id} />
                 ))}
               </datalist>
+              <div className="field-hint">生图默认模型，可从下方列表点选。</div>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
+
+            <div className="field">
               <label htmlFor="concurrency">全局并发槽</label>
               <input
                 id="concurrency"
@@ -240,10 +240,8 @@ export function SettingsPage({ settings, onChange }: Props) {
               />
               <div className="field-hint">1–8，同时最多多少个子任务请求上游。</div>
             </div>
-          </div>
 
-          <div className="admin-fields-2" style={{ marginTop: 14 }}>
-            <div className="field" style={{ marginBottom: 0 }}>
+            <div className="field">
               <label>默认宽高比</label>
               <div className="segmented">
                 {ASPECT_RATIOS.map((ratio) => (
@@ -258,7 +256,8 @@ export function SettingsPage({ settings, onChange }: Props) {
                 ))}
               </div>
             </div>
-            <div className="field" style={{ marginBottom: 0 }}>
+
+            <div className="field">
               <label>默认分辨率</label>
               <div className="segmented">
                 {RESOLUTIONS.map((item) => (

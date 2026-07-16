@@ -996,6 +996,27 @@ a {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  align-items: start;
+}
+
+/* 管理页统一纵向堆叠：避免左右两列高度不一致造成「一上一下」 */
+.admin-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.admin-stack > .field {
+  margin-bottom: 0;
+}
+
+.admin-stack .field label,
+.admin-stack .label-row {
+  min-height: 18px;
+}
+
+.admin-stack .segmented {
+  min-height: 40px;
+  align-content: flex-start;
 }
 
 .admin-actions {
@@ -1111,6 +1132,20 @@ a {
   .admin-fields-2 {
     grid-template-columns: 1fr;
   }
+}
+
+/* 生图页也统一：选项块纵向对齐 */
+.studio-options {
+  display: grid;
+  gap: 12px;
+}
+
+.studio-options .option-block {
+  margin: 0;
+}
+
+.studio-options .option-block + .option-block {
+  margin-top: 0;
 }
 
 @media (max-width: 560px) {

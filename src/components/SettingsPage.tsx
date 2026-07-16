@@ -372,21 +372,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
         </div>
       </section>
 
-      <div className="admin-bottom-grid">
-        <section className="panel admin-side-card">
-          <div className="section-card-title">Quick Tips</div>
-          <h3 className="admin-section-title">使用提示</h3>
-          <ul className="admin-tips">
-            <li>
-              Base 填完整上游，如 <span className="mono">https://网关/v1</span>
-            </li>
-            <li>Key 只存浏览器本地</li>
-            <li>并发槽控制同时请求数</li>
-            <li>失败细节看运行日志</li>
-          </ul>
-        </section>
-        <LogPanel />
-      </div>
+      <LogPanel />
     </div>
   );
 }

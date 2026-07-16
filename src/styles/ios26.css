@@ -1671,6 +1671,8 @@ a {
 
 .results-toolbar-actions .kpi-row-inline {
   order: 0;
+  /* 与右侧「空闲」芯片拉开一点间距 */
+  margin-right: 10px;
 }
 
 .results-toolbar-actions .connection-chip {

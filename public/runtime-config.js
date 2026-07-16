@@ -2,5 +2,7 @@
  * Docker 启动时由 entrypoint 覆盖本文件（只写入用户名 + 密码 sha256）。 */
 window.__CIALLO_RUNTIME__ = {
   masterUsername: "",
-  masterPasswordSha256: ""
+  masterPasswordSha256: "",
+  mediaBase: "",
+  mediaUploadToken: ""
 };

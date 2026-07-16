@@ -3,6 +3,10 @@ export type CialloRuntime = {
   masterUsername: string;
   /** 站长密码 SHA-256 hex；空 = 未从 .env 注入 */
   masterPasswordSha256: string;
+  /** CF Worker 媒体基址，如 https://ciallo-media.xxx.workers.dev */
+  mediaBase: string;
+  /** 可选：Worker 上传 Bearer token（非 Bot Token） */
+  mediaUploadToken: string;
 };
 
 declare global {
@@ -30,9 +34,14 @@ function readRuntime(): CialloRuntime {
   }
   hash = hash.toLowerCase();
   if (hash && !isSha256Hex(hash)) hash = "";
+  const mediaBase = typeof raw?.mediaBase === "string" ? raw.mediaBase.trim() : "";
+  const mediaUploadToken =
+    typeof raw?.mediaUploadToken === "string" ? raw.mediaUploadToken.trim() : "";
   return {
     masterUsername: username || (hash ? "admin" : ""),
     masterPasswordSha256: hash,
+    mediaBase,
+    mediaUploadToken,
   };
 }
 

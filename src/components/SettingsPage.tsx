@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LogPanel } from "@/components/LogPanel";
 import { UserPoolPanel } from "@/components/UserPoolPanel";
 import {
@@ -11,6 +11,13 @@ import {
 import type { CommunityUser } from "@/lib/community/types";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
+import {
+  getMediaBase,
+  getMediaUploadToken,
+  pingMediaWorker,
+  setMediaBase,
+  setMediaUploadToken,
+} from "@/lib/media/client";
 import {
   ASPECT_RATIOS,
   DEFAULT_SETTINGS,
@@ -58,6 +65,16 @@ export function SettingsPage({
   const [message, setMessage] = useState<string>("");
   const [ok, setOk] = useState<boolean | null>(null);
   const [showKey, setShowKey] = useState(false);
+  const [mediaBase, setMediaBaseDraft] = useState("");
+  const [mediaToken, setMediaTokenDraft] = useState("");
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [mediaMsg, setMediaMsg] = useState("");
+  const [mediaOk, setMediaOk] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    setMediaBaseDraft(getMediaBase());
+    setMediaTokenDraft(getMediaUploadToken());
+  }, []);
 
   const imageModels = useMemo(() => {
     const ids = models.map((m) => m.id);
@@ -180,6 +197,34 @@ export function SettingsPage({
     setModels([]);
     setOk(null);
     setMessage("已恢复默认值（尚未写入本地，需点保存）");
+  }
+
+  function handleSaveMedia() {
+    setMediaBase(mediaBase.trim());
+    setMediaUploadToken(mediaToken.trim());
+    setMediaOk(true);
+    setMediaMsg(
+      mediaBase.trim()
+        ? `已保存媒体 Worker：${mediaBase.trim().replace(/\/+$/, "")}`
+        : "已清空 Media Base（分享将使用临时图链）",
+    );
+    log("ok", "媒体 Worker 配置已保存", { base: mediaBase.trim() || "(empty)" });
+  }
+
+  async function handleTestMedia() {
+    setMediaBase(mediaBase.trim());
+    setMediaUploadToken(mediaToken.trim());
+    setMediaBusy(true);
+    setMediaMsg("");
+    setMediaOk(null);
+    try {
+      const res = await pingMediaWorker();
+      setMediaOk(res.ok);
+      setMediaMsg(res.ok ? `Worker 正常 · ${res.detail}` : `Worker 异常 · ${res.detail}`);
+      log(res.ok ? "ok" : "error", "媒体 Worker 探测", res.detail);
+    } finally {
+      setMediaBusy(false);
+    }
   }
 
   return (
@@ -426,6 +471,73 @@ export function SettingsPage({
                   </div>
                   {message ? (
                     <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel admin-form-panel">
+            <div className="admin-section admin-section-merged">
+              <div className="admin-section-head">
+                <div>
+                  <div className="section-card-title">Media</div>
+                  <h3 className="admin-section-title">图片存储（CF Worker → Telegram）</h3>
+                </div>
+              </div>
+              <div className="admin-stack">
+                <p className="footer-note">
+                  部署指南见仓库 <code>docs/telegram-media-worker.md</code>。Bot Token 只放在 Cloudflare
+                  Secrets，不要填进本页。
+                </p>
+                <div className="admin-fields-2">
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="mediaBase">Media Base URL</label>
+                    </div>
+                    <input
+                      id="mediaBase"
+                      className="control mono"
+                      value={mediaBase}
+                      placeholder="https://ciallo-telegram-media.xxx.workers.dev"
+                      onChange={(e) => setMediaBaseDraft(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="mediaToken">Upload Token（可选）</label>
+                    </div>
+                    <input
+                      id="mediaToken"
+                      className="control mono"
+                      value={mediaToken}
+                      placeholder="与 Worker UPLOAD_TOKEN 相同"
+                      onChange={(e) => setMediaTokenDraft(e.target.value)}
+                      autoComplete="off"
+                      spellCheck={false}
+                    />
+                  </div>
+                </div>
+                <div className="admin-actions admin-actions-inline">
+                  <div className="btn-row">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={mediaBusy}
+                      onClick={() => void handleTestMedia()}
+                    >
+                      {mediaBusy ? "探测中…" : "测试 Worker"}
+                    </button>
+                    <button type="button" className="btn btn-secondary" disabled={mediaBusy} onClick={handleSaveMedia}>
+                      保存媒体配置
+                    </button>
+                  </div>
+                  {mediaMsg ? (
+                    <div className={`status ${mediaOk === true ? "ok" : mediaOk === false ? "err" : ""}`}>
+                      {mediaMsg}
+                    </div>
                   ) : null}
                 </div>
               </div>

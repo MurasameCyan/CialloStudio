@@ -3,7 +3,6 @@ name: ciallo-studio
 services:
   ciallo-studio:
     container_name: ciallo-studio
-    # 固定使用 GHCR beta；不本地 build
     image: ghcr.io/murasamecyan/ciallostudio:beta
     pull_policy: always
     ports:
@@ -12,8 +11,8 @@ services:
       # 站长账号（.env）。密码明文仅容器环境；前端只拿 sha256
       CIALLO_MASTER_USERNAME: ${CIALLO_MASTER_USERNAME:-admin}
       CIALLO_MASTER_PASSWORD: ${CIALLO_MASTER_PASSWORD:-${CIALLO_ADMIN_PASSWORD:-}}
-      # 兼容旧 compose
-      CIALLO_ADMIN_PASSWORD: ${CIALLO_ADMIN_PASSWORD:-}
+      CIALLO_MEDIA_BASE: ${CIALLO_MEDIA_BASE:-}
+      CIALLO_MEDIA_UPLOAD_TOKEN: ${CIALLO_MEDIA_UPLOAD_TOKEN:-}
       TZ: ${TZ:-Asia/Shanghai}
     restart: unless-stopped
     init: true

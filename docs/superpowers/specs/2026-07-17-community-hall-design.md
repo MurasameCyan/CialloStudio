@@ -69,12 +69,15 @@ Base：`/api/community`
 - `likes`: post_id, user_id
 - `comments`: id, post_id, author_id, body, rating, created_at
 
-## 图片链路（后续）
+## 图片链路（CF Worker → Telegram）
 
 1. 前端拿到生图 URL（或 blob）
-2. 上传到 CF Worker（multipart / put）
-3. Worker 发到 Telegram 私人频道，返回 `mediaId` + 可访问 URL
-4. `POST /posts` 只存元数据 + media 引用
+2. 若配置了 `mediaBase`：`POST {mediaBase}/v1/upload`（multipart `file`）
+3. Worker `sendDocument` → Telegram 群/频道，返回 `mediaId`（file_id）+ 访问 URL
+4. `POST /posts` 存元数据 + `imageUrl` / `mediaId`
+5. 展示：`GET {mediaBase}/v1/media/:fileId`
+
+实现：`workers/telegram-media/`，部署说明：`docs/telegram-media-worker.md`。
 
 ## 站长账号（.env）
 
@@ -86,7 +89,6 @@ Base：`/api/community`
 ## 非目标（本阶段不做）
 
 - 真实 Docker API / Postgres
-- CF Worker / Telegram 实现
 - 邮箱验证、OAuth
 
 ## 用户池管理（Mock 已落地，入口在管理页）

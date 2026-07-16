@@ -1,0 +1,17 @@
+name = "ciallo-telegram-media"
+main = "src/index.ts"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# 部署后绑定自定义域名：Workers & Pages → 你的 Worker → Settings → Domains
+# 例如 media.example.com
+
+# Secrets（不要写进本文件，用 wrangler secret put）：
+#   TELEGRAM_BOT_TOKEN
+#   TELEGRAM_CHAT_ID
+#   UPLOAD_TOKEN          （可选，建议开启：浏览器上传时带 Authorization: Bearer <token>）
+#   ALLOWED_ORIGINS       （可选，逗号分隔 CORS 白名单；空 = 反射请求 Origin 或 *）
+
+[vars]
+# 公开变量可写这里；密钥必须用 secret
+MAX_UPLOAD_BYTES = "20971520"

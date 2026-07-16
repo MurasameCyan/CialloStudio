@@ -4,6 +4,7 @@ import { communityApi } from "@/lib/community/client";
 import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
+import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
 import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
 import {
   CONCURRENCY_OPTIONS,
@@ -154,8 +155,25 @@ export function StudioPage({
         onNeedLogin?.();
         return;
       }
+
+      // 配置了 CF Worker 时：先上传到 Telegram 存图，再把稳定 URL 写入大厅
+      let imageUrl = src;
+      let mediaId: string | undefined;
+      if (isMediaConfigured()) {
+        log("info", "分享：上传到媒体 Worker（Telegram）…");
+        const uploaded = await uploadMedia(src, {
+          filename: `ciallo-${job.id.slice(0, 10)}.jpg`,
+        });
+        imageUrl = uploaded.url;
+        mediaId = uploaded.mediaId;
+        log("ok", "媒体已入库", { mediaId, url: imageUrl });
+      } else {
+        log("info", "未配置 Media Base，使用原图 URL 分享（Mock / 临时）");
+      }
+
       await communityApi.createPost({
-        imageUrl: src,
+        imageUrl,
+        mediaId,
         prompt: job.prompt,
         model: settings.model,
         aspectRatio: job.aspectRatio || draft.aspectRatio,

@@ -10,6 +10,8 @@ dist-ssr/
 .env
 .env.*
 !.env.example
+workers/**/.dev.vars
+workers/**/.wrangler/
 
 # Editor / OS
 .DS_Store

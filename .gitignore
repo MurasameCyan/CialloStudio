@@ -27,3 +27,6 @@ npm-debug.log*
 
 # Docker local overrides
 docker-compose.override.yml
+
+uploads/
+

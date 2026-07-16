@@ -49,6 +49,21 @@ export function resolveUpstreamOrigin(baseUrl: string): string {
   return upstreamOrigin(normalizeBaseUrl(baseUrl));
 }
 
+const UPSTREAM_COOKIE = "ciallo_upstream";
+
+/** 写入 cookie，供 <img src="/v1/media/..."> 等无法自定义头的请求给 Nginx/Vite 读上游 */
+export function rememberUpstreamOrigin(baseUrl: string): void {
+  if (typeof document === "undefined") return;
+  const origin = resolveUpstreamOrigin(baseUrl);
+  if (!origin) return;
+  // 不设 Domain，仅当前站；Lax 足够同源媒体
+  document.cookie = `${UPSTREAM_COOKIE}=${encodeURIComponent(origin)}; Path=/; SameSite=Lax; Max-Age=31536000`;
+}
+
+function isSameOriginMediaPath(url: string): boolean {
+  return url.startsWith("/v1/") || url.startsWith("/media/");
+}
+
 function joinUrl(baseUrl: string, path: string): string {
   const base = resolveBrowserApiBase(baseUrl);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
@@ -273,6 +288,7 @@ async function apiRequest(
   // 同源代理根据此头转发到真实上游（不写进 .env）
   if (origin) {
     headers.set("X-Ciallo-Upstream", origin);
+    rememberUpstreamOrigin(baseUrl);
   }
 
   let body: string | undefined;
@@ -439,11 +455,15 @@ export async function generateImage(input: {
     if (typeof item.url === "string" && item.url.trim()) {
       const rewritten = rewriteMediaUrl(item.url, input.baseUrl);
       log("info", "生图返回 URL", { raw: item.url, rewritten });
-      // 默认使用可持久化的同源/上游 URL，便于切换页面与刷新后仍能显示
-      // 仅当 rewritten 仍是内网地址时，才退化为 blob
+      rememberUpstreamOrigin(input.baseUrl);
+
+      // 同源 /v1/media 或内网地址：必须 blob 化，因为 <img> 带不了 X-Ciallo-Upstream
       let displayUrl = rewritten;
-      const stillLoopback = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rewritten);
-      if (stillLoopback) {
+      const needsMaterialize =
+        isSameOriginMediaPath(rewritten) ||
+        /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rewritten);
+
+      if (needsMaterialize) {
         try {
           displayUrl = await materializeImageUrl({
             rawUrl: item.url,
@@ -451,14 +471,17 @@ export async function generateImage(input: {
             apiKey: input.apiKey,
             signal: input.signal,
           });
+          log("ok", "媒体已 blob 化供展示", { rewritten, display: displayUrl.slice(0, 48) });
         } catch (error) {
-          log("warn", "blob 化失败，回退 rewritten URL", error);
+          log("warn", "blob 化失败，回退 rewritten（依赖 cookie 代理）", error);
           displayUrl = rewritten;
         }
       }
+
       images.push({
         url: displayUrl,
-        openUrl: rewritten.startsWith("blob:") ? undefined : rewritten,
+        // openUrl 保留同源路径，打开时靠 cookie 代理
+        openUrl: rewritten.startsWith("blob:") || rewritten.startsWith("data:") ? undefined : rewritten,
         revised_prompt: typeof item.revised_prompt === "string" ? item.revised_prompt : undefined,
         mime_type: typeof item.mime_type === "string" ? item.mime_type : undefined,
       });

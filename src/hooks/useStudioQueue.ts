@@ -253,16 +253,23 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             log("warn", `上游返回 ${images.length} 张，本任务只采用第 1 张`, { jobId: job.id });
           }
 
+          // imageUrl：优先 generateImage 已 blob 化的展示地址（<img> 可直接用）
+          // openUrl：同源 /v1/media 路径，打开原图 / 持久化时靠 cookie 代理
           const openUrl =
             first?.openUrl ||
             (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
               ? undefined
               : rewriteMediaUrl(imageUrl, currentSettings.baseUrl));
 
-          const persistable = openUrl || (!imageUrl.startsWith("blob:") ? imageUrl : undefined);
-          const display = persistable || imageUrl;
+          const display = imageUrl;
+          const persistable =
+            openUrl ||
+            (!imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:") ? imageUrl : undefined);
 
-          log("ok", `子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, { display, openUrl });
+          log("ok", `子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, {
+            display: display.startsWith("blob:") ? "blob:…" : display,
+            openUrl: persistable,
+          });
           return { imageUrl: display, openUrl: persistable };
         },
         {

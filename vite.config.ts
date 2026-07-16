@@ -33,32 +33,43 @@ function cialloV1ProxyPlugin(): Plugin {
   };
 }
 
+function readUpstreamFromRequest(req: IncomingMessage): string {
+  const raw = req.headers["x-ciallo-upstream"];
+  const header = Array.isArray(raw) ? raw[0] : raw;
+  if (header && /^https?:\/\//i.test(header)) {
+    try {
+      return new URL(header).origin;
+    } catch {
+      // fall through
+    }
+  }
+  const cookie = req.headers.cookie || "";
+  const m = cookie.match(/(?:^|;\s*)ciallo_upstream=([^;]+)/);
+  if (m?.[1]) {
+    try {
+      const decoded = decodeURIComponent(m[1]);
+      if (/^https?:\/\//i.test(decoded)) return new URL(decoded).origin;
+    } catch {
+      // ignore
+    }
+  }
+  return "";
+}
+
 function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promise<void> {
   return new Promise((resolve, reject) => {
-    const raw = req.headers["x-ciallo-upstream"];
-    const header = Array.isArray(raw) ? raw[0] : raw;
-    if (!header || !/^https?:\/\//i.test(header)) {
+    const origin = readUpstreamFromRequest(req);
+    if (!origin) {
       res.statusCode = 400;
       res.setHeader("Content-Type", "application/json; charset=utf-8");
       res.end(
         JSON.stringify({
           error: {
-            message: "缺少上游。请在管理页填写 API Base URL（https://你的网关/v1）并保存。",
+            message: "缺少上游。请在管理页填写 API Base URL 并测试连接一次。",
             code: "missing_upstream_header",
           },
         }),
       );
-      resolve();
-      return;
-    }
-
-    let origin: string;
-    try {
-      origin = new URL(header).origin;
-    } catch {
-      res.statusCode = 400;
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.end(JSON.stringify({ error: { message: "无效的 X-Ciallo-Upstream", code: "bad_upstream" } }));
       resolve();
       return;
     }

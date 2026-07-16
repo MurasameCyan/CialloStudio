@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { LogPanel } from "@/components/LogPanel";
-import { ApiError, listModels, resolveBrowserApiBase, type OpenAIModel } from "@/lib/api";
+import {
+  ApiError,
+  listModels,
+  rememberUpstreamOrigin,
+  resolveBrowserApiBase,
+  type OpenAIModel,
+} from "@/lib/api";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
@@ -52,6 +58,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
       concurrency: clampConcurrency(next.concurrency),
     };
     saveSettings(normalized);
+    rememberUpstreamOrigin(normalized.baseUrl);
     onChange(normalized);
     setDraft(normalized);
     return normalized;

@@ -1147,16 +1147,44 @@ a {
   letter-spacing: -0.03em;
 }
 
-/* 管理页两列：中间对半分 */
+/* 管理页两列：严格 50/50（避免 1fr 被内容撑偏、避免 960 断点误拆列） */
 .admin-fields-2 {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 14px;
-  align-items: start;
+  grid-template-columns: 50% 50%;
+  column-gap: 14px;
+  row-gap: 12px;
+  align-items: stretch;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-fields-2 > .field {
   margin-bottom: 0;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+  /* 标签行固定高度，避免「显示」按钮让右侧输入框视觉错位 */
+  display: grid;
+  grid-template-rows: 20px auto;
+  gap: 8px;
+  align-content: start;
+}
+
+.admin-fields-2 > .field > label,
+.admin-fields-2 > .field > .label-row {
+  height: 20px;
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  margin: 0;
+}
+
+.admin-fields-2 > .field > .control,
+.admin-fields-2 > .field > .segmented {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   min-width: 0;
 }
 
@@ -1164,7 +1192,8 @@ a {
   flex-wrap: wrap;
 }
 
-@media (max-width: 720px) {
+/* 仅很窄屏才叠成单列 */
+@media (max-width: 560px) {
   .admin-fields-2 {
     grid-template-columns: 1fr;
   }
@@ -1299,10 +1328,10 @@ a {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .admin-bottom-grid,
-  .admin-fields-2 {
+  .admin-bottom-grid {
     grid-template-columns: 1fr;
   }
+  /* 注意：不要在这里拆 .admin-fields-2，保持左右 50/50 */
 }
 
 /* 生图页也统一：选项块纵向对齐 */

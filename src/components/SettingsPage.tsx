@@ -199,7 +199,9 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           <div className="admin-stack">
             <div className="admin-fields-2">
               <div className="field">
-                <label htmlFor="baseUrl">API Base URL</label>
+                <div className="label-row">
+                  <label htmlFor="baseUrl">API Base URL</label>
+                </div>
                 <input
                   id="baseUrl"
                   className="control mono"

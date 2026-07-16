@@ -1196,12 +1196,12 @@ a {
   min-width: 0;
 }
 
-/* 模型输入 / 并发数字：同高同圆角，避免看起来一边大一边小 */
+/* 模型输入 / 并发数字：同高，尽量紧凑 */
 .admin-fields-2 > .field > .control {
-  min-height: 48px;
-  height: 48px;
-  padding: 0 15px;
-  line-height: 48px;
+  min-height: 40px;
+  height: 40px;
+  padding: 0 12px;
+  line-height: 40px;
 }
 
 .admin-fields-2 > .field > .control[type="number"] {
@@ -1216,24 +1216,24 @@ a {
 
 .admin-fields-2 .segmented {
   flex-wrap: wrap;
-  min-height: 48px;
+  min-height: 40px;
   align-content: center;
 }
 
-/* 可用模型：等宽网格 chip，名称再长也同尺寸 */
+/* 可用模型：等宽网格 chip，高度压低 */
 .admin-model-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+  gap: 8px;
 }
 
 .admin-model-chip {
   width: 100%;
   min-width: 0;
-  min-height: 44px;
-  height: 44px;
-  padding: 0 12px;
-  border-radius: 14px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 12px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1305,10 +1305,10 @@ a {
 
 .admin-bottom-grid {
   display: grid;
-  /* 使用提示 | 运行日志 左右等宽 */
+  /* 使用提示 | 运行日志 左右等宽，顶部对齐不互相撑高 */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
   width: 100%;
 }
 
@@ -1319,14 +1319,14 @@ a {
 }
 
 .admin-side-card {
-  padding: 18px;
-  height: 100%;
+  padding: 16px;
 }
 
 .admin-bottom-grid .admin-log-panel,
 .admin-bottom-grid .log-panel {
-  height: 100%;
   margin: 0;
+  max-height: min(420px, 50vh);
+  overflow: auto;
 }
 
 .admin-tips {

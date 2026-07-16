@@ -70,7 +70,6 @@ export function StudioPage({
     if (plannedJobs <= 0) return 0;
     return Math.max(1, Math.min(draft.concurrency, plannedJobs));
   }, [draft.concurrency, plannedJobs]);
-  const perPromptImages = draft.variants * draft.concurrency;
 
   // 清理已不存在或不可下载的勾选
   useEffect(() => {
@@ -218,19 +217,6 @@ export function StudioPage({
                 在飞 <strong>{inFlight}</strong>/{effectiveConcurrency}
               </span>
             ) : null}
-          </div>
-          <div className="field-hint formula-hint">
-            公式：{prompts.length || 0} 条 prompt × {draft.variants} 生图 × {draft.concurrency}{" "}
-            并发 = <strong>{plannedJobs}</strong> 张
-            {prompts.length > 0 ? (
-              <>
-                {" "}
-                （每条 prompt 展开 {perPromptImages} 张）。
-              </>
-            ) : (
-              "。"
-            )}
-            宽高比「1:1」只控制构图。生成中同时最多 {effectiveConcurrency} 路请求。
           </div>
         </div>
 

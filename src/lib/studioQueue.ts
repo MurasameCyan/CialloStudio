@@ -36,7 +36,7 @@ const MAX_JOBS = 120;
 const LEGACY_KEYS = ["ciallo-studio.jobs.v1", "ciallo-studio.draft.v1"] as const;
 
 export const VARIANT_OPTIONS = [1, 2, 3, 4, 5] as const;
-export const CONCURRENCY_OPTIONS = [1, 2, 3, 4, 5] as const;
+export const CONCURRENCY_OPTIONS = [1, 2] as const;
 /** 默认每条 prompt 只出 1 张，避免用户以为选了 1:1 却生成 4 张 */
 export const DEFAULT_VARIANTS = 1;
 

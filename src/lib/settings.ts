@@ -16,7 +16,7 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   model: "grok-imagine-image",
   aspectRatio: "1:1",
   resolution: "1k",
-  concurrency: 3,
+  concurrency: 2,
 };
 
 function asString(value: unknown, fallback: string): string {
@@ -95,8 +95,9 @@ export function normalizeBaseUrl(value: string): string {
 
 export function clampConcurrency(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return 3;
-  return Math.min(5, Math.max(1, Math.round(n)));
+  if (!Number.isFinite(n)) return 1;
+  // 同时请求上限仅 1 / 2
+  return Math.min(2, Math.max(1, Math.round(n)));
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;

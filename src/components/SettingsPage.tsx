@@ -287,7 +287,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                   className="control"
                   type="number"
                   min={1}
-                  max={5}
+                  max={2}
                   value={draft.concurrency}
                   onChange={(e) => update("concurrency", Number(e.target.value))}
                 />

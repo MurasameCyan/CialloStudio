@@ -6,8 +6,8 @@ function clampVariants(value) {
 }
 
 function clampConcurrency(value) {
-  if (!Number.isFinite(value)) return 3;
-  return Math.min(8, Math.max(1, Math.round(value)));
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(2, Math.max(1, Math.round(value)));
 }
 
 function splitPrompts(raw) {
@@ -50,10 +50,11 @@ function assert(cond, msg) {
   assert(prompts.length === 1, "single line");
   assert(planJobCount(prompts, 1, 1) === 1, "1×1=1");
   assert(expandJobs(prompts, 1, 1).length === 1, "expand 1×1");
-  assert(planJobCount(prompts, 1, 3) === 3, "1×3=3");
-  assert(expandJobs(prompts, 1, 3).length === 3, "expand 1×3");
-  assert(planJobCount(prompts, 2, 3) === 6, "2×3=6");
-  assert(expandJobs(prompts, 2, 3).length === 6, "expand 2×3");
+  assert(planJobCount(prompts, 1, 2) === 2, "1×2=2");
+  assert(expandJobs(prompts, 1, 2).length === 2, "expand 1×2");
+  assert(planJobCount(prompts, 2, 2) === 4, "2×2=4");
+  assert(expandJobs(prompts, 2, 2).length === 4, "expand 2×2");
+  assert(planJobCount(prompts, 1, 5) === 2, "concurrency clamped to 2");
 }
 
 // 多行再相乘：3 条 × 生图 2 × 并发 2 = 12
@@ -68,15 +69,16 @@ function assert(cond, msg) {
 // NaN 兜底
 {
   assert(clampVariants(Number("oops")) === 1, "NaN variants -> 1");
-  assert(clampConcurrency(Number("oops")) === 3, "NaN concurrency -> 3");
+  assert(clampConcurrency(Number("oops")) === 1, "NaN concurrency -> 1");
+  assert(clampConcurrency(5) === 2, "max concurrency -> 2");
 }
 
 // 替换语义
 {
-  const oldJobs = expandJobs(["old"], 2, 4); // 8
+  const oldJobs = expandJobs(["old"], 2, 2); // 4
   const batch = expandJobs(["new"], 1, 1); // 1
   assert(batch.length === 1, "replace batch size");
-  assert([...batch, ...oldJobs].length === 9, "append would stack");
+  assert([...batch, ...oldJobs].length === 5, "append would stack");
 }
 
 console.log("planJobCount ok: total = variants × concurrency × prompts");

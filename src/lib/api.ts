@@ -1,3 +1,4 @@
+import { log } from "./logger";
 import { normalizeBaseUrl } from "./settings";
 
 export type OpenAIModel = {
@@ -29,13 +30,49 @@ export class ApiError extends Error {
   }
 }
 
-function joinUrl(baseUrl: string, path: string): string {
+/**
+ * 浏览器侧请求基址。
+ * 上游 grok2api 通常不返回 CORS 头；若配置了跨域绝对 URL，会强制改走同源 `/v1` 代理
+ *（Vite dev / Docker nginx 均已提供）。
+ */
+export function resolveBrowserApiBase(baseUrl: string): string {
   const base = normalizeBaseUrl(baseUrl);
+  if (base.startsWith("/")) return base;
+  if (typeof window === "undefined") return base;
+  try {
+    const api = new URL(base.endsWith("/v1") ? base : `${base}/v1`);
+    if (api.origin !== window.location.origin) {
+      return "/v1";
+    }
+    return base;
+  } catch {
+    return base;
+  }
+}
+
+function joinUrl(baseUrl: string, path: string): string {
+  const base = resolveBrowserApiBase(baseUrl);
   const cleanPath = path.startsWith("/") ? path : `/${path}`;
   if (base.startsWith("/")) {
     return `${base}${cleanPath}`;
   }
   return `${base}${cleanPath}`;
+}
+
+function describeFetchError(error: unknown, url: string): string {
+  if (error instanceof DOMException && error.name === "AbortError") {
+    return "请求已取消";
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (/failed to fetch|networkerror|load failed/i.test(message)) {
+    return [
+      `网络/CORS 失败: ${message}`,
+      `URL: ${url}`,
+      "原因通常是浏览器直连上游且上游未开 CORS。",
+      "请把 Base URL 设为 /v1（同源代理），并确保 Vite/Docker 代理可用。",
+    ].join("\n");
+  }
+  return `${message}\nURL: ${url}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -45,10 +82,42 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function readError(payload: unknown): { code?: string; message?: string } {
   if (!isRecord(payload)) return {};
   const error = isRecord(payload.error) ? payload.error : payload;
-  return {
-    code: typeof error.code === "string" ? error.code : undefined,
-    message: typeof error.message === "string" ? error.message : undefined,
-  };
+  const code =
+    typeof error.code === "string"
+      ? error.code
+      : typeof error.error_code === "number"
+        ? String(error.error_code)
+        : typeof error.error_code === "string"
+          ? error.error_code
+          : typeof payload.status === "number"
+            ? String(payload.status)
+            : undefined;
+  const message =
+    (typeof error.message === "string" && error.message) ||
+    (typeof error.detail === "string" && error.detail) ||
+    (typeof error.title === "string" && error.title) ||
+    (typeof payload.detail === "string" && payload.detail) ||
+    (typeof payload.title === "string" && payload.title) ||
+    undefined;
+  return { code, message };
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"]);
@@ -73,7 +142,8 @@ export function rewriteMediaUrl(rawUrl: string, baseUrl: string): string {
   if (!value) return value;
   if (value.startsWith("data:") || value.startsWith("blob:")) return value;
 
-  const base = normalizeBaseUrl(baseUrl);
+  // 媒体同样优先走同源代理，避免 127.0.0.1:8000 / CORS
+  const base = resolveBrowserApiBase(baseUrl);
   const originFallback =
     typeof window !== "undefined" && window.location?.origin
       ? window.location.origin
@@ -127,25 +197,39 @@ export async function materializeImageUrl(input: {
   }
 
   const rewritten = rewriteMediaUrl(input.rawUrl, input.baseUrl);
+  log("info", "拉取媒体", { raw: input.rawUrl, rewritten });
   const headers = new Headers({ Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" });
   if (input.apiKey.trim()) {
     headers.set("Authorization", `Bearer ${input.apiKey.trim()}`);
   }
 
-  const response = await fetch(rewritten, {
-    method: "GET",
-    headers,
-    signal: input.signal,
-  });
+  let response: Response;
+  try {
+    response = await fetch(rewritten, {
+      method: "GET",
+      headers,
+      signal: input.signal,
+    });
+  } catch (error) {
+    const msg = describeFetchError(error, rewritten);
+    log("error", "媒体 fetch 失败", msg);
+    throw new ApiError(0, msg, "media_network_error");
+  }
+
   if (!response.ok) {
-    throw new ApiError(response.status, `图片资源拉取失败 (${response.status})`, "media_fetch_failed");
+    const msg = `图片资源拉取失败 (${response.status})`;
+    log("error", msg, rewritten);
+    throw new ApiError(response.status, msg, "media_fetch_failed");
   }
 
   const blob = await response.blob();
   if (!blob.size) {
+    log("error", "图片资源为空", rewritten);
     throw new ApiError(200, "图片资源为空", "media_empty");
   }
-  return URL.createObjectURL(blob);
+  const objectUrl = URL.createObjectURL(blob);
+  log("ok", "媒体已转为 blob", { size: blob.size, type: blob.type, objectUrl });
+  return objectUrl;
 }
 
 async function apiRequest(
@@ -162,6 +246,17 @@ async function apiRequest(
     throw new ApiError(401, "请先在管理页填写 API Key", "missing_api_key");
   }
 
+  const configuredBase = normalizeBaseUrl(baseUrl);
+  const requestBase = resolveBrowserApiBase(baseUrl);
+  const url = joinUrl(baseUrl, path);
+  if (configuredBase !== requestBase) {
+    log("warn", "已自动改走同源代理，避免 CORS", {
+      configuredBase,
+      requestBase,
+      pageOrigin: typeof window !== "undefined" ? window.location.origin : "(ssr)",
+    });
+  }
+
   const headers = new Headers({
     Accept: "application/json",
     Authorization: `Bearer ${apiKey.trim()}`,
@@ -173,34 +268,73 @@ async function apiRequest(
     body = JSON.stringify(init.body);
   }
 
-  const response = await fetch(joinUrl(baseUrl, path), {
-    method: init.method ?? "GET",
-    headers,
-    body,
-    signal: init.signal,
-  });
+  const method = init.method ?? "GET";
+  log("info", `请求 ${method} ${url}`, init.body ? { body: init.body } : undefined);
 
-  const text = await response.text();
-  let payload: unknown = null;
-  if (text) {
+  const maxAttempts = method === "POST" ? 3 : 1;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response: Response;
     try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = null;
+      response = await fetch(url, {
+        method,
+        headers,
+        body,
+        signal: init.signal,
+      });
+    } catch (error) {
+      const msg = describeFetchError(error, url);
+      log("error", `请求失败 ${method} ${url}`, msg);
+      throw new ApiError(0, msg, "network_error");
     }
+
+    const text = await response.text();
+    let payload: unknown = null;
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = null;
+      }
+    }
+
+    if (!response.ok) {
+      const err = readError(payload);
+      const fallback = text.trim() || response.statusText || `HTTP ${response.status}`;
+      const message = err.message ?? fallback;
+      const retryable = response.status === 502 || response.status === 503 || response.status === 504;
+      log("error", `HTTP ${response.status} ${method} ${url} (attempt ${attempt}/${maxAttempts})`, {
+        code: err.code,
+        message,
+        bodyPreview: text.slice(0, 500),
+      });
+      lastError = new ApiError(
+        response.status,
+        retryable
+          ? `上游暂时不可用 (${response.status}): ${message}`
+          : message,
+        err.code,
+      );
+      if (retryable && attempt < maxAttempts) {
+        const waitMs = attempt * 2000;
+        log("warn", `将在 ${waitMs}ms 后重试…`);
+        await sleep(waitMs, init.signal);
+        continue;
+      }
+      throw lastError;
+    }
+
+    if (payload === null) {
+      log("error", "非 JSON 响应", text.slice(0, 500));
+      throw new ApiError(response.status, "接口返回了非 JSON 响应", "invalid_response");
+    }
+
+    log("ok", `响应 ${response.status} ${method} ${url}`);
+    return payload;
   }
 
-  if (!response.ok) {
-    const err = readError(payload);
-    const fallback = text.trim() || response.statusText || `HTTP ${response.status}`;
-    throw new ApiError(response.status, err.message ?? fallback, err.code);
-  }
-
-  if (payload === null) {
-    throw new ApiError(response.status, "接口返回了非 JSON 响应", "invalid_response");
-  }
-
-  return payload;
+  throw lastError instanceof Error ? lastError : new ApiError(0, "请求失败", "unknown");
 }
 
 export async function listModels(input: {
@@ -208,6 +342,10 @@ export async function listModels(input: {
   apiKey: string;
   signal?: AbortSignal;
 }): Promise<OpenAIModel[]> {
+  log("info", "拉取模型列表…", {
+    baseUrl: input.baseUrl,
+    requestBase: resolveBrowserApiBase(input.baseUrl),
+  });
   const payload = await apiRequest(input.baseUrl, input.apiKey, "/models", {
     method: "GET",
     signal: input.signal,
@@ -217,7 +355,7 @@ export async function listModels(input: {
     throw new ApiError(200, "模型列表格式无效", "invalid_response");
   }
 
-  return payload.data.flatMap((item) => {
+  const models = payload.data.flatMap((item) => {
     if (!isRecord(item) || typeof item.id !== "string" || !item.id.trim()) return [];
     return [
       {
@@ -228,6 +366,8 @@ export async function listModels(input: {
       },
     ];
   });
+  log("ok", `模型 ${models.length} 个`, models.map((m) => m.id));
+  return models;
 }
 
 export async function generateImage(input: {
@@ -240,6 +380,16 @@ export async function generateImage(input: {
   resolution?: string;
   signal?: AbortSignal;
 }): Promise<ImageResult[]> {
+  log("info", "开始生图", {
+    model: input.model,
+    prompt: input.prompt,
+    n: input.n ?? 1,
+    aspectRatio: input.aspectRatio ?? "1:1",
+    resolution: input.resolution ?? "1k",
+    baseUrl: input.baseUrl,
+    requestBase: resolveBrowserApiBase(input.baseUrl),
+  });
+
   const payload = await apiRequest(input.baseUrl, input.apiKey, "/images/generations", {
     method: "POST",
     signal: input.signal,
@@ -275,6 +425,7 @@ export async function generateImage(input: {
 
     if (typeof item.url === "string" && item.url.trim()) {
       const rewritten = rewriteMediaUrl(item.url, input.baseUrl);
+      log("info", "生图返回 URL", { raw: item.url, rewritten });
       // 优先物化为 blob，避免 <img> 直接请求内网/跨域地址
       let displayUrl = rewritten;
       try {
@@ -284,7 +435,8 @@ export async function generateImage(input: {
           apiKey: input.apiKey,
           signal: input.signal,
         });
-      } catch {
+      } catch (error) {
+        log("warn", "blob 化失败，回退 rewritten URL", error);
         displayUrl = rewritten;
       }
       images.push({
@@ -300,6 +452,7 @@ export async function generateImage(input: {
     throw new ApiError(200, "生图响应中没有图片", "invalid_response");
   }
 
+  log("ok", `生图完成 ${images.length} 张`);
   return images;
 }
 

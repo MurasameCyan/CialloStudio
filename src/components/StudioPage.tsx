@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { ApiError, generateImage, rewriteMediaUrl, runPool } from "@/lib/api";
+import { log } from "@/lib/logger";
 import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
 
 type JobStatus = "queued" | "running" | "done" | "failed";
@@ -69,6 +70,12 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
       createdAt: Date.now(),
     }));
     setJobs((prev) => [...batch, ...prev]);
+    log("info", `批量生图开始：${batch.length} 条，并发 ${settings.concurrency}`, {
+      model: settings.model,
+      baseUrl: settings.baseUrl,
+      aspectRatio,
+      resolution,
+    });
 
     try {
       await runPool(
@@ -78,6 +85,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           setJobs((prev) =>
             prev.map((item) => (item.id === job.id ? { ...item, status: "running" } : item)),
           );
+          log("info", `任务开始 ${job.id}`, job.prompt);
           const images = await generateImage({
             baseUrl: settings.baseUrl,
             apiKey: settings.apiKey,
@@ -95,6 +103,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           const openUrl = images[0]?.openUrl || (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
             ? undefined
             : rewriteMediaUrl(imageUrl, settings.baseUrl));
+          log("ok", `任务完成 ${job.id}`, { imageUrl, openUrl });
           return { imageUrl, openUrl };
         },
         (index, result) => {
@@ -115,12 +124,17 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             );
           } else {
             const reason = result.reason;
-            const message =
+            let message =
               reason instanceof ApiError
                 ? reason.message
                 : reason instanceof Error
                   ? reason.message
                   : "生成失败";
+            // Cloudflare HTML/JSON 错误体可能很长，卡片只展示摘要
+            if (message.length > 280) {
+              message = `${message.slice(0, 280)}…（完整内容见底部运行日志）`;
+            }
+            log("error", `任务失败 ${job.id}`, reason instanceof Error ? reason.message : message);
             setJobs((prev) =>
               prev.map((item) =>
                 item.id === job.id
@@ -136,6 +150,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           }
         },
       );
+      log("ok", "批量生图结束");
     } finally {
       setRunning(false);
       abortRef.current = null;

@@ -1,13 +1,24 @@
 import { useMemo, useState } from "react";
+import { LogPanel } from "@/components/LogPanel";
 import { SettingsPage } from "@/components/SettingsPage";
 import { StudioPage } from "@/components/StudioPage";
+import { log } from "@/lib/logger";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
 
 type Tab = "studio" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
-  const [settings, setSettings] = useState<StudioSettings>(() => loadSettings());
+  const [settings, setSettings] = useState<StudioSettings>(() => {
+    const initial = loadSettings();
+    log("info", "Ciallo Studio 已加载", {
+      baseUrl: initial.baseUrl,
+      model: initial.model,
+      hasKey: Boolean(initial.apiKey.trim()),
+      page: typeof window !== "undefined" ? window.location.href : "",
+    });
+    return initial;
+  });
 
   const connectionLabel = useMemo(() => {
     if (!settings.apiKey.trim()) return "未配置 API Key";
@@ -47,6 +58,8 @@ export default function App() {
       ) : (
         <SettingsPage settings={settings} onChange={setSettings} />
       )}
+
+      <LogPanel />
     </div>
   );
 }

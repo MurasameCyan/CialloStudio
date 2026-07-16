@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { ApiError, listModels, type OpenAIModel } from "@/lib/api";
+import { ApiError, listModels, resolveBrowserApiBase, type OpenAIModel } from "@/lib/api";
+import { log } from "@/lib/logger";
 import {
   ASPECT_RATIOS,
   DEFAULT_SETTINGS,
@@ -52,6 +53,12 @@ export function SettingsPage({ settings, onChange }: Props) {
     setOk(null);
     try {
       const normalized = persist(draft);
+      log("info", "管理页：测试连接", {
+        baseUrl: normalized.baseUrl,
+        requestBase: resolveBrowserApiBase(normalized.baseUrl),
+        model: normalized.model,
+        keyPrefix: normalized.apiKey.slice(0, 12),
+      });
       const list = await listModels({
         baseUrl: normalized.baseUrl,
         apiKey: normalized.apiKey,
@@ -66,10 +73,14 @@ export function SettingsPage({ settings, onChange }: Props) {
         persist({ ...normalized, model: preferred });
       }
       setOk(true);
-      setMessage(`连接成功，共 ${list.length} 个模型。默认可用：${preferred}`);
+      setMessage(
+        `连接成功，共 ${list.length} 个模型。请求基址：${resolveBrowserApiBase(normalized.baseUrl)} · 模型：${preferred}`,
+      );
     } catch (error) {
       setOk(false);
-      setMessage(error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败");
+      const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "连接失败";
+      log("error", "管理页：测试连接失败", message);
+      setMessage(message);
     } finally {
       setBusy(false);
     }
@@ -77,8 +88,22 @@ export function SettingsPage({ settings, onChange }: Props) {
 
   function handleSave() {
     const normalized = persist(draft);
+    log("ok", "设置已保存", {
+      baseUrl: normalized.baseUrl,
+      requestBase: resolveBrowserApiBase(normalized.baseUrl),
+      model: normalized.model,
+      concurrency: normalized.concurrency,
+    });
     setOk(true);
-    setMessage(`已保存。Base: ${normalized.baseUrl} · Model: ${normalized.model}`);
+    setMessage(
+      `已保存。配置 Base: ${normalized.baseUrl} · 实际请求: ${resolveBrowserApiBase(normalized.baseUrl)} · Model: ${normalized.model}`,
+    );
+  }
+
+  function useSameOriginProxy() {
+    update("baseUrl", "/v1");
+    setMessage("已切换为同源代理 /v1（推荐）。请再点保存 / 测试连接。");
+    setOk(null);
   }
 
   function handleReset() {
@@ -109,7 +134,9 @@ export function SettingsPage({ settings, onChange }: Props) {
             spellCheck={false}
           />
           <div className="field-hint">
-            Docker 默认把 <span className="mono">/v1</span> 代理到上游。开发模式 Vite 也会代理到 grok2api。
+            推荐填 <span className="mono">/v1</span>（同源代理，可避开 CORS）。
+            若填完整域名，前端也会自动改走 <span className="mono">/v1</span>。
+            页面底部有运行日志，失败时请看红色条目。
           </div>
         </div>
 
@@ -200,6 +227,9 @@ export function SettingsPage({ settings, onChange }: Props) {
           </button>
           <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
             保存设置
+          </button>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={useSameOriginProxy}>
+            使用同源代理 /v1
           </button>
           <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
             恢复默认

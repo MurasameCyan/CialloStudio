@@ -34,5 +34,8 @@ npm-debug.log*
 # Docker local overrides
 docker-compose.override.yml
 
+# Local community API test data
+.tmp-data/
+
 uploads/
 

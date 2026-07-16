@@ -7,6 +7,10 @@ export type CialloRuntime = {
   mediaBase: string;
   /** 可选：媒体上传 Bearer token（非 Bot Token） */
   mediaUploadToken: string;
+  /** 社区 API：mock（浏览器 localStorage）| http（Docker /data 持久化） */
+  communityMode: "mock" | "http";
+  /** 社区 API base，默认 /api/community */
+  communityApiBase: string;
 };
 
 declare global {
@@ -29,12 +33,30 @@ function readRuntime(): CialloRuntime {
   const mediaBase = typeof raw?.mediaBase === "string" ? raw.mediaBase.trim() : "";
   const mediaUploadToken =
     typeof raw?.mediaUploadToken === "string" ? raw.mediaUploadToken.trim() : "";
+  const modeRaw =
+    typeof raw?.communityMode === "string" ? raw.communityMode.trim().toLowerCase() : "";
+  const communityMode: "mock" | "http" = modeRaw === "http" ? "http" : "mock";
+  const communityApiBase =
+    typeof raw?.communityApiBase === "string" && raw.communityApiBase.trim()
+      ? raw.communityApiBase.trim()
+      : "/api/community";
   return {
     masterUsername: username || (hash ? "admin" : ""),
     masterPasswordSha256: hash,
     mediaBase,
     mediaUploadToken,
+    communityMode,
+    communityApiBase,
   };
+}
+
+/** Docker 注入的社区模式（未注入时默认 mock，便于本地 dev） */
+export function getRuntimeCommunityMode(): "mock" | "http" {
+  return readRuntime().communityMode;
+}
+
+export function getRuntimeCommunityApiBase(): string {
+  return readRuntime().communityApiBase || "/api/community";
 }
 
 export function getRuntimeConfig(): CialloRuntime {

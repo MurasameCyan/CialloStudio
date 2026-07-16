@@ -11,16 +11,20 @@ RUN npm ci
 
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY src ./src
+COPY public ./public
 RUN npm run build
 
 
 FROM nginx:${NGINX_VERSION}
 
-RUN apk add --no-cache gettext curl \
-  && mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp
+# 社区 API 用 Node；nginx 反代 /api/community
+RUN apk add --no-cache gettext curl nodejs \
+  && mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp \
+  && mkdir -p /data /opt/ciallo
 
 COPY nginx.conf /etc/nginx/nginx.conf.template
 COPY docker/entrypoint.sh /entrypoint.sh
+COPY server/community-api.mjs /opt/ciallo/community-api.mjs
 RUN chmod +x /entrypoint.sh \
   && sed -i 's/\r$//' /entrypoint.sh
 
@@ -28,7 +32,11 @@ COPY --from=frontend-builder /src/dist /usr/share/nginx/html
 
 ENV CIALLO_MASTER_USERNAME=admin \
     CIALLO_MASTER_PASSWORD= \
+    CIALLO_DATA_DIR=/data \
+    CIALLO_COMMUNITY_PORT=8090 \
     TZ=Asia/Shanghai
+
+VOLUME ["/data"]
 
 EXPOSE 8080
 

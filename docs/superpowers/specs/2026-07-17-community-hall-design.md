@@ -18,7 +18,7 @@
 | 账号 | 注册、登录、退出在**大厅**页；Mock 演示 `demo/demo123`、`admin/admin123` |
 | 大厅 | 列表、搜索、详情抽屉、点赞、评论、删除 |
 | 分享 | 生图结果卡「分享到大厅」 |
-| API 模式 | 默认 `mock`（localStorage）；可切 `http` → `/api/community/*` |
+| API 模式 | 本地 dev 默认 `mock`（localStorage）；Docker 默认 `http` → `/api/community/*` + volume `/data` |
 
 ## 架构（目标）
 
@@ -89,9 +89,16 @@ Base：`/api/community`
 - 站长登录后 `role=admin`：**唯一**可进入管理页（接口 / 用户池 / 媒体）；游客不可见内容
 - 本地未配置时 Mock 回退 `admin` / `admin123`
 
-## 非目标（本阶段不做）
+## Docker 持久化（已落地）
 
-- 真实 Docker API / Postgres
+- 容器内 `server/community-api.mjs` 提供 `/api/community/*`
+- 数据目录 `CIALLO_DATA_DIR`（默认 `/data`），compose volume `ciallo-studio-data`
+- 文件：`community.json`、`share-cooldown.json`
+- 前端由 `runtime-config.js` 注入 `communityMode: "http"`（entrypoint 生成）
+
+## 非目标
+
+- Postgres / 多实例共享库（当前单文件 JSON，适合单节点）
 - 邮箱验证、OAuth
 
 ## 用户池管理（Mock 已落地，入口在管理页）

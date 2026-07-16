@@ -13,7 +13,14 @@ services:
       CIALLO_MASTER_PASSWORD: ${CIALLO_MASTER_PASSWORD:-}
       CIALLO_MEDIA_BASE: ${CIALLO_MEDIA_BASE:-}
       CIALLO_MEDIA_UPLOAD_TOKEN: ${CIALLO_MEDIA_UPLOAD_TOKEN:-}
+      # 社区数据持久化目录（容器内）；volume 挂到宿主机
+      CIALLO_DATA_DIR: /data
+      CIALLO_COMMUNITY_MODE: ${CIALLO_COMMUNITY_MODE:-http}
+      CIALLO_COMMUNITY_API_BASE: ${CIALLO_COMMUNITY_API_BASE:-/api/community}
       TZ: ${TZ:-Asia/Shanghai}
+    volumes:
+      # 用户 / 帖子 / 会话 / 冷却配置 保存在此 volume
+      - ciallo-data:/data
     restart: unless-stopped
     init: true
     stop_grace_period: 15s
@@ -25,3 +32,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 15s
+
+volumes:
+  ciallo-data:
+    name: ciallo-studio-data

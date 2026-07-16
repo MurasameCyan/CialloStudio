@@ -4,8 +4,9 @@ iOS 26 风格的轻量 **AI 生图前端**。对接任意 OpenAI 兼容图片接
 
 - 管理页配置 **Base URL + API Key**（浏览器 localStorage，不写 `.env`）
 - 浏览器只访问同源 **`/v1`**，由 Vite / Nginx 按请求头转发到真实上游（**免 CORS**）
-- 多并发生图、分享大厅（Mock 契约）
-- **站长账号**由 `.env` 配置；**管理页仅站长可进**（接口 / 用户池 / 媒体）
+- 多并发生图、分享大厅
+- **站长账号**由 `.env` 配置；**管理页仅站长可进**（接口 / 用户池 / 媒体 / 运行日志）
+- **用户数据**：Docker 默认写入 volume `ciallo-studio-data`（`/data/community.json`），重启不丢
 - **图片存储**：Cloudflare Pages/Worker → Telegram（见 [docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
 - Docker 仅拉 GHCR 镜像
 
@@ -30,9 +31,12 @@ docker compose up -d
 
 1. **大厅** → 用站长账号登录（`.env` 中的用户名/密码）
 2. **管理** → 接口设置：填 `https://你的网关/v1` + API Key → 保存 / 测试
-3. **管理 → 用户池**：禁用 / 解禁 / 删除社区用户
+3. **管理 → 用户池**：禁用 / 解禁 / 删除社区用户（数据在 Docker volume，换浏览器/重启仍在）
 
-请求路径：浏览器 → `http://本站/v1/models` + 头 `X-Ciallo-Upstream: https://你的网关` → Nginx 反代到上游。
+请求路径：
+
+- 生图：浏览器 → `http://本站/v1/...` + 头 `X-Ciallo-Upstream` → Nginx 反代上游
+- 社区：浏览器 → `http://本站/api/community/*` → 容器内 Node API → 文件 `/data/*.json`（volume）
 
 ## 本地开发
 
@@ -52,10 +56,24 @@ npm run dev
 | `CIALLO_PORT` | 映射端口，默认 8080 |
 | `CIALLO_MASTER_USERNAME` | 站长用户名（社区 admin），默认 `admin` |
 | `CIALLO_MASTER_PASSWORD` | 站长密码（仅容器环境；前端只拿 sha256） |
+| `CIALLO_COMMUNITY_MODE` | `http`（默认，volume 持久化）/ `mock`（仅浏览器） |
 | `CIALLO_MEDIA_BASE` | CF 媒体公网根 URL（Telegram 存图反代） |
 | `CIALLO_MEDIA_UPLOAD_TOKEN` | 与媒体 `UPLOAD_TOKEN` 一致（可选） |
 
-管理页**只**认站长登录（`role=admin`）；游客/普通用户点「管理」会跳转大厅登录。  
+### 用户数据 volume
+
+`docker-compose.yml` 挂载命名卷：
+
+```text
+ciallo-studio-data → 容器 /data
+  community.json      用户 / 会话 / 帖子 / 点赞 / 评论
+  share-cooldown.json 分享冷却配置
+```
+
+查看：`docker volume inspect ciallo-studio-data`  
+备份：导出该 volume 或复制其中的 `community.json`。
+
+管理页**只**认站长登录（`role=admin`）可进用户池与运行日志；普通登录用户可进「设置」配接口。  
 Bot Token **只**放在 Cloudflare Secrets，见媒体部署文档。
 
 镜像固定：`ghcr.io/murasamecyan/ciallostudio:beta`

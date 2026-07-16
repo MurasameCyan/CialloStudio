@@ -1,9 +1,13 @@
 /**
  * 社区 API 客户端。
- * - 默认 mock（localStorage），不依赖 Docker DB
- * - 设置 localStorage ciallo-studio.community.mode = "http"
- *   且配置 base 后走真实 /api/community/*
+ * - 本地 dev 默认 mock（浏览器 localStorage）
+ * - Docker：runtime-config 注入 communityMode=http，数据落在容器 volume /data
+ * - 可手动 localStorage 覆盖：ciallo-studio.community.mode = "http" | "mock"
  */
+import {
+  getRuntimeCommunityApiBase,
+  getRuntimeCommunityMode,
+} from "@/lib/runtimeConfig";
 import { mockCommunity } from "./mockStore";
 import type {
   AuthSession,
@@ -27,10 +31,12 @@ const BASE_KEY = "ciallo-studio.community.apiBase"; // e.g. /api/community
 
 export function getCommunityMode(): "mock" | "http" {
   try {
-    return localStorage.getItem(MODE_KEY) === "http" ? "http" : "mock";
+    const override = localStorage.getItem(MODE_KEY);
+    if (override === "http" || override === "mock") return override;
   } catch {
-    return "mock";
+    // ignore
   }
+  return getRuntimeCommunityMode();
 }
 
 export function setCommunityMode(mode: "mock" | "http"): void {
@@ -39,10 +45,12 @@ export function setCommunityMode(mode: "mock" | "http"): void {
 
 export function getCommunityApiBase(): string {
   try {
-    return localStorage.getItem(BASE_KEY) || "/api/community";
+    const override = localStorage.getItem(BASE_KEY);
+    if (override && override.trim()) return override.trim();
   } catch {
-    return "/api/community";
+    // ignore
   }
+  return getRuntimeCommunityApiBase();
 }
 
 export function getToken(): string | null {

@@ -1196,8 +1196,61 @@ a {
   min-width: 0;
 }
 
+/* 模型输入 / 并发数字：同高同圆角，避免看起来一边大一边小 */
+.admin-fields-2 > .field > .control {
+  min-height: 48px;
+  height: 48px;
+  padding: 0 15px;
+  line-height: 48px;
+}
+
+.admin-fields-2 > .field > .control[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.admin-fields-2 > .field > .control[type="number"]::-webkit-outer-spin-button,
+.admin-fields-2 > .field > .control[type="number"]::-webkit-inner-spin-button {
+  margin: 0;
+}
+
 .admin-fields-2 .segmented {
   flex-wrap: wrap;
+  min-height: 48px;
+  align-content: center;
+}
+
+/* 可用模型：等宽网格 chip，名称再长也同尺寸 */
+.admin-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
+}
+
+.admin-model-chip {
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  height: 44px;
+  padding: 0 12px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+}
+
+.admin-model-chip-text {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 /* 仅很窄屏才叠成单列 */
@@ -1252,13 +1305,28 @@ a {
 
 .admin-bottom-grid {
   display: grid;
-  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+  /* 使用提示 | 运行日志 左右等宽 */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
-  align-items: start;
+  align-items: stretch;
+  width: 100%;
+}
+
+.admin-bottom-grid > * {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .admin-side-card {
   padding: 18px;
+  height: 100%;
+}
+
+.admin-bottom-grid .admin-log-panel,
+.admin-bottom-grid .log-panel {
+  height: 100%;
+  margin: 0;
 }
 
 .admin-tips {

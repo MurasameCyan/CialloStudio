@@ -334,15 +334,18 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 <h3 className="admin-section-title">可用模型</h3>
               </div>
             </div>
-            <div className="segmented">
+            <div className="admin-model-grid" role="listbox" aria-label="可用模型">
               {models.map((model) => (
                 <button
                   key={model.id}
                   type="button"
-                  className={`chip ${draft.model === model.id ? "active" : ""}`}
+                  role="option"
+                  aria-selected={draft.model === model.id}
+                  title={model.id}
+                  className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
                   onClick={() => update("model", model.id)}
                 >
-                  {model.id}
+                  <span className="admin-model-chip-text">{model.id}</span>
                 </button>
               ))}
             </div>
@@ -375,11 +378,11 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           <h3 className="admin-section-title">使用提示</h3>
           <ul className="admin-tips">
             <li>
-              Base 优先填 <span className="mono">/v1</span>
+              Base 填完整上游，如 <span className="mono">https://网关/v1</span>
             </li>
             <li>Key 只存浏览器本地</li>
-            <li>并发槽控制 fan-out 同时请求数</li>
-            <li>生图失败细节看右侧日志</li>
+            <li>并发槽控制同时请求数</li>
+            <li>失败细节看运行日志</li>
           </ul>
         </section>
         <LogPanel />

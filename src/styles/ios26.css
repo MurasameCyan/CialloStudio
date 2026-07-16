@@ -948,6 +948,16 @@ a {
   backdrop-filter: blur(10px);
 }
 
+.stat-pill-muted {
+  color: var(--text-tertiary);
+  font-weight: 560;
+}
+
+.hint-warn {
+  color: var(--warning);
+  font-weight: 720;
+}
+
 @media (prefers-color-scheme: dark) {
   .stat-pill {
     background: rgba(255, 255, 255, 0.04);

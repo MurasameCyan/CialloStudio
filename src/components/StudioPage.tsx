@@ -57,6 +57,11 @@ export function StudioPage({
     [jobs],
   );
   const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
+  /** 真实会启动的 worker 数 = min(设定并发, 总任务)；总张数=1 时永远是 1 */
+  const effectiveConcurrency = useMemo(() => {
+    if (plannedJobs <= 0) return 0;
+    return Math.max(1, Math.min(draft.concurrency, plannedJobs));
+  }, [draft.concurrency, plannedJobs]);
 
   // 清理已不存在或不可下载的勾选
   useEffect(() => {
@@ -166,18 +171,34 @@ export function StudioPage({
             <span className="stat-pill" title="总张数 = Prompt 条数 × 每条张数">
               总张数 <strong>{plannedJobs}</strong>
             </span>
-            <span className="stat-pill">
-              并发 <strong>{draft.concurrency}</strong>
+            <span
+              className="stat-pill"
+              title="有效并发 = min(设定并发, 总张数)。只有 1 张任务时无法并行。"
+            >
+              有效并发 <strong>{effectiveConcurrency}</strong>
+              {effectiveConcurrency < draft.concurrency ? (
+                <span className="stat-pill-muted"> / 设 {draft.concurrency}</span>
+              ) : null}
             </span>
             {running ? (
               <span className="stat-pill">
-                在飞 <strong>{inFlight}</strong>
+                在飞 <strong>{inFlight}</strong>/{effectiveConcurrency}
               </span>
             ) : null}
           </div>
           <div className="field-hint formula-hint">
             公式：{prompts.length || 0} 条 prompt × {draft.variants} 张/条 = <strong>{plannedJobs}</strong>{" "}
             张。宽高比「1:1」只控制构图，不会改张数。
+            {plannedJobs > 0 && draft.concurrency > plannedJobs ? (
+              <>
+                {" "}
+                <strong className="hint-warn">
+                  当前只有 {plannedJobs} 张，设定并发 {draft.concurrency} 用不上——有效并发是{" "}
+                  {effectiveConcurrency}。
+                </strong>
+                想看并行：把「每条」调到 ≥{draft.concurrency}，或多写几行 prompt。
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -219,8 +240,8 @@ export function StudioPage({
                 ))}
               </div>
               <div className="field-hint">
-                同时最多几路请求。生成 4 张 + 并发 2 = 先跑 2 张，完成 1 张再补 1 张。生成中右上角会显示「在飞
-                2/2」。
+                同时最多几路请求，但<strong>不会超过总张数</strong>。例：总张数 1 + 并发 3 → 实际只发 1
+                路；总张数 6 + 并发 3 → 同时 3 路。生成中看「在飞 x/{effectiveConcurrency}」。
               </div>
             </div>
           </div>
@@ -324,7 +345,7 @@ export function StudioPage({
             <div className="connection-chip">
               <span className={`live-dot ${running ? "" : "off"}`} />
               {running
-                ? `在飞 ${inFlight}/${draft.concurrency} · 排队 ${stats.queued}`
+                ? `在飞 ${inFlight}/${effectiveConcurrency} · 排队 ${stats.queued}`
                 : stats.total
                   ? "空闲"
                   : "等待开始"}

@@ -176,11 +176,14 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       saveJobs(batch);
     }
 
+    // 有效 worker 数不会超过任务数（1 张图时并发 3 也只能跑 1 路）
+    const effectiveWorkers = Math.max(1, Math.min(concurrency, batch.length));
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 张/条 · worker=${concurrency} · ${appendResults ? "追加" : "替换"}模式`,
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 张/条 · 有效并发 ${effectiveWorkers}/${concurrency} · ${appendResults ? "追加" : "替换"}模式`,
       {
         concurrency,
+        effectiveWorkers,
         variants,
         promptCount: currentPrompts.length,
         batchLength: batch.length,
@@ -190,6 +193,12 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         model: currentSettings.model,
       },
     );
+    if (batch.length > 0 && concurrency > batch.length) {
+      log(
+        "warn",
+        `设定并发 ${concurrency} > 总张数 ${batch.length}，有效并发被限制为 ${effectiveWorkers}。想并行请增加「每条张数」或多行 prompt。`,
+      );
+    }
 
     if (batch.length !== currentPrompts.length * variants) {
       log("warn", "batch 长度与预期不符", {

@@ -504,7 +504,7 @@ export function StudioPage({
                 <div className="kpi-value">{stats.done}</div>
               </div>
               <div className="kpi">
-                <div className="kpi-label">在飞 / 排队</div>
+                <div className="kpi-label">生成中</div>
                 <div className="kpi-value">
                   {running ? inFlight : stats.running}/{effectiveConcurrency || draft.concurrency}
                   <span className="kpi-value-sep">·</span>

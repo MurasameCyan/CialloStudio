@@ -3,7 +3,6 @@ import { ApiError } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
 import {
   computeShareRemainSec,
-  roleLabel,
   type ShareStatus,
 } from "@/lib/community/types";
 import { downloadJobs } from "@/lib/download";
@@ -256,10 +255,7 @@ export function StudioPage({
       }
       setShareNotice({
         ok: true,
-        text:
-          me.role === "admin" || nextCooldown === 0
-            ? "已分享到大厅（站长无冷却）"
-            : `已分享到大厅 · 下次分享冷却 ${nextCooldown ?? 60} 秒`,
+        text: "已分享到大厅",
       });
       // 稍后再跳转大厅，让工作台先显示冷却倒计时
       if (onSharedToHall) {
@@ -301,10 +297,10 @@ export function StudioPage({
             style={{ marginBottom: 14 }}
           >
             {shareStatus.cooldownSec <= 0
-              ? `分享冷却：${roleLabel(shareStatus.role)}不限`
+              ? "分享冷却：不限"
               : shareCooldownLocked
-                ? `分享冷却中：还剩 ${shareRemainSec} 秒（${roleLabel(shareStatus.role)}间隔 ${shareStatus.cooldownSec} 秒）`
-                : `分享冷却：可分享 · ${roleLabel(shareStatus.role)}间隔 ${shareStatus.cooldownSec} 秒`}
+                ? `分享冷却中：还剩 ${shareRemainSec} 秒`
+                : "分享冷却：可分享"}
           </div>
         ) : null}
 

@@ -390,9 +390,7 @@ export const mockCommunity = {
     const cooldownSec = shareCooldownForRole(role, cooldownCfg);
     const remain = computeShareRemainSec(cooldownSec, user.lastShareAt);
     if (remain > 0) {
-      throw new Error(
-        `分享冷却中，请 ${remain} 秒后再试（${role === "vip" ? "VIP" : "普通用户"}间隔 ${cooldownSec} 秒）`,
-      );
+      throw new Error(`分享冷却中，请 ${remain} 秒后再试`);
     }
 
     const post: GalleryPost = {

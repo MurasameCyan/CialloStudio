@@ -1624,6 +1624,34 @@ a {
   box-sizing: border-box;
 }
 
+/* 生图数量 / 并发 / 宽高比 / 分辨率 合并为一张卡片 */
+.option-block-params {
+  padding: 14px;
+}
+
+.studio-params-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.studio-params-grid > .field {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.studio-params-grid .segmented {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 560px) {
+  .studio-params-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .append-toggle {
   display: inline-flex;
   align-items: center;

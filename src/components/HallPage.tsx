@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { HallAuthPanel } from "@/components/HallAuthPanel";
 import { communityApi } from "@/lib/community/client";
+import { fallbackPostImageUrl, resolvePostImageUrl } from "@/lib/community/postImage";
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
+
+const PAGE_SIZE = 24;
 
 type Props = {
   user: CommunityUser | null;
@@ -12,9 +15,51 @@ type Props = {
   onLogout: () => Promise<void>;
 };
 
+function HallPostImage({
+  post,
+  alt,
+}: {
+  post: Pick<GalleryPost, "imageUrl" | "mediaId" | "prompt">;
+  alt: string;
+}) {
+  const initial = resolvePostImageUrl(post);
+  const [src, setSrc] = useState(initial);
+  const [failed, setFailed] = useState(!initial);
+  const [triedFallback, setTriedFallback] = useState(false);
+
+  if (failed || !src) {
+    return (
+      <div className="hall-media-placeholder" role="img" aria-label="图不可用">
+        图不可用
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => {
+        if (!triedFallback) {
+          const next = fallbackPostImageUrl(post, src);
+          setTriedFallback(true);
+          if (next) {
+            setSrc(next);
+            return;
+          }
+        }
+        setFailed(true);
+      }}
+    />
+  );
+}
+
 export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props) {
   const [posts, setPosts] = useState<GalleryPost[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | undefined>(undefined);
   const [listLoading, setListLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [q, setQ] = useState("");
   const [error, setError] = useState("");
   const [active, setActive] = useState<GalleryPost | null>(null);
@@ -32,14 +77,41 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     setListLoading(true);
     setError("");
     try {
-      const res = await communityApi.listPosts({ limit: 40, q: q.trim() || undefined });
+      const res = await communityApi.listPosts({
+        limit: PAGE_SIZE,
+        q: q.trim() || undefined,
+      });
       setPosts(res.items);
+      setNextCursor(res.nextCursor);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
     } finally {
       setListLoading(false);
     }
   }, [q]);
+
+  const loadMore = useCallback(async () => {
+    if (!nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setError("");
+    try {
+      const res = await communityApi.listPosts({
+        limit: PAGE_SIZE,
+        cursor: nextCursor,
+        q: q.trim() || undefined,
+      });
+      setPosts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const appended = res.items.filter((p) => !seen.has(p.id));
+        return [...prev, ...appended];
+      });
+      setNextCursor(res.nextCursor);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载更多失败");
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [nextCursor, loadingMore, q]);
 
   useEffect(() => {
     void load();
@@ -162,41 +234,55 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             <p className="empty-text">在生图结果里点「分享到大厅」，或登录后从详情发布。</p>
           </div>
         ) : (
-          <div className="hall-grid">
-            {posts.map((post) => (
-              <article key={post.id} className="hall-card">
-                <button type="button" className="hall-media" onClick={() => void openPost(post)}>
-                  <img src={post.imageUrl} alt={post.prompt} loading="lazy" />
-                </button>
-                <div className="hall-card-body">
-                  <div className="hall-meta">
-                    <strong>{post.authorName}</strong>
-                    <span>{new Date(post.createdAt).toLocaleString()}</span>
-                  </div>
-                  <p className="hall-prompt" title={post.prompt}>
-                    {post.caption || post.prompt}
-                  </p>
-                  <div className="hall-actions">
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleLike(post)}>
-                      {post.likedByMe ? "已赞" : "赞"} {post.likeCount}
-                    </button>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openPost(post)}>
-                      评 {post.commentCount}
-                    </button>
-                    {user && (user.id === post.authorId || user.role === "admin") ? (
-                      <button
-                        type="button"
-                        className="btn btn-danger btn-sm"
-                        onClick={() => void handleDelete(post)}
-                      >
-                        删
+          <>
+            <div className="hall-grid">
+              {posts.map((post) => (
+                <article key={post.id} className="hall-card">
+                  <button type="button" className="hall-media" onClick={() => void openPost(post)}>
+                    <HallPostImage key={post.id} post={post} alt={post.prompt} />
+                  </button>
+                  <div className="hall-card-body">
+                    <div className="hall-meta">
+                      <strong>{post.authorName}</strong>
+                      <span>{new Date(post.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="hall-prompt" title={post.prompt}>
+                      {post.caption || post.prompt}
+                    </p>
+                    <div className="hall-actions">
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleLike(post)}>
+                        {post.likedByMe ? "已赞" : "赞"} {post.likeCount}
                       </button>
-                    ) : null}
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openPost(post)}>
+                        评 {post.commentCount}
+                      </button>
+                      {user && (user.id === post.authorId || user.role === "admin") ? (
+                        <button
+                          type="button"
+                          className="btn btn-danger btn-sm"
+                          onClick={() => void handleDelete(post)}
+                        >
+                          删
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+            {nextCursor ? (
+              <div className="btn-row" style={{ marginTop: 16, justifyContent: "center" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  disabled={loadingMore}
+                  onClick={() => void loadMore()}
+                >
+                  {loadingMore ? "加载中…" : "加载更多"}
+                </button>
+              </div>
+            ) : null}
+          </>
         )}
       </section>
 
@@ -217,7 +303,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
               </button>
             </div>
             <div className="hall-drawer-media">
-              <img src={active.imageUrl} alt={active.prompt} />
+              <HallPostImage key={active.id} post={active} alt={active.prompt} />
             </div>
             <p className="hall-prompt-full">{active.prompt}</p>
             {active.caption ? <p className="panel-desc">{active.caption}</p> : null}

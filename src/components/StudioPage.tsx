@@ -7,10 +7,15 @@ type JobStatus = "queued" | "running" | "done" | "failed";
 
 type Job = {
   id: string;
+  /** 同一条 prompt 拆出的并发组 */
+  batchId: string;
+  /** 在组内序号，从 1 开始 */
+  variant: number;
+  /** 该 prompt 共拆出几张 */
+  variants: number;
   prompt: string;
   status: JobStatus;
   imageUrl?: string;
-  /** 同源可打开的媒体链接（非 blob） */
   openUrl?: string;
   error?: string;
   createdAt: number;
@@ -22,6 +27,8 @@ type Props = {
   onOpenSettings: () => void;
 };
 
+const VARIANT_OPTIONS = [1, 2, 3, 4, 6, 8] as const;
+
 function splitPrompts(raw: string): string[] {
   return raw
     .split(/\r?\n+/)
@@ -29,25 +36,58 @@ function splitPrompts(raw: string): string[] {
     .filter(Boolean);
 }
 
-function uid(): string {
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+function uid(prefix = ""): string {
+  return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function clampVariants(value: number): number {
+  if (!Number.isFinite(value)) return 4;
+  return Math.min(8, Math.max(1, Math.round(value)));
+}
+
+/**
+ * 把「提示词列表 × 每条张数」展开成并行子任务（类似 sub-agent）。
+ * 每个子任务独立请求一次 /images/generations，由全局并发池调度。
+ */
+function expandJobs(prompts: string[], variants: number): Job[] {
+  const count = clampVariants(variants);
+  const now = Date.now();
+  const jobs: Job[] = [];
+  for (const prompt of prompts) {
+    const batchId = uid("batch-");
+    for (let variant = 1; variant <= count; variant += 1) {
+      jobs.push({
+        id: uid("job-"),
+        batchId,
+        variant,
+        variants: count,
+        prompt,
+        status: "queued",
+        createdAt: now,
+      });
+    }
+  }
+  return jobs;
 }
 
 export function StudioPage({ settings, onOpenSettings }: Props) {
   const [promptText, setPromptText] = useState("a cute orange cat sitting on a windowsill, soft daylight, minimal");
   const [aspectRatio, setAspectRatio] = useState(settings.aspectRatio);
   const [resolution, setResolution] = useState(settings.resolution);
+  const [variants, setVariants] = useState(4);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [running, setRunning] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const prompts = useMemo(() => splitPrompts(promptText), [promptText]);
+  const plannedJobs = prompts.length * variants;
   const stats = useMemo(() => {
     const total = jobs.length;
     const done = jobs.filter((j) => j.status === "done").length;
     const failed = jobs.filter((j) => j.status === "failed").length;
     const active = jobs.filter((j) => j.status === "running" || j.status === "queued").length;
-    return { total, done, failed, active };
+    const batches = new Set(jobs.map((j) => j.batchId)).size;
+    return { total, done, failed, active, batches };
   }, [jobs]);
 
   const configured = Boolean(settings.apiKey.trim());
@@ -63,18 +103,15 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
     abortRef.current = controller;
     setRunning(true);
 
-    const batch: Job[] = prompts.map((prompt) => ({
-      id: uid(),
-      prompt,
-      status: "queued",
-      createdAt: Date.now(),
-    }));
+    const batch = expandJobs(prompts, variants);
     setJobs((prev) => [...batch, ...prev]);
-    log("info", `批量生图开始：${batch.length} 条，并发 ${settings.concurrency}`, {
+    log("info", `并发生图开始：${prompts.length} 条 prompt × ${variants} 张 = ${batch.length} 子任务`, {
       model: settings.model,
       baseUrl: settings.baseUrl,
+      concurrency: settings.concurrency,
       aspectRatio,
       resolution,
+      mode: "fan-out-subagents",
     });
 
     try {
@@ -85,7 +122,11 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           setJobs((prev) =>
             prev.map((item) => (item.id === job.id ? { ...item, status: "running" } : item)),
           );
-          log("info", `任务开始 ${job.id}`, job.prompt);
+          log("info", `子任务 ${job.variant}/${job.variants} 开始 ${job.id}`, {
+            batchId: job.batchId,
+            prompt: job.prompt,
+          });
+          // 每个子任务独立 n=1，真正并行；比单请求 n=N 更稳，也更像 sub-agent
           const images = await generateImage({
             baseUrl: settings.baseUrl,
             apiKey: settings.apiKey,
@@ -100,10 +141,12 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           if (!imageUrl) {
             throw new ApiError(200, "未返回图片 URL", "invalid_response");
           }
-          const openUrl = images[0]?.openUrl || (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
-            ? undefined
-            : rewriteMediaUrl(imageUrl, settings.baseUrl));
-          log("ok", `任务完成 ${job.id}`, { imageUrl, openUrl });
+          const openUrl =
+            images[0]?.openUrl ||
+            (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
+              ? undefined
+              : rewriteMediaUrl(imageUrl, settings.baseUrl));
+          log("ok", `子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, { imageUrl, openUrl });
           return { imageUrl, openUrl };
         },
         (index, result) => {
@@ -130,11 +173,14 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
                 : reason instanceof Error
                   ? reason.message
                   : "生成失败";
-            // Cloudflare HTML/JSON 错误体可能很长，卡片只展示摘要
             if (message.length > 280) {
               message = `${message.slice(0, 280)}…（完整内容见底部运行日志）`;
             }
-            log("error", `任务失败 ${job.id}`, reason instanceof Error ? reason.message : message);
+            log(
+              "error",
+              `子任务 ${job.variant}/${job.variants} 失败 ${job.id}`,
+              reason instanceof Error ? reason.message : message,
+            );
             setJobs((prev) =>
               prev.map((item) =>
                 item.id === job.id
@@ -150,7 +196,10 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
           }
         },
       );
-      log("ok", "批量生图结束");
+      log("ok", "并发生图结束", {
+        total: batch.length,
+        done: batch.length, // 结束态在 UI 统计
+      });
     } finally {
       setRunning(false);
       abortRef.current = null;
@@ -159,6 +208,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
 
   function handleStop() {
     abortRef.current?.abort();
+    log("warn", "用户停止：已 abort 进行中的子任务");
   }
 
   function handleClear() {
@@ -171,7 +221,8 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
       <section className="panel">
         <h2 className="panel-title">生图</h2>
         <p className="panel-desc">
-          每行一个 prompt，按并发数同时请求 <span className="mono">/images/generations</span>。当前模型：
+          每行一个 prompt。设置「每条张数」后，会拆成多个并发子任务（类似 sub-agent），由全局并发池调度。
+          当前模型：
           <span className="mono"> {settings.model || "未选择"}</span>
         </p>
 
@@ -190,7 +241,29 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             onChange={(e) => setPromptText(e.target.value)}
             placeholder={"每行一个 prompt\n例如：cyberpunk city at night\na watercolor fox"}
           />
-          <div className="field-hint">已识别 {prompts.length} 条 · 并发 {settings.concurrency}</div>
+          <div className="field-hint">
+            {prompts.length} 条 prompt × {variants} 张 = <strong>{plannedJobs}</strong> 个子任务 · 全局并发槽{" "}
+            {settings.concurrency}
+          </div>
+        </div>
+
+        <div className="field">
+          <label>每条生成张数（并发 fan-out）</label>
+          <div className="chip-row">
+            {VARIANT_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`chip ${variants === n ? "active" : ""}`}
+                onClick={() => setVariants(n)}
+              >
+                {n} 张
+              </button>
+            ))}
+          </div>
+          <div className="field-hint">
+            同一提示词会同时派出 {variants} 个独立请求；失败互不影响，完成一张就显示一张。
+          </div>
         </div>
 
         <div className="field">
@@ -232,7 +305,7 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             disabled={running || prompts.length === 0}
             onClick={handleGenerate}
           >
-            {running ? "生成中…" : `开始生成 (${prompts.length})`}
+            {running ? "生成中…" : `开始生成 (${plannedJobs})`}
           </button>
           <button type="button" className="btn btn-secondary" disabled={!running} onClick={handleStop}>
             停止
@@ -247,16 +320,20 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
 
         <p className="footer-note">
           Base: <span className="mono">{settings.baseUrl}</span>
+          {" · "}
+          全局并发可在「管理」里调（1–8）
         </p>
       </section>
 
       <section className="panel">
         <h2 className="panel-title">结果</h2>
-        <p className="panel-desc">多任务并行展示。失败任务会保留错误信息，可修改 prompt 后重试。</p>
+        <p className="panel-desc">
+          子任务并行展示。同一 prompt 的多张图会标 <span className="mono">#1/#2…</span>。
+        </p>
 
         <div className="kpi-row">
           <div className="kpi">
-            <div className="kpi-label">总计</div>
+            <div className="kpi-label">子任务</div>
             <div className="kpi-value">{stats.total}</div>
           </div>
           <div className="kpi">
@@ -272,27 +349,36 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
         </div>
 
         {jobs.length === 0 ? (
-          <div className="empty">还没有任务。输入 prompt 后点「开始生成」。</div>
+          <div className="empty">还没有任务。输入 prompt，选择「每条张数」，点「开始生成」。</div>
         ) : (
           <div className="gallery">
             {jobs.map((job) => (
               <article key={job.id} className="card">
-                <span className={`badge ${job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"}`}>
-                  {job.status}
+                <span
+                  className={`badge ${
+                    job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
+                  }`}
+                >
+                  {job.status} · #{job.variant}/{job.variants}
                 </span>
                 {job.status === "done" && job.imageUrl ? (
                   <a href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
-                    <img src={job.imageUrl} alt={job.prompt} loading="lazy" />
+                    <img src={job.imageUrl} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
                   </a>
                 ) : job.status === "failed" ? (
-                  <div className="skeleton" style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}>
+                  <div
+                    className="skeleton"
+                    style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+                  >
                     <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
                   </div>
                 ) : (
                   <div className="skeleton" />
                 )}
                 <div className="card-body">
-                  <div className="card-meta">{job.prompt}</div>
+                  <div className="card-meta">
+                    <strong>#{job.variant}</strong> {job.prompt}
+                  </div>
                   {job.imageUrl ? (
                     <a className="mono" href={job.openUrl || job.imageUrl} target="_blank" rel="noreferrer">
                       打开原图

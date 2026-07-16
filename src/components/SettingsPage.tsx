@@ -184,7 +184,10 @@ export function SettingsPage({ settings, onChange }: Props) {
               value={draft.concurrency}
               onChange={(e) => update("concurrency", Number(e.target.value))}
             />
-            <div className="field-hint">1–8。同时跑多个 prompt 时生效。</div>
+            <div className="field-hint">
+              1–8。全局并发槽：同一时间最多多少个「子任务」在请求上游。
+              生图页「每条张数」会 fan-out 出多个子任务。
+            </div>
           </div>
         </div>
 

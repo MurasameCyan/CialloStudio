@@ -192,11 +192,11 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
       </section>
 
       <section className="panel admin-form-panel">
-        <div className="admin-section">
+        <div className="admin-section admin-section-merged">
           <div className="admin-section-head">
             <div>
-              <div className="section-card-title">Connection</div>
-              <h3 className="admin-section-title">接口连接</h3>
+              <div className="section-card-title">Settings</div>
+              <h3 className="admin-section-title">接口与生成</h3>
             </div>
             <button type="button" className="btn btn-secondary btn-sm" onClick={useExampleAbsolute}>
               填 https://
@@ -204,6 +204,7 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
           </div>
 
           <div className="admin-stack">
+            <div className="admin-block-label">接口连接</div>
             <div className="admin-fields-2">
               <div className="field">
                 <div className="label-row">
@@ -238,21 +239,15 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 />
               </div>
             </div>
-          </div>
-        </div>
 
-        <div className="admin-section">
-          <div className="admin-section-head">
-            <div>
-              <div className="section-card-title">Generation</div>
-              <h3 className="admin-section-title">生成默认值</h3>
-            </div>
-          </div>
+            <div className="admin-block-divider" role="separator" />
 
-          <div className="admin-stack">
+            <div className="admin-block-label">生成默认值</div>
             <div className="admin-fields-2">
               <div className="field">
-                <label htmlFor="model">模型</label>
+                <div className="label-row">
+                  <label htmlFor="model">模型</label>
+                </div>
                 <input
                   id="model"
                   className="control mono"
@@ -269,7 +264,9 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 </datalist>
               </div>
               <div className="field">
-                <label htmlFor="concurrency">全局并发槽</label>
+                <div className="label-row">
+                  <label htmlFor="concurrency">全局并发槽</label>
+                </div>
                 <input
                   id="concurrency"
                   className="control"
@@ -284,7 +281,9 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
 
             <div className="admin-fields-2">
               <div className="field">
-                <label>默认宽高比</label>
+                <div className="label-row">
+                  <label>默认宽高比</label>
+                </div>
                 <div className="segmented">
                   {ASPECT_RATIOS.map((ratio) => (
                     <button
@@ -299,7 +298,9 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 </div>
               </div>
               <div className="field">
-                <label>默认分辨率</label>
+                <div className="label-row">
+                  <label>默认分辨率</label>
+                </div>
                 <div className="segmented">
                   {RESOLUTIONS.map((item) => {
                     const allowed = modelCap.allowedResolutions.includes(item);
@@ -320,55 +321,46 @@ export function SettingsPage({ settings, onChange, adminGateEnabled, onLockAdmin
                 </div>
               </div>
             </div>
-            <div className="field-hint">
-              并发 1–8。{modelCap.note}
-            </div>
-          </div>
-        </div>
 
-        {models.length > 0 ? (
-          <div className="admin-section">
-            <div className="admin-section-head">
-              <div>
-                <div className="section-card-title">Models</div>
-                <h3 className="admin-section-title">可用模型</h3>
-              </div>
-            </div>
-            <div className="admin-model-grid" role="listbox" aria-label="可用模型">
-              {models.map((model) => (
-                <button
-                  key={model.id}
-                  type="button"
-                  role="option"
-                  aria-selected={draft.model === model.id}
-                  title={model.id}
-                  className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                  onClick={() => update("model", model.id)}
-                >
-                  <span className="admin-model-chip-text">{model.id}</span>
+            {models.length > 0 ? (
+              <>
+                <div className="admin-block-divider" role="separator" />
+                <div className="admin-block-label">可用模型</div>
+                <div className="admin-model-grid" role="listbox" aria-label="可用模型">
+                  {models.map((model) => (
+                    <button
+                      key={model.id}
+                      type="button"
+                      role="option"
+                      aria-selected={draft.model === model.id}
+                      title={model.id}
+                      className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
+                      onClick={() => update("model", model.id)}
+                    >
+                      <span className="admin-model-chip-text">{model.id}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : null}
+
+            <div className="admin-actions admin-actions-inline">
+              <div className="btn-row">
+                <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
+                  {busy ? "测试中…" : "测试连接"}
                 </button>
-              ))}
+                <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
+                  保存设置
+                </button>
+                <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
+                  恢复默认
+                </button>
+              </div>
+              {message ? (
+                <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
+              ) : null}
             </div>
           </div>
-        ) : null}
-
-        <div className="admin-actions">
-          <div className="btn-row">
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
-              {busy ? "测试中…" : "测试连接"}
-            </button>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
-              保存设置
-            </button>
-            <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
-              恢复默认
-            </button>
-          </div>
-          {message ? (
-            <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
-          ) : (
-            <div className="admin-actions-hint">先测试连接，确认模型列表后再回生图页使用。</div>
-          )}
         </div>
       </section>
 

@@ -1144,9 +1144,10 @@ a {
 
 .admin-form-panel {
   display: grid;
-  gap: 14px;
+  gap: 0;
 }
 
+/* 单卡片内合并：接口 + 生成 + 模型 + 操作 */
 .admin-section {
   position: relative;
   z-index: 1;
@@ -1154,6 +1155,31 @@ a {
   padding: 16px;
   background: rgba(255, 255, 255, 0.4);
   border: 1px solid var(--separator);
+}
+
+.admin-section-merged {
+  padding: 18px;
+}
+
+.admin-block-label {
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  margin: 2px 0 0;
+}
+
+.admin-block-divider {
+  height: 1px;
+  width: 100%;
+  margin: 4px 0;
+  background: var(--separator);
+  border: 0;
+}
+
+.admin-actions-inline {
+  margin-top: 4px;
+  padding: 12px;
 }
 
 @media (prefers-color-scheme: dark) {

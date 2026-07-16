@@ -9,6 +9,7 @@ type Tab = "studio" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
+  const [logOpen, setLogOpen] = useState(true);
   const [settings, setSettings] = useState<StudioSettings>(() => {
     const initial = loadSettings();
     log("info", "Ciallo Studio 已加载", {
@@ -26,7 +27,7 @@ export default function App() {
   }, [settings]);
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${logOpen ? "with-log-open" : "with-log-collapsed"}`}>
       <header className="glass-bar">
         <div className="brand">
           <div className="brand-mark" aria-hidden />
@@ -50,16 +51,26 @@ export default function App() {
           >
             管理
           </button>
+          <button
+            type="button"
+            className={`nav-pill ${logOpen ? "active" : ""}`}
+            onClick={() => setLogOpen((v) => !v)}
+            title="显示/隐藏运行日志"
+          >
+            日志
+          </button>
         </nav>
       </header>
 
-      {tab === "studio" ? (
-        <StudioPage settings={settings} onOpenSettings={() => setTab("settings")} />
-      ) : (
-        <SettingsPage settings={settings} onChange={setSettings} />
-      )}
+      <main className="app-main">
+        {tab === "studio" ? (
+          <StudioPage settings={settings} onOpenSettings={() => setTab("settings")} />
+        ) : (
+          <SettingsPage settings={settings} onChange={setSettings} />
+        )}
+      </main>
 
-      <LogPanel />
+      <LogPanel open={logOpen} onOpenChange={setLogOpen} />
     </div>
   );
 }

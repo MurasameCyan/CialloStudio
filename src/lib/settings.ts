@@ -86,7 +86,7 @@ export function normalizeBaseUrl(value: string): string {
 export function clampConcurrency(value: unknown): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return 3;
-  return Math.min(8, Math.max(1, Math.round(n)));
+  return Math.min(5, Math.max(1, Math.round(n)));
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;

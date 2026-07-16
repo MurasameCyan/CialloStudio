@@ -35,8 +35,8 @@ const DRAFT_KEY = "ciallo-studio.draft.v2";
 const MAX_JOBS = 120;
 const LEGACY_KEYS = ["ciallo-studio.jobs.v1", "ciallo-studio.draft.v1"] as const;
 
-export const VARIANT_OPTIONS = [1, 2, 3, 4, 6, 8] as const;
-export const CONCURRENCY_OPTIONS = [1, 2, 3, 4, 6, 8] as const;
+export const VARIANT_OPTIONS = [1, 2, 3, 4, 5] as const;
+export const CONCURRENCY_OPTIONS = [1, 2, 3, 4, 5] as const;
 /** 默认每条 prompt 只出 1 张，避免用户以为选了 1:1 却生成 4 张 */
 export const DEFAULT_VARIANTS = 1;
 
@@ -46,7 +46,7 @@ export function uid(prefix = ""): string {
 
 export function clampVariants(value: number): number {
   if (!Number.isFinite(value)) return DEFAULT_VARIANTS;
-  return Math.min(8, Math.max(1, Math.round(value)));
+  return Math.min(5, Math.max(1, Math.round(value)));
 }
 
 /**

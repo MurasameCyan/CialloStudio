@@ -1644,6 +1644,20 @@ a {
 
 .studio-params-grid .segmented {
   flex-wrap: wrap;
+  align-items: stretch;
+  min-height: 40px;
+}
+
+/* 同一卡片内所有 chip 同高，分辨率与宽高比对齐 */
+.studio-params-grid .chip {
+  min-height: 40px;
+  height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  line-height: 1;
 }
 
 @media (max-width: 560px) {

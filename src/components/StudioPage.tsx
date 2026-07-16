@@ -328,10 +328,6 @@ export function StudioPage({ settings, onOpenSettings }: Props) {
             模型 {settings.model || "未选择"} →
           </button>
         </div>
-
-        <p className="footer-note">
-          Base <span className="mono">{settings.baseUrl}</span>
-        </p>
       </section>
 
       <section className="panel">

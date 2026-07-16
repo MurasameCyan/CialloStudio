@@ -512,10 +512,6 @@ export function StudioPage({
                 </div>
               </div>
             </div>
-            <div className="connection-chip" title={running ? "生成中" : stats.total ? "空闲" : "等待开始"}>
-              <span className={`live-dot ${running ? "" : "off"}`} />
-              {running ? "生成中" : stats.total ? "空闲" : "等待开始"}
-            </div>
             <button
               type="button"
               className="btn btn-danger btn-sm"

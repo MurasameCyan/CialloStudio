@@ -1671,8 +1671,8 @@ a {
 
 .results-toolbar-actions .kpi-row-inline {
   order: 0;
-  /* 与右侧「空闲」芯片拉开一点间距 */
-  margin-right: 10px;
+  /* 与右侧「空闲」芯片总间距约 30px（含 actions gap 8px） */
+  margin-right: 22px;
 }
 
 .results-toolbar-actions .connection-chip {

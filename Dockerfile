@@ -12,6 +12,8 @@ RUN npm ci
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY src ./src
 COPY public ./public
+# vite.config.ts 开发代理依赖 SSRF guard（tsc -b 会解析该 import）
+COPY server/upstream-guard.mjs server/upstream-guard.d.mts ./server/
 RUN npm run build
 
 

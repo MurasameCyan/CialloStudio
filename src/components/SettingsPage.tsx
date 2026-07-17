@@ -607,17 +607,44 @@ export function SettingsPage({
                 {models.length > 0 ? (
                   <>
                     <div className="admin-block-divider" role="separator" />
-                    <div className="admin-block-label">可用模型</div>
-                    <div className="admin-model-grid" role="listbox" aria-label="可用模型">
+                    <div className="admin-block-label">可用模型 · 生图</div>
+                    <p className="footer-note" style={{ margin: "0 0 8px" }}>
+                      测试连接后点选填入「生图模型」
+                    </p>
+                    <div className="admin-model-grid" role="listbox" aria-label="生图模型">
                       {models.map((model) => (
                         <button
-                          key={model.id}
+                          key={`img-${model.id}`}
                           type="button"
                           role="option"
                           aria-selected={draft.model === model.id}
                           title={model.id}
                           className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
                           onClick={() => update("model", model.id)}
+                        >
+                          <span className="admin-model-chip-text">{model.id}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="admin-block-label" style={{ marginTop: 14 }}>
+                      可用模型 · 提示词优化
+                    </div>
+                    <p className="footer-note" style={{ margin: "0 0 8px" }}>
+                      点选填入「提示词优化模型」（需上游支持 chat/completions）
+                    </p>
+                    <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
+                      {models.map((model) => (
+                        <button
+                          key={`opt-${model.id}`}
+                          type="button"
+                          role="option"
+                          aria-selected={draft.promptOptimizeModel === model.id}
+                          title={model.id}
+                          className={`chip admin-model-chip ${
+                            draft.promptOptimizeModel === model.id ? "active" : ""
+                          }`}
+                          onClick={() => update("promptOptimizeModel", model.id)}
                         >
                           <span className="admin-model-chip-text">{model.id}</span>
                         </button>

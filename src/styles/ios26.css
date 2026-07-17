@@ -1918,25 +1918,57 @@ a {
   order: 2;
 }
 
-/* 开始生成操作卡片（在选项区顶部） */
-.option-block-actions {
+/* 生图：操作条 + 参数区合并为一张卡片 */
+.option-block-studio {
   display: grid;
-  gap: 12px;
-  padding-top: 14px;
-  padding-bottom: 14px;
-}
-
-.option-block-actions .action-bar-compact {
-  margin-top: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-}
-
-/* 生图数量 / 并发 / 分辨率 / 宽高比 合并为一张卡片 */
-.option-block-params {
+  gap: 14px;
   padding: 14px;
+}
+
+.studio-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 40px;
+}
+
+.studio-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.studio-toolbar .btn {
+  min-height: 40px;
+  height: 40px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.studio-toolbar-model {
+  margin-left: auto;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-params-divider {
+  height: 1px;
+  margin: 0;
+  border: 0;
+  background: var(--separator);
+  opacity: 0.9;
 }
 
 .studio-params-grid {
@@ -2016,6 +2048,24 @@ a {
 }
 
 @media (max-width: 560px) {
+  .studio-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .studio-toolbar-actions {
+    width: 100%;
+  }
+
+  .studio-toolbar-actions .btn {
+    flex: 1 1 auto;
+  }
+
+  .studio-toolbar-model {
+    margin-left: 0;
+    justify-content: flex-start;
+  }
+
   .studio-params-row > .field {
     flex: 1 1 100%;
     width: 100%;

@@ -377,9 +377,10 @@ export function StudioPage({
         </div>
 
         <div className="studio-options">
-          <div className="option-block option-block-actions">
-            <div className="action-bar action-bar-compact">
-              <div className="btn-row">
+          {/* 操作 + 参数合并为一张玻璃卡片，风格统一 */}
+          <div className="option-block option-block-studio">
+            <div className="studio-toolbar">
+              <div className="btn-row studio-toolbar-actions">
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -392,13 +393,13 @@ export function StudioPage({
                   停止
                 </button>
               </div>
-              <button type="button" className="btn btn-ghost" onClick={openConfigOrLogin}>
+              <button type="button" className="btn btn-ghost studio-toolbar-model" onClick={openConfigOrLogin}>
                 模型 {settings.model || "未选择"} →
               </button>
             </div>
-          </div>
 
-          <div className="option-block option-block-params">
+            <div className="studio-params-divider" role="separator" />
+
             <div className="studio-params-grid">
               <div className="studio-params-row">
                 <div className="field">

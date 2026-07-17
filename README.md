@@ -100,7 +100,7 @@ npm run pack:media-worker:pages
 | 全局并发槽（**仅站长**） | 优化模型列表（测试连接后点选） |
 | 生图模型列表（测试连接后点选） | |
 
-- **模型不可手输**，须先 **测试连接** 再点选 chip
+- **模型不可手输**，须先 **测试连接** 再点选 chip；标题右侧可 **筛选** 模型 ID
 - 优化默认 **复用生图上游**；「单独设定」后可填独立 Base/Key
 - 工作台：**优化提示词** → 覆盖输入框；**回退** → 恢复优化前内容
 
@@ -210,6 +210,9 @@ releases/               仅 pages zip
 docker/entrypoint.sh
 nginx.conf
 ```
+
+## 致谢
+- [LINUX DO](https://linux.do/)
 
 ## License
 

@@ -65,6 +65,8 @@ export function SettingsPage({
   }));
   const [showOptimizeKey, setShowOptimizeKey] = useState(false);
   const [models, setModels] = useState<OpenAIModel[]>([]);
+  const [imageModelFilter, setImageModelFilter] = useState("");
+  const [optimizeModelFilter, setOptimizeModelFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
   const [ok, setOk] = useState<boolean | null>(null);
@@ -94,6 +96,18 @@ export function SettingsPage({
     () => getImageModelCapability(typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model),
     [draft.model],
   );
+
+  const filteredImageModels = useMemo(() => {
+    const q = imageModelFilter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.id.toLowerCase().includes(q));
+  }, [models, imageModelFilter]);
+
+  const filteredOptimizeModels = useMemo(() => {
+    const q = optimizeModelFilter.trim().toLowerCase();
+    if (!q) return models;
+    return models.filter((m) => m.id.toLowerCase().includes(q));
+  }, [models, optimizeModelFilter]);
 
   function update<K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
@@ -462,23 +476,40 @@ export function SettingsPage({
                       </div>
                     ) : null}
 
-                    <div className="admin-block-label admin-block-label-sub">点选生图模型</div>
+                    <div className="admin-model-picker-head">
+                      <div className="admin-block-label admin-block-label-sub">点选生图模型</div>
+                      <input
+                        type="search"
+                        className="control mono admin-model-filter"
+                        value={imageModelFilter}
+                        onChange={(e) => setImageModelFilter(e.target.value)}
+                        placeholder="筛选…"
+                        disabled={models.length === 0}
+                        aria-label="筛选生图模型"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
                     {models.length > 0 ? (
-                      <div className="admin-model-grid" role="listbox" aria-label="生图模型">
-                        {models.map((model) => (
-                          <button
-                            key={`img-${model.id}`}
-                            type="button"
-                            role="option"
-                            aria-selected={draft.model === model.id}
-                            title={model.id}
-                            className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                            onClick={() => update("model", model.id)}
-                          >
-                            <span className="admin-model-chip-text">{model.id}</span>
-                          </button>
-                        ))}
-                      </div>
+                      filteredImageModels.length > 0 ? (
+                        <div className="admin-model-grid" role="listbox" aria-label="生图模型">
+                          {filteredImageModels.map((model) => (
+                            <button
+                              key={`img-${model.id}`}
+                              type="button"
+                              role="option"
+                              aria-selected={draft.model === model.id}
+                              title={model.id}
+                              className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
+                              onClick={() => update("model", model.id)}
+                            >
+                              <span className="admin-model-chip-text">{model.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="footer-note">无匹配「{imageModelFilter.trim()}」</p>
+                      )
                     ) : (
                       <p className="footer-note">点下方「测试连接」加载列表后点选</p>
                     )}
@@ -594,25 +625,42 @@ export function SettingsPage({
                       )}
                     </div>
 
-                    <div className="admin-block-label admin-block-label-sub">点选优化模型</div>
+                    <div className="admin-model-picker-head">
+                      <div className="admin-block-label admin-block-label-sub">点选优化模型</div>
+                      <input
+                        type="search"
+                        className="control mono admin-model-filter"
+                        value={optimizeModelFilter}
+                        onChange={(e) => setOptimizeModelFilter(e.target.value)}
+                        placeholder="筛选…"
+                        disabled={models.length === 0}
+                        aria-label="筛选优化模型"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
                     {models.length > 0 ? (
-                      <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
-                        {models.map((model) => (
-                          <button
-                            key={`opt-${model.id}`}
-                            type="button"
-                            role="option"
-                            aria-selected={draft.promptOptimizeModel === model.id}
-                            title={model.id}
-                            className={`chip admin-model-chip ${
-                              draft.promptOptimizeModel === model.id ? "active" : ""
-                            }`}
-                            onClick={() => update("promptOptimizeModel", model.id)}
-                          >
-                            <span className="admin-model-chip-text">{model.id}</span>
-                          </button>
-                        ))}
-                      </div>
+                      filteredOptimizeModels.length > 0 ? (
+                        <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
+                          {filteredOptimizeModels.map((model) => (
+                            <button
+                              key={`opt-${model.id}`}
+                              type="button"
+                              role="option"
+                              aria-selected={draft.promptOptimizeModel === model.id}
+                              title={model.id}
+                              className={`chip admin-model-chip ${
+                                draft.promptOptimizeModel === model.id ? "active" : ""
+                              }`}
+                              onClick={() => update("promptOptimizeModel", model.id)}
+                            >
+                              <span className="admin-model-chip-text">{model.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="footer-note">无匹配「{optimizeModelFilter.trim()}」</p>
+                      )
                     ) : (
                       <p className="footer-note">
                         点下方「测试连接」加载列表（需支持 chat/completions）

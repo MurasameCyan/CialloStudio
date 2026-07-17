@@ -1695,6 +1695,28 @@ a {
   }
 }
 
+/* 点选模型标题行：左侧文案 + 右侧筛选 */
+.admin-model-picker-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.admin-model-picker-head .admin-block-label-sub {
+  margin: 0;
+}
+
+.admin-model-filter {
+  width: min(160px, 100%);
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  line-height: 32px;
+}
+
 /* 可用模型：等宽网格 chip，高度压低 */
 .admin-model-grid {
   display: grid;

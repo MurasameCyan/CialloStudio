@@ -360,246 +360,248 @@ export function SettingsPage({
               </div>
 
               <div className="admin-stack">
-                <div className="admin-block-label">接口连接</div>
-                <div className="admin-fields-2">
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="baseUrl">API Base URL</label>
-                    </div>
-                    <input
-                      id="baseUrl"
-                      className="control mono"
-                      value={baseUrl}
-                      placeholder="https://your-gateway/v1"
-                      onChange={(e) => update("baseUrl", e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="apiKey">API Key</label>
-                      <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
-                        {showKey ? "隐藏" : "显示"}
-                      </button>
-                    </div>
-                    <input
-                      id="apiKey"
-                      className="control mono"
-                      type={showKey ? "text" : "password"}
-                      value={apiKey}
-                      placeholder="g2a_..."
-                      onChange={(e) => update("apiKey", e.target.value)}
-                      autoComplete="off"
-                      spellCheck={false}
-                    />
-                  </div>
+                <div className="admin-block-label">当前已选模型</div>
+                <div className="admin-selected-models admin-selected-models-bar">
+                  <span className="admin-selected-pill" title="生图模型">
+                    生图 · <strong className="mono-tight">{draft.model || "未选"}</strong>
+                  </span>
+                  <span className="admin-selected-pill" title="提示词优化模型">
+                    优化 ·{" "}
+                    <strong className="mono-tight">
+                      {draft.promptOptimizeModel?.trim() || "未选"}
+                    </strong>
+                  </span>
                 </div>
 
                 <div className="admin-block-divider" role="separator" />
 
-                <div className="admin-block-label">生成默认值</div>
+                {/* 左：生图 · 右：优化 */}
+                <div className="admin-dual-cols">
+                  <div className="admin-dual-col">
+                    <div className="admin-block-label">生图</div>
 
-                {isStationMaster ? (
-                  <div className="field" style={{ marginBottom: 12 }}>
-                    <div className="label-row">
-                      <label htmlFor="concurrency">全局并发槽</label>
-                    </div>
-                    <input
-                      id="concurrency"
-                      className="control"
-                      type="number"
-                      min={1}
-                      max={2}
-                      value={draft.concurrency}
-                      onChange={(e) => update("concurrency", Number(e.target.value))}
-                      style={{ maxWidth: 160 }}
-                    />
-                  </div>
-                ) : null}
-
-                <div className="admin-fields-2">
-                  <div className="field">
-                    <div className="label-row">
-                      <label>独立优化上游</label>
-                    </div>
-                    <div className="segmented">
-                      <button
-                        type="button"
-                        className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                        onClick={() => update("promptOptimizeCustomUpstream", false)}
-                      >
-                        复用生图
-                      </button>
-                      <button
-                        type="button"
-                        className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                        onClick={() => update("promptOptimizeCustomUpstream", true)}
-                      >
-                        单独设定
-                      </button>
-                    </div>
-                    <p className="footer-note" style={{ marginTop: 6 }}>
-                      优化提示词默认复用生图 API；单独设定可填其它 chat 上游
-                    </p>
-                  </div>
-                  <div className="field">
-                    <div className="label-row">
-                      <label>当前已选模型</label>
-                    </div>
-                    <div className="admin-selected-models">
-                      <span className="admin-selected-pill" title="生图模型">
-                        生图 · <strong className="mono-tight">{draft.model || "未选"}</strong>
-                      </span>
-                      <span className="admin-selected-pill" title="提示词优化模型">
-                        优化 ·{" "}
-                        <strong className="mono-tight">
-                          {draft.promptOptimizeModel?.trim() || "未选"}
-                        </strong>
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {draft.promptOptimizeCustomUpstream ? (
-                  <div className="admin-fields-2" style={{ marginTop: 12 }}>
+                    <div className="admin-block-label admin-block-label-sub">接口连接</div>
                     <div className="field">
                       <div className="label-row">
-                        <label htmlFor="prompt-optimize-base">优化 API Base URL</label>
+                        <label htmlFor="baseUrl">API Base URL</label>
                       </div>
                       <input
-                        id="prompt-optimize-base"
+                        id="baseUrl"
                         className="control mono"
-                        value={
-                          typeof draft.promptOptimizeBaseUrl === "string"
-                            ? draft.promptOptimizeBaseUrl
-                            : ""
-                        }
-                        onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
-                        placeholder="https://other-gateway/v1"
-                        spellCheck={false}
-                      />
-                    </div>
-                    <div className="field">
-                      <div className="label-row">
-                        <label htmlFor="prompt-optimize-key">优化 API Key</label>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => setShowOptimizeKey((v) => !v)}
-                        >
-                          {showOptimizeKey ? "隐藏" : "显示"}
-                        </button>
-                      </div>
-                      <input
-                        id="prompt-optimize-key"
-                        className="control mono"
-                        type={showOptimizeKey ? "text" : "password"}
-                        value={
-                          typeof draft.promptOptimizeApiKey === "string"
-                            ? draft.promptOptimizeApiKey
-                            : ""
-                        }
-                        onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
-                        placeholder="独立上游密钥"
+                        value={baseUrl}
+                        placeholder="https://your-gateway/v1"
+                        onChange={(e) => update("baseUrl", e.target.value)}
                         autoComplete="off"
                         spellCheck={false}
                       />
                     </div>
-                  </div>
-                ) : null}
-
-                <div className="admin-fields-2" style={{ marginTop: 12 }}>
-                  <div className="field">
-                    <div className="label-row">
-                      <label>默认宽高比</label>
-                    </div>
-                    <div className="segmented">
-                      {ASPECT_RATIOS.map((ratio) => (
-                        <button
-                          key={ratio}
-                          type="button"
-                          className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                          onClick={() => update("aspectRatio", ratio)}
-                        >
-                          {ratio}
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="apiKey">API Key</label>
+                        <button type="button" className="text-link" onClick={() => setShowKey((v) => !v)}>
+                          {showKey ? "隐藏" : "显示"}
                         </button>
-                      ))}
+                      </div>
+                      <input
+                        id="apiKey"
+                        className="control mono"
+                        type={showKey ? "text" : "password"}
+                        value={apiKey}
+                        placeholder="g2a_..."
+                        onChange={(e) => update("apiKey", e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
                     </div>
-                  </div>
-                  <div className="field">
-                    <div className="label-row">
-                      <label>默认分辨率</label>
-                    </div>
-                    <div className="segmented">
-                      {RESOLUTIONS.map((item) => {
-                        const allowed = modelCap.allowedResolutions.includes(item);
-                        return (
+
+                    <div className="field">
+                      <div className="label-row">
+                        <label>默认宽高比</label>
+                      </div>
+                      <div className="segmented">
+                        {ASPECT_RATIOS.map((ratio) => (
                           <button
-                            key={item}
+                            key={ratio}
                             type="button"
-                            className={`chip ${draft.resolution === item ? "active" : ""}`}
-                            disabled={!allowed}
-                            onClick={() => {
-                              if (allowed) update("resolution", item);
-                            }}
+                            className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                            onClick={() => update("aspectRatio", ratio)}
                           >
-                            {item}
+                            {ratio}
                           </button>
-                        );
-                      })}
+                        ))}
+                      </div>
                     </div>
+
+                    <div className="field">
+                      <div className="label-row">
+                        <label>默认分辨率</label>
+                      </div>
+                      <div className="segmented">
+                        {RESOLUTIONS.map((item) => {
+                          const allowed = modelCap.allowedResolutions.includes(item);
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              className={`chip ${draft.resolution === item ? "active" : ""}`}
+                              disabled={!allowed}
+                              onClick={() => {
+                                if (allowed) update("resolution", item);
+                              }}
+                            >
+                              {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {isStationMaster ? (
+                      <div className="field">
+                        <div className="label-row">
+                          <label htmlFor="concurrency">全局并发槽</label>
+                        </div>
+                        <input
+                          id="concurrency"
+                          className="control"
+                          type="number"
+                          min={1}
+                          max={2}
+                          value={draft.concurrency}
+                          onChange={(e) => update("concurrency", Number(e.target.value))}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="admin-block-label admin-block-label-sub">生图模型</div>
+                    {models.length > 0 ? (
+                      <div className="admin-model-grid" role="listbox" aria-label="生图模型">
+                        {models.map((model) => (
+                          <button
+                            key={`img-${model.id}`}
+                            type="button"
+                            role="option"
+                            aria-selected={draft.model === model.id}
+                            title={model.id}
+                            className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
+                            onClick={() => update("model", model.id)}
+                          >
+                            <span className="admin-model-chip-text">{model.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="footer-note">点下方「测试连接」加载列表后点选</p>
+                    )}
+                  </div>
+
+                  <div className="admin-dual-col">
+                    <div className="admin-block-label">提示词优化</div>
+
+                    <div className="field">
+                      <div className="label-row">
+                        <label>独立优化上游</label>
+                      </div>
+                      <div className="segmented">
+                        <button
+                          type="button"
+                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          onClick={() => update("promptOptimizeCustomUpstream", false)}
+                        >
+                          复用生图
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          onClick={() => update("promptOptimizeCustomUpstream", true)}
+                        >
+                          单独设定
+                        </button>
+                      </div>
+                      <p className="footer-note" style={{ marginTop: 6 }}>
+                        默认复用左侧生图 API；单独设定可接其它 chat 上游
+                      </p>
+                    </div>
+
+                    {draft.promptOptimizeCustomUpstream ? (
+                      <>
+                        <div className="field">
+                          <div className="label-row">
+                            <label htmlFor="prompt-optimize-base">优化 API Base URL</label>
+                          </div>
+                          <input
+                            id="prompt-optimize-base"
+                            className="control mono"
+                            value={
+                              typeof draft.promptOptimizeBaseUrl === "string"
+                                ? draft.promptOptimizeBaseUrl
+                                : ""
+                            }
+                            onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
+                            placeholder="https://other-gateway/v1"
+                            spellCheck={false}
+                          />
+                        </div>
+                        <div className="field">
+                          <div className="label-row">
+                            <label htmlFor="prompt-optimize-key">优化 API Key</label>
+                            <button
+                              type="button"
+                              className="text-link"
+                              onClick={() => setShowOptimizeKey((v) => !v)}
+                            >
+                              {showOptimizeKey ? "隐藏" : "显示"}
+                            </button>
+                          </div>
+                          <input
+                            id="prompt-optimize-key"
+                            className="control mono"
+                            type={showOptimizeKey ? "text" : "password"}
+                            value={
+                              typeof draft.promptOptimizeApiKey === "string"
+                                ? draft.promptOptimizeApiKey
+                                : ""
+                            }
+                            onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
+                            placeholder="独立上游密钥"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </div>
+                      </>
+                    ) : (
+                      <p className="footer-note">
+                        当前使用生图上游：
+                        <span className="mono-tight"> {baseUrl || "（未配置）"}</span>
+                      </p>
+                    )}
+
+                    <div className="admin-block-label admin-block-label-sub">优化模型</div>
+                    {models.length > 0 ? (
+                      <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
+                        {models.map((model) => (
+                          <button
+                            key={`opt-${model.id}`}
+                            type="button"
+                            role="option"
+                            aria-selected={draft.promptOptimizeModel === model.id}
+                            title={model.id}
+                            className={`chip admin-model-chip ${
+                              draft.promptOptimizeModel === model.id ? "active" : ""
+                            }`}
+                            onClick={() => update("promptOptimizeModel", model.id)}
+                          >
+                            <span className="admin-model-chip-text">{model.id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="footer-note">
+                        点下方「测试连接」加载列表（需支持 chat/completions）
+                      </p>
+                    )}
                   </div>
                 </div>
-
-                <div className="admin-block-divider" role="separator" />
-                <div className="admin-block-label">生图模型</div>
-                {models.length > 0 ? (
-                  <div className="admin-model-grid" role="listbox" aria-label="生图模型">
-                    {models.map((model) => (
-                      <button
-                        key={`img-${model.id}`}
-                        type="button"
-                        role="option"
-                        aria-selected={draft.model === model.id}
-                        title={model.id}
-                        className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                        onClick={() => update("model", model.id)}
-                      >
-                        <span className="admin-model-chip-text">{model.id}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="footer-note">请先点「测试连接」加载模型列表，再点选生图模型</p>
-                )}
-
-                <div className="admin-block-label" style={{ marginTop: 14 }}>
-                  提示词优化模型
-                </div>
-                {models.length > 0 ? (
-                  <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
-                    {models.map((model) => (
-                      <button
-                        key={`opt-${model.id}`}
-                        type="button"
-                        role="option"
-                        aria-selected={draft.promptOptimizeModel === model.id}
-                        title={model.id}
-                        className={`chip admin-model-chip ${
-                          draft.promptOptimizeModel === model.id ? "active" : ""
-                        }`}
-                        onClick={() => update("promptOptimizeModel", model.id)}
-                      >
-                        <span className="admin-model-chip-text">{model.id}</span>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="footer-note">
-                    请先点「测试连接」加载列表；需上游支持 chat/completions
-                  </p>
-                )}
 
                 <div className="admin-actions admin-actions-inline">
                   <div className="btn-row">

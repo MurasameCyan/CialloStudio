@@ -1605,6 +1605,52 @@ a {
   align-content: center;
 }
 
+/* 左生图 / 右优化 两列布局 */
+.admin-dual-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 20px;
+  align-items: start;
+}
+
+.admin-dual-col {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.22);
+  box-sizing: border-box;
+}
+
+.admin-dual-col .field {
+  margin-bottom: 0;
+}
+
+.admin-block-label-sub {
+  margin-top: 4px;
+  opacity: 0.85;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+.admin-selected-models-bar {
+  margin-bottom: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-dual-col {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+@media (max-width: 860px) {
+  .admin-dual-cols {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* 已选模型摘要（只读，靠下方 grid 点选更新） */
 .admin-selected-models {
   display: flex;

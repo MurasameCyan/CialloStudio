@@ -497,28 +497,6 @@ export function SettingsPage({
 
                     <div className="field">
                       <div className="label-row">
-                        <label>独立优化上游</label>
-                      </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", false)}
-                        >
-                          复用生图
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", true)}
-                        >
-                          单独设定
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <div className="label-row">
                         <label htmlFor="prompt-optimize-base">API Base URL</label>
                       </div>
                       <input
@@ -583,11 +561,37 @@ export function SettingsPage({
                         autoComplete="off"
                         spellCheck={false}
                       />
+                    </div>
+
+                    <div className="field">
+                      <div className="label-row">
+                        <label>独立优化上游</label>
+                      </div>
+                      <div className="segmented">
+                        <button
+                          type="button"
+                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          onClick={() => update("promptOptimizeCustomUpstream", false)}
+                        >
+                          复用生图
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          onClick={() => update("promptOptimizeCustomUpstream", true)}
+                        >
+                          单独设定
+                        </button>
+                      </div>
                       {!draft.promptOptimizeCustomUpstream ? (
                         <p className="footer-note" style={{ marginTop: 6 }}>
-                          复用左侧生图接口（只读）
+                          复用左侧生图接口（上方 URL / Key 只读同步）
                         </p>
-                      ) : null}
+                      ) : (
+                        <p className="footer-note" style={{ marginTop: 6 }}>
+                          已单独设定：请填写上方优化 API Base / Key
+                        </p>
+                      )}
                     </div>
 
                     <div className="admin-block-label admin-block-label-sub">点选优化模型</div>

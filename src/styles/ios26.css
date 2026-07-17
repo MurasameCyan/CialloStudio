@@ -1625,23 +1625,13 @@ a {
   align-content: start;
 }
 
-/* 右栏：标题置顶，独立上游 + 优化模型贴底与左栏生图模型对齐 */
-.admin-dual-col-optimize {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-}
-
-.admin-optimize-footer {
-  margin-top: auto;
-  display: grid;
-  gap: 12px;
-  min-width: 0;
-}
-
 .admin-dual-col .field {
   margin-bottom: 0;
+}
+
+.admin-dual-col .control:disabled {
+  opacity: 0.72;
+  cursor: not-allowed;
 }
 
 .admin-block-label-sub {

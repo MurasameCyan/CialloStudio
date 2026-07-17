@@ -30,6 +30,9 @@ npm-debug.log*
 
 # Superpowers / local tools
 .superpowers/
+# 本地规格与计划，不推送
+docs/superpowers/specs/
+docs/superpowers/plans/
 
 # Docker local overrides
 docker-compose.override.yml

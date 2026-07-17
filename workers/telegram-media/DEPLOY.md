@@ -45,39 +45,27 @@ npm run pack:media-worker:pages
 ```
 
 > Workers 控制台对「含 JS 的 zip」常仍要求 wrangler；**请改用 Pages Upload**。
+> 仓库 `releases/` **只保留** `ciallo-telegram-media-pages.zip`。
 
 ---
 
-## 方式 A：Wrangler（推荐）
+## 方式 A：Wrangler（源码目录，非 zip）
 
-### 1. 解压
+从仓库 `workers/telegram-media` 部署（不依赖 releases 里的 worker zip）：
 
 ```bash
-unzip ciallo-telegram-media-worker.zip -d ciallo-telegram-media
-cd ciallo-telegram-media
+cd workers/telegram-media
 npm install
 npx wrangler login
-```
-
-### 2. 写入 Secrets（交互粘贴）
-
-```bash
 npx wrangler secret put TELEGRAM_BOT_TOKEN
 npx wrangler secret put TELEGRAM_CHAT_ID
 npx wrangler secret put UPLOAD_TOKEN
-# 可选
-npx wrangler secret put ALLOWED_ORIGINS
-```
-
-### 3. 部署
-
-```bash
 npx wrangler deploy
 ```
 
 记下输出的 `https://ciallo-telegram-media.<subdomain>.workers.dev`。
 
-### 4. 自检
+自检：
 
 ```bash
 curl -sS "https://你的地址/healthz"

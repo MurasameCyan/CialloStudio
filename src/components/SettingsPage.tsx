@@ -86,14 +86,6 @@ export function SettingsPage({
     }
   }, [isStationMaster, section]);
 
-  const imageModels = useMemo(() => {
-    const ids = models.map((m) => m.id);
-    if (!ids.includes("grok-imagine-image")) {
-      return ["grok-imagine-image", ...ids];
-    }
-    return ids;
-  }, [models]);
-
   const apiKey = typeof draft.apiKey === "string" ? draft.apiKey : "";
   const baseUrl = typeof draft.baseUrl === "string" ? draft.baseUrl : "";
   const hasKey = Boolean(apiKey.trim());
@@ -407,89 +399,26 @@ export function SettingsPage({
                 <div className="admin-block-divider" role="separator" />
 
                 <div className="admin-block-label">生成默认值</div>
-                {isStationMaster ? (
-                  <div className="admin-fields-2">
-                    <div className="field">
-                      <div className="label-row">
-                        <label htmlFor="model">生图模型</label>
-                      </div>
-                      <input
-                        id="model"
-                        className="control mono"
-                        list="model-options"
-                        value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
-                        onChange={(e) => update("model", e.target.value)}
-                        placeholder="grok-imagine-image"
-                        spellCheck={false}
-                      />
-                      <datalist id="model-options">
-                        {imageModels.map((id) => (
-                          <option key={id} value={id} />
-                        ))}
-                      </datalist>
-                    </div>
-                    <div className="field">
-                      <div className="label-row">
-                        <label htmlFor="concurrency">全局并发槽</label>
-                      </div>
-                      <input
-                        id="concurrency"
-                        className="control"
-                        type="number"
-                        min={1}
-                        max={2}
-                        value={draft.concurrency}
-                        onChange={(e) => update("concurrency", Number(e.target.value))}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="model">生图模型</label>
-                    </div>
-                    <input
-                      id="model"
-                      className="control mono"
-                      list="model-options"
-                      value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
-                      onChange={(e) => update("model", e.target.value)}
-                      placeholder="grok-imagine-image"
-                      spellCheck={false}
-                    />
-                    <datalist id="model-options">
-                      {imageModels.map((id) => (
-                        <option key={id} value={id} />
-                      ))}
-                    </datalist>
-                  </div>
-                )}
 
-                <div className="admin-fields-2" style={{ marginTop: 12 }}>
-                  <div className="field">
+                {isStationMaster ? (
+                  <div className="field" style={{ marginBottom: 12 }}>
                     <div className="label-row">
-                      <label htmlFor="prompt-optimize-model">提示词优化模型</label>
+                      <label htmlFor="concurrency">全局并发槽</label>
                     </div>
                     <input
-                      id="prompt-optimize-model"
-                      className="control mono"
-                      list="optimize-model-options"
-                      value={
-                        typeof draft.promptOptimizeModel === "string" ? draft.promptOptimizeModel : ""
-                      }
-                      onChange={(e) => update("promptOptimizeModel", e.target.value)}
-                      placeholder="如 gpt-4o-mini / grok-3"
-                      spellCheck={false}
+                      id="concurrency"
+                      className="control"
+                      type="number"
+                      min={1}
+                      max={2}
+                      value={draft.concurrency}
+                      onChange={(e) => update("concurrency", Number(e.target.value))}
+                      style={{ maxWidth: 160 }}
                     />
-                    <datalist id="optimize-model-options">
-                      {models.map((m) => (
-                        <option key={`opt-${m.id}`} value={m.id} />
-                      ))}
-                    </datalist>
-                    <p className="footer-note" style={{ marginTop: 6 }}>
-                      工作台「优化提示词」调用 chat/completions；默认复用上方生图 API
-                    </p>
                   </div>
+                ) : null}
+
+                <div className="admin-fields-2">
                   <div className="field">
                     <div className="label-row">
                       <label>独立优化上游</label>
@@ -509,6 +438,25 @@ export function SettingsPage({
                       >
                         单独设定
                       </button>
+                    </div>
+                    <p className="footer-note" style={{ marginTop: 6 }}>
+                      优化提示词默认复用生图 API；单独设定可填其它 chat 上游
+                    </p>
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label>当前已选模型</label>
+                    </div>
+                    <div className="admin-selected-models">
+                      <span className="admin-selected-pill" title="生图模型">
+                        生图 · <strong className="mono-tight">{draft.model || "未选"}</strong>
+                      </span>
+                      <span className="admin-selected-pill" title="提示词优化模型">
+                        优化 ·{" "}
+                        <strong className="mono-tight">
+                          {draft.promptOptimizeModel?.trim() || "未选"}
+                        </strong>
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -561,7 +509,7 @@ export function SettingsPage({
                   </div>
                 ) : null}
 
-                <div className="admin-fields-2">
+                <div className="admin-fields-2" style={{ marginTop: 12 }}>
                   <div className="field">
                     <div className="label-row">
                       <label>默认宽高比</label>
@@ -604,54 +552,54 @@ export function SettingsPage({
                   </div>
                 </div>
 
+                <div className="admin-block-divider" role="separator" />
+                <div className="admin-block-label">生图模型</div>
                 {models.length > 0 ? (
-                  <>
-                    <div className="admin-block-divider" role="separator" />
-                    <div className="admin-block-label">可用模型 · 生图</div>
-                    <p className="footer-note" style={{ margin: "0 0 8px" }}>
-                      测试连接后点选填入「生图模型」
-                    </p>
-                    <div className="admin-model-grid" role="listbox" aria-label="生图模型">
-                      {models.map((model) => (
-                        <button
-                          key={`img-${model.id}`}
-                          type="button"
-                          role="option"
-                          aria-selected={draft.model === model.id}
-                          title={model.id}
-                          className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                          onClick={() => update("model", model.id)}
-                        >
-                          <span className="admin-model-chip-text">{model.id}</span>
-                        </button>
-                      ))}
-                    </div>
+                  <div className="admin-model-grid" role="listbox" aria-label="生图模型">
+                    {models.map((model) => (
+                      <button
+                        key={`img-${model.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={draft.model === model.id}
+                        title={model.id}
+                        className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
+                        onClick={() => update("model", model.id)}
+                      >
+                        <span className="admin-model-chip-text">{model.id}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="footer-note">请先点「测试连接」加载模型列表，再点选生图模型</p>
+                )}
 
-                    <div className="admin-block-label" style={{ marginTop: 14 }}>
-                      可用模型 · 提示词优化
-                    </div>
-                    <p className="footer-note" style={{ margin: "0 0 8px" }}>
-                      点选填入「提示词优化模型」（需上游支持 chat/completions）
-                    </p>
-                    <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
-                      {models.map((model) => (
-                        <button
-                          key={`opt-${model.id}`}
-                          type="button"
-                          role="option"
-                          aria-selected={draft.promptOptimizeModel === model.id}
-                          title={model.id}
-                          className={`chip admin-model-chip ${
-                            draft.promptOptimizeModel === model.id ? "active" : ""
-                          }`}
-                          onClick={() => update("promptOptimizeModel", model.id)}
-                        >
-                          <span className="admin-model-chip-text">{model.id}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                ) : null}
+                <div className="admin-block-label" style={{ marginTop: 14 }}>
+                  提示词优化模型
+                </div>
+                {models.length > 0 ? (
+                  <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
+                    {models.map((model) => (
+                      <button
+                        key={`opt-${model.id}`}
+                        type="button"
+                        role="option"
+                        aria-selected={draft.promptOptimizeModel === model.id}
+                        title={model.id}
+                        className={`chip admin-model-chip ${
+                          draft.promptOptimizeModel === model.id ? "active" : ""
+                        }`}
+                        onClick={() => update("promptOptimizeModel", model.id)}
+                      >
+                        <span className="admin-model-chip-text">{model.id}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="footer-note">
+                    请先点「测试连接」加载列表；需上游支持 chat/completions
+                  </p>
+                )}
 
                 <div className="admin-actions admin-actions-inline">
                   <div className="btn-row">

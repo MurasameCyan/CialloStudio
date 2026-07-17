@@ -1605,6 +1605,44 @@ a {
   align-content: center;
 }
 
+/* 已选模型摘要（只读，靠下方 grid 点选更新） */
+.admin-selected-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  min-height: 40px;
+}
+
+.admin-selected-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.36);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-selected-pill strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+@media (prefers-color-scheme: dark) {
+  .admin-selected-pill {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
 /* 可用模型：等宽网格 chip，高度压低 */
 .admin-model-grid {
   display: grid;

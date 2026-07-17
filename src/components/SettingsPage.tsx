@@ -495,111 +495,114 @@ export function SettingsPage({
                     )}
                   </div>
 
-                  <div className="admin-dual-col">
+                  <div className="admin-dual-col admin-dual-col-optimize">
                     <div className="admin-block-label">提示词优化</div>
 
-                    <div className="field">
-                      <div className="label-row">
-                        <label>独立优化上游</label>
-                      </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", false)}
-                        >
-                          复用生图
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", true)}
-                        >
-                          单独设定
-                        </button>
-                      </div>
-                      <p className="footer-note" style={{ marginTop: 6 }}>
-                        默认复用左侧生图 API；单独设定可接其它 chat 上游
-                      </p>
-                    </div>
-
-                    {draft.promptOptimizeCustomUpstream ? (
-                      <>
-                        <div className="field">
-                          <div className="label-row">
-                            <label htmlFor="prompt-optimize-base">优化 API Base URL</label>
-                          </div>
-                          <input
-                            id="prompt-optimize-base"
-                            className="control mono"
-                            value={
-                              typeof draft.promptOptimizeBaseUrl === "string"
-                                ? draft.promptOptimizeBaseUrl
-                                : ""
-                            }
-                            onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
-                            placeholder="https://other-gateway/v1"
-                            spellCheck={false}
-                          />
+                    {/* 独立上游 + 优化模型贴底，与左侧「生图模型」对齐 */}
+                    <div className="admin-optimize-footer">
+                      <div className="field">
+                        <div className="label-row">
+                          <label>独立优化上游</label>
                         </div>
-                        <div className="field">
-                          <div className="label-row">
-                            <label htmlFor="prompt-optimize-key">优化 API Key</label>
-                            <button
-                              type="button"
-                              className="text-link"
-                              onClick={() => setShowOptimizeKey((v) => !v)}
-                            >
-                              {showOptimizeKey ? "隐藏" : "显示"}
-                            </button>
-                          </div>
-                          <input
-                            id="prompt-optimize-key"
-                            className="control mono"
-                            type={showOptimizeKey ? "text" : "password"}
-                            value={
-                              typeof draft.promptOptimizeApiKey === "string"
-                                ? draft.promptOptimizeApiKey
-                                : ""
-                            }
-                            onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
-                            placeholder="独立上游密钥"
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                        </div>
-                      </>
-                    ) : (
-                      <p className="footer-note">
-                        当前使用生图上游：
-                        <span className="mono-tight"> {baseUrl || "（未配置）"}</span>
-                      </p>
-                    )}
-
-                    <div className="admin-block-label admin-block-label-sub">优化模型</div>
-                    {models.length > 0 ? (
-                      <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
-                        {models.map((model) => (
+                        <div className="segmented">
                           <button
-                            key={`opt-${model.id}`}
                             type="button"
-                            role="option"
-                            aria-selected={draft.promptOptimizeModel === model.id}
-                            title={model.id}
-                            className={`chip admin-model-chip ${
-                              draft.promptOptimizeModel === model.id ? "active" : ""
-                            }`}
-                            onClick={() => update("promptOptimizeModel", model.id)}
+                            className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                            onClick={() => update("promptOptimizeCustomUpstream", false)}
                           >
-                            <span className="admin-model-chip-text">{model.id}</span>
+                            复用生图
                           </button>
-                        ))}
+                          <button
+                            type="button"
+                            className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                            onClick={() => update("promptOptimizeCustomUpstream", true)}
+                          >
+                            单独设定
+                          </button>
+                        </div>
+                        {!draft.promptOptimizeCustomUpstream ? (
+                          <p className="footer-note" style={{ marginTop: 6 }}>
+                            复用左侧生图 API
+                            <span className="mono-tight">
+                              {baseUrl ? ` · ${baseUrl}` : "（未配置）"}
+                            </span>
+                          </p>
+                        ) : null}
                       </div>
-                    ) : (
-                      <p className="footer-note">
-                        点下方「测试连接」加载列表（需支持 chat/completions）
-                      </p>
-                    )}
+
+                      {draft.promptOptimizeCustomUpstream ? (
+                        <>
+                          <div className="field">
+                            <div className="label-row">
+                              <label htmlFor="prompt-optimize-base">优化 API Base URL</label>
+                            </div>
+                            <input
+                              id="prompt-optimize-base"
+                              className="control mono"
+                              value={
+                                typeof draft.promptOptimizeBaseUrl === "string"
+                                  ? draft.promptOptimizeBaseUrl
+                                  : ""
+                              }
+                              onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
+                              placeholder="https://other-gateway/v1"
+                              spellCheck={false}
+                            />
+                          </div>
+                          <div className="field">
+                            <div className="label-row">
+                              <label htmlFor="prompt-optimize-key">优化 API Key</label>
+                              <button
+                                type="button"
+                                className="text-link"
+                                onClick={() => setShowOptimizeKey((v) => !v)}
+                              >
+                                {showOptimizeKey ? "隐藏" : "显示"}
+                              </button>
+                            </div>
+                            <input
+                              id="prompt-optimize-key"
+                              className="control mono"
+                              type={showOptimizeKey ? "text" : "password"}
+                              value={
+                                typeof draft.promptOptimizeApiKey === "string"
+                                  ? draft.promptOptimizeApiKey
+                                  : ""
+                              }
+                              onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
+                              placeholder="独立上游密钥"
+                              autoComplete="off"
+                              spellCheck={false}
+                            />
+                          </div>
+                        </>
+                      ) : null}
+
+                      <div className="admin-block-label admin-block-label-sub">优化模型</div>
+                      {models.length > 0 ? (
+                        <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
+                          {models.map((model) => (
+                            <button
+                              key={`opt-${model.id}`}
+                              type="button"
+                              role="option"
+                              aria-selected={draft.promptOptimizeModel === model.id}
+                              title={model.id}
+                              className={`chip admin-model-chip ${
+                                draft.promptOptimizeModel === model.id ? "active" : ""
+                              }`}
+                              onClick={() => update("promptOptimizeModel", model.id)}
+                            >
+                              <span className="admin-model-chip-text">{model.id}</span>
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="footer-note">
+                          点下方「测试连接」加载列表（需支持 chat/completions）
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
 

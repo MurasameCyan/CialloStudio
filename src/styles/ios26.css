@@ -2276,6 +2276,204 @@ a {
   align-items: center;
 }
 
+/* 大厅互动：赞 / 评 / 删除 — 统一玻璃胶囊 */
+.hall-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.hall-chip-row-inline {
+  margin: 0;
+}
+
+.hall-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.4);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: background 0.18s var(--ease), color 0.18s var(--ease), border-color 0.18s var(--ease);
+}
+
+.hall-chip:hover {
+  color: var(--text);
+  border-color: rgba(0, 113, 227, 0.22);
+}
+
+.hall-chip.active {
+  background: rgba(255, 69, 58, 0.12);
+  border-color: rgba(255, 69, 58, 0.2);
+  color: var(--danger);
+}
+
+.hall-chip-static {
+  cursor: default;
+  pointer-events: none;
+}
+
+.hall-chip-danger {
+  color: var(--danger);
+}
+
+.hall-chip-danger:hover {
+  background: rgba(255, 69, 58, 0.1);
+  border-color: rgba(255, 69, 58, 0.22);
+}
+
+.hall-chip-icon,
+.hall-chip-label {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.92;
+}
+
+.hall-chip-label {
+  font-weight: 800;
+}
+
+.hall-stars {
+  letter-spacing: 0.04em;
+  color: var(--warning);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hall-stars-empty {
+  color: var(--text-tertiary);
+  opacity: 0.45;
+}
+
+.hall-comments-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hall-comments-head .admin-section-title {
+  margin: 0;
+}
+
+.hall-composer {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.28);
+  border: 1px solid var(--separator);
+  display: grid;
+  gap: 10px;
+}
+
+.hall-composer-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.hall-composer-input {
+  margin: 0;
+  min-height: 84px;
+}
+
+.hall-composer-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hall-rating {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.hall-rating-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+}
+
+.hall-rating-segmented {
+  gap: 6px;
+}
+
+.hall-rating-chip {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.hall-composer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.hall-composer-submit {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 999px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .hall-chip {
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .hall-composer {
+    background: rgba(255, 255, 255, 0.04);
+  }
+}
+
+@media (max-width: 520px) {
+  .hall-composer-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .hall-composer-actions {
+    margin-left: 0;
+  }
+
+  .hall-composer-submit {
+    width: 100%;
+  }
+
+  .hall-rating-segmented {
+    width: 100%;
+  }
+
+  .hall-rating-chip {
+    flex: 1 1 auto;
+  }
+}
+
 .hall-drawer-backdrop {
   position: fixed;
   inset: 0;

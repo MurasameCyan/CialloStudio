@@ -255,20 +255,28 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                     <p className="hall-prompt" title={post.prompt}>
                       {post.caption || post.prompt}
                     </p>
-                    <div className="hall-actions">
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleLike(post)}>
-                        {post.likedByMe ? "已赞" : "赞"} {post.likeCount}
+                    <div className="hall-chip-row" role="group" aria-label="互动">
+                      <button
+                        type="button"
+                        className={`hall-chip ${post.likedByMe ? "active" : ""}`}
+                        onClick={() => void handleLike(post)}
+                      >
+                        <span className="hall-chip-icon" aria-hidden>
+                          {post.likedByMe ? "♥" : "♡"}
+                        </span>
+                        <span>{post.likeCount}</span>
                       </button>
-                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => void openPost(post)}>
-                        评 {post.commentCount}
+                      <button type="button" className="hall-chip" onClick={() => void openPost(post)}>
+                        <span className="hall-chip-label">评</span>
+                        <span>{post.commentCount}</span>
                       </button>
                       {user && (user.id === post.authorId || user.role === "admin") ? (
                         <button
                           type="button"
-                          className="btn btn-danger btn-sm"
+                          className="hall-chip hall-chip-danger"
                           onClick={() => void handleDelete(post)}
                         >
-                          删
+                          删除
                         </button>
                       ) : null}
                     </div>
@@ -321,7 +329,26 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             </div>
 
             <div className="hall-comments">
-              <h4 className="admin-section-title">点评</h4>
+              <div className="hall-comments-head">
+                <h4 className="admin-section-title">点评</h4>
+                <div className="hall-chip-row hall-chip-row-inline" role="group" aria-label="互动">
+                  <button
+                    type="button"
+                    className={`hall-chip ${active.likedByMe ? "active" : ""}`}
+                    onClick={() => void handleLike(active)}
+                  >
+                    <span className="hall-chip-icon" aria-hidden>
+                      {active.likedByMe ? "♥" : "♡"}
+                    </span>
+                    <span>{active.likeCount}</span>
+                  </button>
+                  <span className="hall-chip hall-chip-static" title="评论数">
+                    <span className="hall-chip-label">评</span>
+                    <span>{active.commentCount ?? comments.length}</span>
+                  </span>
+                </div>
+              </div>
+
               {comments.length === 0 ? (
                 <p className="footer-note">还没有评论，来写第一条吧。</p>
               ) : (
@@ -330,7 +357,12 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                     <li key={c.id}>
                       <div className="hall-meta">
                         <strong>{c.authorName}</strong>
-                        {c.rating ? <span>{"★".repeat(c.rating)}</span> : null}
+                        {c.rating ? (
+                          <span className="hall-stars" aria-label={`${c.rating} 星`}>
+                            {"★".repeat(c.rating)}
+                            <span className="hall-stars-empty">{"★".repeat(Math.max(0, 5 - c.rating))}</span>
+                          </span>
+                        ) : null}
                         <span>{new Date(c.createdAt).toLocaleString()}</span>
                       </div>
                       <p>{c.body}</p>
@@ -339,45 +371,48 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                 </ul>
               )}
 
-              <div className="field" style={{ marginTop: 12 }}>
-                <label htmlFor="cmt">写评论</label>
+              <div className="hall-composer">
+                <label htmlFor="cmt" className="hall-composer-label">
+                  写评论
+                </label>
                 <textarea
                   id="cmt"
-                  className="textarea"
+                  className="textarea hall-composer-input"
                   rows={3}
                   value={commentBody}
                   onChange={(e) => setCommentBody(e.target.value)}
                   placeholder={user ? "友善点评…" : "登录后可评论"}
                   disabled={!user || busy}
                 />
-                <div className="hall-actions" style={{ marginTop: 8 }}>
-                  <label className="footer-note">
-                    星级{" "}
-                    <select
-                      className="control"
-                      style={{ width: "auto", display: "inline-block" }}
-                      value={rating}
-                      onChange={(e) => setRating(Number(e.target.value))}
-                      disabled={!user || busy}
-                    >
-                      {[5, 4, 3, 2, 1].map((n) => (
-                        <option key={n} value={n}>
-                          {n}
-                        </option>
+                <div className="hall-composer-footer">
+                  <div className="hall-rating" role="group" aria-label="星级">
+                    <span className="hall-rating-label">星级</span>
+                    <div className="segmented hall-rating-segmented">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <button
+                          key={n}
+                          type="button"
+                          className={`chip hall-rating-chip ${rating === n ? "active" : ""}`}
+                          disabled={!user || busy}
+                          aria-pressed={rating === n}
+                          aria-label={`${n} 星`}
+                          onClick={() => setRating(n)}
+                        >
+                          {n}★
+                        </button>
                       ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={!user || busy || !commentBody.trim()}
-                    onClick={() => void handleComment()}
-                  >
-                    {user ? "发送" : "请先登录"}
-                  </button>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => void handleLike(active)}>
-                    {active.likedByMe ? "取消赞" : "点赞"} {active.likeCount}
-                  </button>
+                    </div>
+                  </div>
+                  <div className="hall-composer-actions">
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm hall-composer-submit"
+                      disabled={!user || busy || !commentBody.trim()}
+                      onClick={() => void handleComment()}
+                    >
+                      {user ? "发送" : "请先登录"}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

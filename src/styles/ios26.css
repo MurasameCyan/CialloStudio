@@ -1164,6 +1164,31 @@ a {
 }
 
 /* Composer */
+.prompt-label-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.prompt-label-row > label {
+  margin: 0;
+}
+
+.prompt-optimize-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.prompt-optimize-btn.active,
+.prompt-optimize-btn:not(:disabled):hover {
+  border-color: rgba(0, 113, 227, 0.28);
+}
+
 .composer-stats {
   display: flex;
   flex-wrap: wrap;

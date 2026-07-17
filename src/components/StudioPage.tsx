@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiError } from "@/lib/api";
+import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
 import {
   computeShareRemainSec,
@@ -9,7 +9,12 @@ import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
-import { ASPECT_RATIOS, RESOLUTIONS, type StudioSettings } from "@/lib/settings";
+import {
+  ASPECT_RATIOS,
+  RESOLUTIONS,
+  resolvePromptOptimizeEndpoint,
+  type StudioSettings,
+} from "@/lib/settings";
 import {
   CONCURRENCY_OPTIONS,
   VARIANT_OPTIONS,
@@ -70,6 +75,20 @@ export function StudioPage({
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
   const [shareNotice, setShareNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
+  const [optimizeBusy, setOptimizeBusy] = useState(false);
+  /** 优化前快照，供「回退」一次 */
+  const [promptBeforeOptimize, setPromptBeforeOptimize] = useState<string | null>(null);
+  const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const optimizeEndpoint = useMemo(() => resolvePromptOptimizeEndpoint(settings), [settings]);
+  const canOptimize = Boolean(
+    optimizeEndpoint.model &&
+      optimizeEndpoint.baseUrl &&
+      optimizeEndpoint.apiKey &&
+      draft.promptText.trim() &&
+      !optimizeBusy &&
+      !running,
+  );
 
   const shareRemainSec = useMemo(() => {
     if (!shareStatus) return 0;
@@ -210,6 +229,66 @@ export function StudioPage({
     }
   }
 
+  async function handleOptimizePrompt() {
+    const ep = resolvePromptOptimizeEndpoint(settings);
+    if (!ep.model) {
+      setOptimizeNotice({ ok: false, text: "请先在设置页填写「提示词优化模型」" });
+      openConfigOrLogin();
+      return;
+    }
+    if (!ep.baseUrl || !ep.apiKey) {
+      setOptimizeNotice({
+        ok: false,
+        text: ep.usingCustomUpstream
+          ? "请填写独立优化 API Base URL 与 Key"
+          : "请先配置生图 API Base URL 与 Key",
+      });
+      openConfigOrLogin();
+      return;
+    }
+    const current = draft.promptText;
+    if (!current.trim()) {
+      setOptimizeNotice({ ok: false, text: "请先输入提示词" });
+      return;
+    }
+    setOptimizeBusy(true);
+    setOptimizeNotice(null);
+    try {
+      const optimized = await optimizePromptText({
+        baseUrl: ep.baseUrl,
+        apiKey: ep.apiKey,
+        model: ep.model,
+        promptText: current,
+      });
+      setPromptBeforeOptimize(current);
+      setDraft({ promptText: optimized });
+      setOptimizeNotice({ ok: true, text: "已优化并覆盖输入框 · 可点「回退」恢复" });
+      log("ok", "提示词优化完成", {
+        model: ep.model,
+        customUpstream: ep.usingCustomUpstream,
+      });
+    } catch (error) {
+      const message =
+        error instanceof ApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "优化失败";
+      setOptimizeNotice({ ok: false, text: message });
+      log("error", "提示词优化失败", message);
+    } finally {
+      setOptimizeBusy(false);
+    }
+  }
+
+  function handleUndoOptimize() {
+    if (promptBeforeOptimize == null) return;
+    setDraft({ promptText: promptBeforeOptimize });
+    setPromptBeforeOptimize(null);
+    setOptimizeNotice({ ok: true, text: "已回退到优化前的提示词" });
+    log("info", "提示词已回退");
+  }
+
   function handleClear() {
     clearSelection();
     onClear();
@@ -348,14 +427,60 @@ export function StudioPage({
         ) : null}
 
         <div className="field">
-          <label htmlFor="prompts">Prompt</label>
+          <div className="label-row prompt-label-row">
+            <label htmlFor="prompts">Prompt</label>
+            <div className="prompt-optimize-actions">
+              <button
+                type="button"
+                className="hall-chip prompt-optimize-btn"
+                disabled={!canOptimize}
+                title={
+                  !optimizeEndpoint.model
+                    ? "请先在设置页填写「提示词优化模型」"
+                    : !optimizeEndpoint.apiKey || !optimizeEndpoint.baseUrl
+                      ? optimizeEndpoint.usingCustomUpstream
+                        ? "请填写独立优化 API Base / Key"
+                        : "请先配置生图 API"
+                      : !draft.promptText.trim()
+                        ? "请先输入提示词"
+                        : "调用 chat 模型优化当前提示词"
+                }
+                onClick={() => void handleOptimizePrompt()}
+              >
+                {optimizeBusy ? "优化中…" : "优化提示词"}
+              </button>
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={promptBeforeOptimize == null || optimizeBusy || running}
+                title="恢复到本次优化前的内容"
+                onClick={handleUndoOptimize}
+              >
+                回退
+              </button>
+            </div>
+          </div>
           <textarea
             id="prompts"
             className="textarea"
             value={draft.promptText}
             onChange={(e) => setDraft({ promptText: e.target.value })}
             placeholder={"每行一个 prompt\n例如：cyberpunk city at night\na watercolor fox"}
+            disabled={optimizeBusy}
           />
+          {optimizeNotice ? (
+            <div
+              className={`studio-feedback ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+              role="status"
+              style={{ marginTop: 10, marginBottom: 0 }}
+            >
+              <span
+                className={`studio-feedback-dot ${optimizeNotice.ok ? "ok" : "warn"}`}
+                aria-hidden
+              />
+              <span className="studio-feedback-text">{optimizeNotice.text}</span>
+            </div>
+          ) : null}
           <div className="composer-stats">
             <span className="stat-pill">
               Prompt <strong>{prompts.length}</strong>

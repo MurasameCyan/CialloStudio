@@ -58,7 +58,12 @@ export function SettingsPage({
     aspectRatio: settings?.aspectRatio || DEFAULT_SETTINGS.aspectRatio,
     resolution: settings?.resolution === "2k" ? "2k" : "1k",
     concurrency: clampConcurrency(settings?.concurrency),
+    promptOptimizeModel: settings?.promptOptimizeModel ?? DEFAULT_SETTINGS.promptOptimizeModel,
+    promptOptimizeCustomUpstream: settings?.promptOptimizeCustomUpstream === true,
+    promptOptimizeBaseUrl: settings?.promptOptimizeBaseUrl ?? DEFAULT_SETTINGS.promptOptimizeBaseUrl,
+    promptOptimizeApiKey: settings?.promptOptimizeApiKey ?? DEFAULT_SETTINGS.promptOptimizeApiKey,
   }));
+  const [showOptimizeKey, setShowOptimizeKey] = useState(false);
   const [models, setModels] = useState<OpenAIModel[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -107,6 +112,7 @@ export function SettingsPage({
     const concurrency = clampConcurrency(
       isStationMaster ? next.concurrency : (settings?.concurrency ?? DEFAULT_SETTINGS.concurrency),
     );
+    const customUp = next.promptOptimizeCustomUpstream === true;
     const normalized: StudioSettings = {
       ...DEFAULT_SETTINGS,
       ...next,
@@ -117,9 +123,25 @@ export function SettingsPage({
         (typeof next.aspectRatio === "string" && next.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
       resolution: next.resolution === "2k" ? "2k" : "1k",
       concurrency,
+      promptOptimizeModel:
+        typeof next.promptOptimizeModel === "string" ? next.promptOptimizeModel.trim() : "",
+      promptOptimizeCustomUpstream: customUp,
+      promptOptimizeBaseUrl: customUp
+        ? normalizeBaseUrl(
+            typeof next.promptOptimizeBaseUrl === "string" ? next.promptOptimizeBaseUrl : "",
+          )
+        : "",
+      promptOptimizeApiKey: customUp
+        ? typeof next.promptOptimizeApiKey === "string"
+          ? next.promptOptimizeApiKey
+          : ""
+        : "",
     };
     saveSettings(normalized);
     rememberUpstreamOrigin(normalized.baseUrl);
+    if (normalized.promptOptimizeCustomUpstream && normalized.promptOptimizeBaseUrl) {
+      rememberUpstreamOrigin(normalized.promptOptimizeBaseUrl);
+    }
     onChange(normalized);
     setDraft(normalized);
     return normalized;
@@ -389,7 +411,7 @@ export function SettingsPage({
                   <div className="admin-fields-2">
                     <div className="field">
                       <div className="label-row">
-                        <label htmlFor="model">模型</label>
+                        <label htmlFor="model">生图模型</label>
                       </div>
                       <input
                         id="model"
@@ -424,7 +446,7 @@ export function SettingsPage({
                 ) : (
                   <div className="field">
                     <div className="label-row">
-                      <label htmlFor="model">模型</label>
+                      <label htmlFor="model">生图模型</label>
                     </div>
                     <input
                       id="model"
@@ -442,6 +464,102 @@ export function SettingsPage({
                     </datalist>
                   </div>
                 )}
+
+                <div className="admin-fields-2" style={{ marginTop: 12 }}>
+                  <div className="field">
+                    <div className="label-row">
+                      <label htmlFor="prompt-optimize-model">提示词优化模型</label>
+                    </div>
+                    <input
+                      id="prompt-optimize-model"
+                      className="control mono"
+                      list="optimize-model-options"
+                      value={
+                        typeof draft.promptOptimizeModel === "string" ? draft.promptOptimizeModel : ""
+                      }
+                      onChange={(e) => update("promptOptimizeModel", e.target.value)}
+                      placeholder="如 gpt-4o-mini / grok-3"
+                      spellCheck={false}
+                    />
+                    <datalist id="optimize-model-options">
+                      {models.map((m) => (
+                        <option key={`opt-${m.id}`} value={m.id} />
+                      ))}
+                    </datalist>
+                    <p className="footer-note" style={{ marginTop: 6 }}>
+                      工作台「优化提示词」调用 chat/completions；默认复用上方生图 API
+                    </p>
+                  </div>
+                  <div className="field">
+                    <div className="label-row">
+                      <label>独立优化上游</label>
+                    </div>
+                    <div className="segmented">
+                      <button
+                        type="button"
+                        className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                        onClick={() => update("promptOptimizeCustomUpstream", false)}
+                      >
+                        复用生图
+                      </button>
+                      <button
+                        type="button"
+                        className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                        onClick={() => update("promptOptimizeCustomUpstream", true)}
+                      >
+                        单独设定
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {draft.promptOptimizeCustomUpstream ? (
+                  <div className="admin-fields-2" style={{ marginTop: 12 }}>
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="prompt-optimize-base">优化 API Base URL</label>
+                      </div>
+                      <input
+                        id="prompt-optimize-base"
+                        className="control mono"
+                        value={
+                          typeof draft.promptOptimizeBaseUrl === "string"
+                            ? draft.promptOptimizeBaseUrl
+                            : ""
+                        }
+                        onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
+                        placeholder="https://other-gateway/v1"
+                        spellCheck={false}
+                      />
+                    </div>
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="prompt-optimize-key">优化 API Key</label>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => setShowOptimizeKey((v) => !v)}
+                        >
+                          {showOptimizeKey ? "隐藏" : "显示"}
+                        </button>
+                      </div>
+                      <input
+                        id="prompt-optimize-key"
+                        className="control mono"
+                        type={showOptimizeKey ? "text" : "password"}
+                        value={
+                          typeof draft.promptOptimizeApiKey === "string"
+                            ? draft.promptOptimizeApiKey
+                            : ""
+                        }
+                        onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
+                        placeholder="独立上游密钥"
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
                 <div className="admin-fields-2">
                   <div className="field">

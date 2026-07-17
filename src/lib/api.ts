@@ -498,4 +498,81 @@ export async function generateImage(input: {
   return images;
 }
 
+const PROMPT_OPTIMIZE_SYSTEM = [
+  "You are an expert AI image prompt engineer.",
+  "Rewrite the user's prompts for text-to-image models.",
+  "Rules:",
+  "1) Preserve line structure: one prompt per line. Do not merge or drop lines unless a line is empty.",
+  "2) Keep the same language the user used when possible; improve clarity, subject, composition, lighting, style.",
+  "3) Output ONLY the optimized prompts, plain text, no markdown, no numbering, no quotes, no explanations.",
+  "4) Keep each line reasonably concise (under ~400 chars when possible).",
+].join("\n");
+
+/**
+ * 用 chat/completions 优化提示词，返回纯文本（可多行）。
+ */
+export async function optimizePromptText(input: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  promptText: string;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const model = typeof input.model === "string" ? input.model.trim() : "";
+  if (!model) {
+    throw new ApiError(400, "请先在设置页填写「提示词优化模型」", "missing_optimize_model");
+  }
+  const text = typeof input.promptText === "string" ? input.promptText.trim() : "";
+  if (!text) {
+    throw new ApiError(400, "请先输入提示词", "empty_prompt");
+  }
+
+  log("info", "优化提示词", {
+    model,
+    lines: text.split(/\r?\n/).filter((l) => l.trim()).length,
+    baseUrl: input.baseUrl,
+  });
+
+  const payload = await apiRequest(input.baseUrl, input.apiKey, "/chat/completions", {
+    method: "POST",
+    signal: input.signal,
+    body: {
+      model,
+      temperature: 0.6,
+      messages: [
+        { role: "system", content: PROMPT_OPTIMIZE_SYSTEM },
+        { role: "user", content: text },
+      ],
+    },
+  });
+
+  if (!isRecord(payload) || !Array.isArray(payload.choices) || payload.choices.length === 0) {
+    throw new ApiError(200, "优化响应格式无效", "invalid_response");
+  }
+
+  const first = payload.choices[0];
+  if (!isRecord(first)) {
+    throw new ApiError(200, "优化响应为空", "invalid_response");
+  }
+
+  let content = "";
+  if (isRecord(first.message) && typeof first.message.content === "string") {
+    content = first.message.content;
+  } else if (typeof first.text === "string") {
+    content = first.text;
+  }
+
+  content = content
+    .replace(/^```[\w]*\r?\n?/m, "")
+    .replace(/\r?\n?```$/m, "")
+    .trim();
+
+  if (!content) {
+    throw new ApiError(200, "模型未返回优化结果", "empty_optimize_result");
+  }
+
+  log("ok", "提示词已优化", { chars: content.length });
+  return content;
+}
+
 export { runPool } from "./runPool";

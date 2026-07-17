@@ -6,6 +6,12 @@ export type StudioSettings = {
   aspectRatio: string;
   resolution: string;
   concurrency: number;
+  /** 提示词优化专用 chat 模型 ID（设置页配置） */
+  promptOptimizeModel: string;
+  /** true = 优化走独立 Base/Key；false = 复用生图上游 */
+  promptOptimizeCustomUpstream: boolean;
+  promptOptimizeBaseUrl: string;
+  promptOptimizeApiKey: string;
 };
 
 export const DEFAULT_SETTINGS: StudioSettings = {
@@ -17,6 +23,10 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   aspectRatio: "1:1",
   resolution: "1k",
   concurrency: 2,
+  promptOptimizeModel: "",
+  promptOptimizeCustomUpstream: false,
+  promptOptimizeBaseUrl: "",
+  promptOptimizeApiKey: "",
 };
 
 function asString(value: unknown, fallback: string): string {
@@ -53,6 +63,12 @@ export function loadSettings(): StudioSettings {
       aspectRatio: asString(parsed.aspectRatio, DEFAULT_SETTINGS.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
       resolution,
       concurrency: clampConcurrency(parsed.concurrency ?? DEFAULT_SETTINGS.concurrency),
+      promptOptimizeModel: asString(parsed.promptOptimizeModel, DEFAULT_SETTINGS.promptOptimizeModel),
+      promptOptimizeCustomUpstream: parsed.promptOptimizeCustomUpstream === true,
+      promptOptimizeBaseUrl: normalizeBaseUrl(
+        asString(parsed.promptOptimizeBaseUrl, DEFAULT_SETTINGS.promptOptimizeBaseUrl),
+      ),
+      promptOptimizeApiKey: asString(parsed.promptOptimizeApiKey, DEFAULT_SETTINGS.promptOptimizeApiKey),
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -67,6 +83,10 @@ export function saveSettings(settings: StudioSettings): void {
     aspectRatio: asString(settings.aspectRatio, DEFAULT_SETTINGS.aspectRatio),
     resolution: settings.resolution === "2k" ? "2k" : "1k",
     concurrency: clampConcurrency(settings.concurrency),
+    promptOptimizeModel: asString(settings.promptOptimizeModel, "").trim(),
+    promptOptimizeCustomUpstream: settings.promptOptimizeCustomUpstream === true,
+    promptOptimizeBaseUrl: normalizeBaseUrl(asString(settings.promptOptimizeBaseUrl, "")),
+    promptOptimizeApiKey: asString(settings.promptOptimizeApiKey, ""),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
@@ -98,6 +118,30 @@ export function clampConcurrency(value: unknown): number {
   if (!Number.isFinite(n)) return 1;
   // 同时请求上限仅 1 / 2
   return Math.min(2, Math.max(1, Math.round(n)));
+}
+
+/** 解析提示词优化实际使用的上游 + 模型 */
+export function resolvePromptOptimizeEndpoint(settings: StudioSettings): {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  usingCustomUpstream: boolean;
+} {
+  const model = asString(settings.promptOptimizeModel, "").trim();
+  if (settings.promptOptimizeCustomUpstream) {
+    return {
+      baseUrl: normalizeBaseUrl(asString(settings.promptOptimizeBaseUrl, "")),
+      apiKey: asString(settings.promptOptimizeApiKey, "").trim(),
+      model,
+      usingCustomUpstream: true,
+    };
+  }
+  return {
+    baseUrl: normalizeBaseUrl(asString(settings.baseUrl, "")),
+    apiKey: asString(settings.apiKey, "").trim(),
+    model,
+    usingCustomUpstream: false,
+  };
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;

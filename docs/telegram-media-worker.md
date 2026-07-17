@@ -23,7 +23,6 @@ Telegram 群/频道（file_id）
 | **浏览器 / Docker .env** | 仅 `CIALLO_MEDIA_BASE`（Worker 公网 URL）+ 可选 `CIALLO_MEDIA_UPLOAD_TOKEN` |
 | **禁止** | Bot Token 写进前端、Git、截图、Issue |
 
-你已在对话中提供过 Bot Token：**请视作已暴露**。建议在 [@BotFather](https://t.me/BotFather) **撤销/重发 Token**，新 Token 只写入 `wrangler secret`，不要再贴到聊天。
 
 ---
 
@@ -49,7 +48,6 @@ Telegram 群/频道（file_id）
 
 ### 方式 A：Cloudflare Pages 上传 zip（推荐）
 
-Workers 控制台对「含 JS 的 zip」会提示必须用 wrangler。请改用 **Pages → Upload assets**。
 
 包路径：
 
@@ -64,9 +62,9 @@ releases/ciallo-telegram-media-pages.zip
 3. 项目名例如 `ciallo-media`，上传 **`ciallo-telegram-media-pages.zip`**
 4. Deploy 后：**Settings → Environment variables**（Production）添加密钥
 5. 变量若后加：点 **Retry deployment** 或再传一次
-6. 地址：`https://ciallo-media.pages.dev` → Studio **Media Base URL**
+6. 地址：`https://ciallo-media.pages.dev` → Studio **Media Base URL**（建议绑定域名, 否则其他地区无法直连访问）
 
-重新打包：`npm run pack:media-worker:pages`
+
 
 ### 方式 B：本机 Wrangler（Workers）
 
@@ -266,4 +264,3 @@ UPLOAD_TOKEN=本地测试口令
 1. 分享时上传 → 得到稳定 `url` + `mediaId`  
 2. `createPost({ imageUrl, mediaId, ... })` 写入大厅  
 
-后续 Docker DB 只需持久化 `media_id` / `image_url`，读图始终走 Worker。

@@ -4,13 +4,13 @@
 
 ## 功能
 
-- 管理页配置 **API Base URL + API Key**（存浏览器 `localStorage`，不写进 `.env`）
-- 浏览器只访问同源 **`/v1`**，由 Vite / 容器内 Node 代理转发到真实上游（免 CORS）
-- **自定义上游**：可在页面随时改网关；服务端 SSRF 防护拦截内网 / 本机 / metadata
+- 管理页配置 **API Base URL + API Key**
+- 浏览器只访问同源 **`/v1`**，由 Vite / 容器内 Node 代理转发到真实上游
+- **自定义上游**：可在页面随时改网关
 - 多并发生图、结果墙、批量下载
 - **分享大厅**：登录用户点赞 / 评论 / 分享；站长管用户池与分享冷却
-- **用户数据**：Docker volume 持久化（`/data/community.json`），重启不丢
-- **图片存储（可选）**：Cloudflare Pages → Telegram 反代（见 [docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
+- **用户数据**：Docker volume 持久化（`/data/community.json`）
+- **图片存储（可选）**：Cloudflare Pages → Telegram （见 [docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
 
 ## 架构（Docker）
 
@@ -34,8 +34,7 @@
 ```bash
 cp .env.example .env
 # 编辑站长用户名/密码（必改）
-docker compose pull
-docker compose up -d
+docker compose up -d --pull always --remove-orphans
 ```
 
 打开 `http://127.0.0.1:8080`：
@@ -180,9 +179,9 @@ GET /api/upstream-check?url=http://127.0.0.1:8000/v1
 
 把生成图经 **Cloudflare Pages** 存进 **Telegram**，再按 `file_id` 反代访问。
 
-- 部署包（仓库只保留）：[`releases/ciallo-telegram-media-pages.zip`](releases/ciallo-telegram-media-pages.zip)
+- 部署包：[`releases/ciallo-telegram-media-pages.zip`](releases/ciallo-telegram-media-pages.zip)
 - 重新打包：`npm run pack:media-worker:pages`
-- **Bot Token 只放 Cloudflare Secrets**，不要写进 Git / 前端
+- **Bot Token 只放 Cloudflare Secrets**
 - Docker 可注入 `CIALLO_MEDIA_BASE`、`CIALLO_MEDIA_UPLOAD_TOKEN`
 
 完整步骤：[docs/telegram-media-worker.md](docs/telegram-media-worker.md)  
@@ -213,14 +212,6 @@ docker/entrypoint.sh 生成 runtime-config + 启动进程
 nginx.conf           反代 /v1、/api/community、/debug/upstream
 ```
 
-## 镜像与 CI
-
-- 镜像：`ghcr.io/murasamecyan/ciallostudio:beta`（`main`/`beta` 推送构建多架构）
-- 工作流：`.github/workflows/ghcr-image.yml`（自维护 tag，不依赖 metadata-action）
-
-```bash
-docker compose pull && docker compose up -d
-```
 
 ## License
 

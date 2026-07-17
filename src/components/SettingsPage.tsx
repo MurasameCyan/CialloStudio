@@ -103,6 +103,10 @@ export function SettingsPage({
   }
 
   function persist(next: StudioSettings) {
+    // 全局并发槽仅站长可改；普通用户保存时保留已有 concurrency
+    const concurrency = clampConcurrency(
+      isStationMaster ? next.concurrency : (settings?.concurrency ?? DEFAULT_SETTINGS.concurrency),
+    );
     const normalized: StudioSettings = {
       ...DEFAULT_SETTINGS,
       ...next,
@@ -112,7 +116,7 @@ export function SettingsPage({
       aspectRatio:
         (typeof next.aspectRatio === "string" && next.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
       resolution: next.resolution === "2k" ? "2k" : "1k",
-      concurrency: clampConcurrency(next.concurrency),
+      concurrency,
     };
     saveSettings(normalized);
     rememberUpstreamOrigin(normalized.baseUrl);
@@ -194,11 +198,21 @@ export function SettingsPage({
       concurrency: normalized.concurrency,
     });
     setOk(true);
-    setMessage(`已保存 · 模型 ${normalized.model} · 并发 ${normalized.concurrency}`);
+    setMessage(
+      isStationMaster
+        ? `已保存 · 模型 ${normalized.model} · 并发 ${normalized.concurrency}`
+        : `已保存 · 模型 ${normalized.model}`,
+    );
   }
 
   function handleReset() {
-    setDraft({ ...DEFAULT_SETTINGS });
+    setDraft({
+      ...DEFAULT_SETTINGS,
+      // 非站长不能通过恢复默认改掉并发槽
+      concurrency: isStationMaster
+        ? DEFAULT_SETTINGS.concurrency
+        : clampConcurrency(settings?.concurrency ?? DEFAULT_SETTINGS.concurrency),
+    });
     setModels([]);
     setOk(null);
     setMessage("已恢复默认值（尚未写入本地，需点保存）");
@@ -249,10 +263,12 @@ export function SettingsPage({
           {draft.model || "—"}
         </strong>
       </div>
-      <div className="admin-status-card">
-        <span className="admin-status-label">并发</span>
-        <strong className="admin-status-value">{draft.concurrency}</strong>
-      </div>
+      {isStationMaster ? (
+        <div className="admin-status-card">
+          <span className="admin-status-label">并发</span>
+          <strong className="admin-status-value">{draft.concurrency}</strong>
+        </div>
+      ) : null}
       <div className="admin-status-card">
         <span className="admin-status-label">请求通道</span>
         <strong className="admin-status-value mono-tight" title={requestBase}>
@@ -369,7 +385,43 @@ export function SettingsPage({
                 <div className="admin-block-divider" role="separator" />
 
                 <div className="admin-block-label">生成默认值</div>
-                <div className="admin-fields-2">
+                {isStationMaster ? (
+                  <div className="admin-fields-2">
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="model">模型</label>
+                      </div>
+                      <input
+                        id="model"
+                        className="control mono"
+                        list="model-options"
+                        value={typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model}
+                        onChange={(e) => update("model", e.target.value)}
+                        placeholder="grok-imagine-image"
+                        spellCheck={false}
+                      />
+                      <datalist id="model-options">
+                        {imageModels.map((id) => (
+                          <option key={id} value={id} />
+                        ))}
+                      </datalist>
+                    </div>
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="concurrency">全局并发槽</label>
+                      </div>
+                      <input
+                        id="concurrency"
+                        className="control"
+                        type="number"
+                        min={1}
+                        max={2}
+                        value={draft.concurrency}
+                        onChange={(e) => update("concurrency", Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                ) : (
                   <div className="field">
                     <div className="label-row">
                       <label htmlFor="model">模型</label>
@@ -389,21 +441,7 @@ export function SettingsPage({
                       ))}
                     </datalist>
                   </div>
-                  <div className="field">
-                    <div className="label-row">
-                      <label htmlFor="concurrency">全局并发槽</label>
-                    </div>
-                    <input
-                      id="concurrency"
-                      className="control"
-                      type="number"
-                      min={1}
-                      max={2}
-                      value={draft.concurrency}
-                      onChange={(e) => update("concurrency", Number(e.target.value))}
-                    />
-                  </div>
-                </div>
+                )}
 
                 <div className="admin-fields-2">
                   <div className="field">

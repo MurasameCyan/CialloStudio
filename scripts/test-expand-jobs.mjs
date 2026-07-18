@@ -17,6 +17,14 @@ function splitPrompts(raw) {
     .filter(Boolean);
 }
 
+function resolvePrompts(raw, mode) {
+  if (mode === "block") {
+    const text = String(raw ?? "").trim();
+    return text ? [text] : [];
+  }
+  return splitPrompts(raw);
+}
+
 function imagesPerPrompt(variants, concurrency) {
   return clampVariants(variants) * clampConcurrency(concurrency);
 }
@@ -64,6 +72,18 @@ function assert(cond, msg) {
   assert(prompts.length === 3, `expected 3 prompts, got ${prompts.length}`);
   assert(planJobCount(prompts, 2, 2) === 12, "3×2×2=12");
   assert(expandJobs(prompts, 2, 2).length === 12, "expand 3×2×2");
+}
+
+// block 模式：整段算 1 条
+{
+  const raw = "line one\nline two\n\nline three";
+  const asLines = resolvePrompts(raw, "lines");
+  const asBlock = resolvePrompts(raw, "block");
+  assert(asLines.length === 3, "lines mode 3 prompts");
+  assert(asBlock.length === 1, "block mode 1 prompt");
+  assert(asBlock[0].includes("line one") && asBlock[0].includes("line three"), "block keeps body");
+  assert(planJobCount(asBlock, 2, 2) === 4, "block 1×2×2=4");
+  assert(resolvePrompts("  \n  ", "block").length === 0, "block empty");
 }
 
 // NaN 兜底

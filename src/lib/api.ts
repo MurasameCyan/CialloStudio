@@ -498,7 +498,7 @@ export async function generateImage(input: {
   return images;
 }
 
-const PROMPT_OPTIMIZE_SYSTEM = [
+const PROMPT_OPTIMIZE_SYSTEM_LINES = [
   "You are an expert AI image prompt engineer.",
   "Rewrite the user's prompts for text-to-image models.",
   "Rules:",
@@ -508,14 +508,27 @@ const PROMPT_OPTIMIZE_SYSTEM = [
   "4) Keep each line reasonably concise (under ~400 chars when possible).",
 ].join("\n");
 
+const PROMPT_OPTIMIZE_SYSTEM_BLOCK = [
+  "You are an expert AI image prompt engineer.",
+  "Rewrite the user's text as ONE coherent text-to-image prompt.",
+  "Rules:",
+  "1) Treat the entire input as a single prompt (multi-line input is still one image).",
+  "2) You may reorganize into a clear paragraph or a few lines of the same single prompt; do not invent multiple independent scenes.",
+  "3) Keep the same language the user used when possible; improve clarity, subject, composition, lighting, style.",
+  "4) Output ONLY the optimized prompt, plain text, no markdown, no numbering, no quotes, no explanations.",
+].join("\n");
+
 /**
  * 用 chat/completions 优化提示词，返回纯文本（可多行）。
+ * mode=lines：按行优化；mode=block：整段作为一条 prompt。
  */
 export async function optimizePromptText(input: {
   baseUrl: string;
   apiKey: string;
   model: string;
   promptText: string;
+  /** lines=按行；block=整段一条 */
+  mode?: "lines" | "block";
   signal?: AbortSignal;
 }): Promise<string> {
   const model = typeof input.model === "string" ? input.model.trim() : "";
@@ -527,8 +540,10 @@ export async function optimizePromptText(input: {
     throw new ApiError(400, "请先输入提示词", "empty_prompt");
   }
 
+  const mode = input.mode === "block" ? "block" : "lines";
   log("info", "优化提示词", {
     model,
+    mode,
     lines: text.split(/\r?\n/).filter((l) => l.trim()).length,
     baseUrl: input.baseUrl,
   });
@@ -540,7 +555,10 @@ export async function optimizePromptText(input: {
       model,
       temperature: 0.6,
       messages: [
-        { role: "system", content: PROMPT_OPTIMIZE_SYSTEM },
+        {
+          role: "system",
+          content: mode === "block" ? PROMPT_OPTIMIZE_SYSTEM_BLOCK : PROMPT_OPTIMIZE_SYSTEM_LINES,
+        },
         { role: "user", content: text },
       ],
     },

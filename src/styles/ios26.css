@@ -1184,6 +1184,17 @@ a {
   gap: 8px;
 }
 
+.prompt-mode-segmented {
+  gap: 4px;
+}
+
+.prompt-mode-segmented .chip {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
 .prompt-optimize-btn.active,
 .prompt-optimize-btn:not(:disabled):hover {
   border-color: rgba(0, 113, 227, 0.28);

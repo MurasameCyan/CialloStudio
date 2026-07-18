@@ -19,6 +19,9 @@ export type StudioJob = {
   aspectRatio?: string;
 };
 
+/** lines=每行一条 prompt；block=整段文本作为一条 prompt */
+export type PromptMode = "lines" | "block";
+
 export type StudioDraft = {
   promptText: string;
   aspectRatio: string;
@@ -27,6 +30,8 @@ export type StudioDraft = {
   concurrency: number;
   /** 新生成是否追加到结果墙；false=只保留本次 */
   appendResults: boolean;
+  /** 单行拆分 / 多行整段 */
+  promptMode: PromptMode;
 };
 
 // v2：清空旧版结果墙历史（v1 曾默认追加，容易看起来像「点一次出十几张」）
@@ -60,6 +65,23 @@ export function splitPrompts(raw: string): string[] {
     .filter(Boolean);
 }
 
+export function normalizePromptMode(value: unknown): PromptMode {
+  return value === "block" ? "block" : "lines";
+}
+
+/**
+ * 按模式解析 prompt 列表。
+ * - lines（单行）：每行一条，空行忽略（默认，与历史行为一致）
+ * - block（多行）：整段 trim 后作为一条 prompt（保留内部换行）
+ */
+export function resolvePrompts(raw: string, mode: PromptMode = "lines"): string[] {
+  if (normalizePromptMode(mode) === "block") {
+    const text = String(raw ?? "").trim();
+    return text ? [text] : [];
+  }
+  return splitPrompts(raw);
+}
+
 /**
  * 每条 prompt 最终展开几张：
  * 生图数量(variants) × 并发数(concurrency)
@@ -76,8 +98,9 @@ export function planJobCount(
   prompts: string[] | string,
   variants: number,
   concurrency: number,
+  mode: PromptMode = "lines",
 ): number {
-  const list = Array.isArray(prompts) ? prompts : splitPrompts(prompts);
+  const list = Array.isArray(prompts) ? prompts : resolvePrompts(prompts, mode);
   return list.length * imagesPerPrompt(variants, concurrency);
 }
 
@@ -190,6 +213,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
         concurrency: clampConcurrency(defaults.concurrency),
         appendResults: false,
+        promptMode: normalizePromptMode(defaults.promptMode),
       };
     }
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
@@ -201,6 +225,9 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
       // 缺省 / 非 boolean 一律 false：替换结果墙
       appendResults: parsed.appendResults === true,
+      promptMode: normalizePromptMode(
+        parsed.promptMode ?? defaults.promptMode ?? "lines",
+      ),
     };
   } catch {
     return {
@@ -208,6 +235,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
       concurrency: clampConcurrency(defaults.concurrency),
       appendResults: false,
+      promptMode: normalizePromptMode(defaults.promptMode),
     };
   }
 }
@@ -220,6 +248,7 @@ export function saveDraft(draft: StudioDraft): void {
         ...draft,
         variants: clampVariants(draft.variants),
         concurrency: clampConcurrency(draft.concurrency),
+        promptMode: normalizePromptMode(draft.promptMode),
       }),
     );
   } catch {

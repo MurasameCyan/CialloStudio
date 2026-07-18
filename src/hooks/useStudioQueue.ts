@@ -10,10 +10,11 @@ import {
   expandJobs,
   loadDraft,
   loadJobs,
+  normalizePromptMode,
   planJobCount,
+  resolvePrompts,
   saveDraft,
   saveJobs,
-  splitPrompts,
   type StudioDraft,
   type StudioJob,
 } from "@/lib/studioQueue";
@@ -52,6 +53,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       variants: DEFAULT_VARIANTS,
       concurrency: clampConcurrency(settings.concurrency),
       appendResults: false,
+      promptMode: "lines",
     }),
   );
   const [jobs, setJobs] = useState<StudioJob[]>(() => loadJobs());
@@ -68,7 +70,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   draftRef.current = draft;
   settingsRef.current = settings;
 
-  const prompts = useMemo(() => splitPrompts(draft.promptText), [draft.promptText]);
+  const prompts = useMemo(
+    () => resolvePrompts(draft.promptText, draft.promptMode),
+    [draft.promptText, draft.promptMode],
+  );
   // 总张数 = Prompt 条数 × 生图数量 × 并发数
   const plannedJobs = planJobCount(prompts, draft.variants, draft.concurrency);
 
@@ -110,6 +115,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             : clampConcurrency(prev.concurrency),
         appendResults:
           patch.appendResults !== undefined ? patch.appendResults === true : prev.appendResults === true,
+        promptMode:
+          patch.promptMode !== undefined
+            ? normalizePromptMode(patch.promptMode)
+            : normalizePromptMode(prev.promptMode),
       };
       draftRef.current = next;
       return next;
@@ -131,7 +140,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const start = useCallback(async () => {
     const currentSettings = settingsRef.current;
     const currentDraft = draftRef.current;
-    const currentPrompts = splitPrompts(currentDraft.promptText);
+    const currentPrompts = resolvePrompts(currentDraft.promptText, currentDraft.promptMode);
 
     const apiKey = typeof currentSettings.apiKey === "string" ? currentSettings.apiKey : "";
     if (!apiKey.trim()) {

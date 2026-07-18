@@ -259,6 +259,7 @@ export function StudioPage({
         apiKey: ep.apiKey,
         model: ep.model,
         promptText: current,
+        mode: draft.promptMode === "block" ? "block" : "lines",
       });
       setPromptBeforeOptimize(current);
       setDraft({ promptText: optimized });
@@ -266,6 +267,7 @@ export function StudioPage({
       log("ok", "提示词优化完成", {
         model: ep.model,
         customUpstream: ep.usingCustomUpstream,
+        promptMode: draft.promptMode,
       });
     } catch (error) {
       const message =
@@ -287,6 +289,14 @@ export function StudioPage({
     setPromptBeforeOptimize(null);
     setOptimizeNotice({ ok: true, text: "已回退到优化前的提示词" });
     log("info", "提示词已回退");
+  }
+
+  function handleClearPrompt() {
+    if (!draft.promptText) return;
+    setDraft({ promptText: "" });
+    setPromptBeforeOptimize(null);
+    setOptimizeNotice(null);
+    log("info", "已清空提示词");
   }
 
   function handleClear() {
@@ -430,6 +440,26 @@ export function StudioPage({
           <div className="label-row prompt-label-row">
             <label htmlFor="prompts">Prompt</label>
             <div className="prompt-optimize-actions">
+              <div className="segmented prompt-mode-segmented" role="group" aria-label="提示词模式">
+                <button
+                  type="button"
+                  className={`chip ${draft.promptMode !== "block" ? "active" : ""}`}
+                  disabled={optimizeBusy || running}
+                  title="每行一条 prompt，分别生图"
+                  onClick={() => setDraft({ promptMode: "lines" })}
+                >
+                  单行
+                </button>
+                <button
+                  type="button"
+                  className={`chip ${draft.promptMode === "block" ? "active" : ""}`}
+                  disabled={optimizeBusy || running}
+                  title="整段输入作为同一张图的提示词"
+                  onClick={() => setDraft({ promptMode: "block" })}
+                >
+                  多行
+                </button>
+              </div>
               <button
                 type="button"
                 className="hall-chip prompt-optimize-btn"
@@ -458,6 +488,15 @@ export function StudioPage({
               >
                 回退
               </button>
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={!draft.promptText || optimizeBusy || running}
+                title="清空输入框"
+                onClick={handleClearPrompt}
+              >
+                清除
+              </button>
             </div>
           </div>
           <textarea
@@ -465,7 +504,11 @@ export function StudioPage({
             className="textarea"
             value={draft.promptText}
             onChange={(e) => setDraft({ promptText: e.target.value })}
-            placeholder={"每行一个 prompt\n例如：cyberpunk city at night\na watercolor fox"}
+            placeholder={
+              draft.promptMode === "block"
+                ? "多行模式：整段内容作为同一张图的提示词\n可换行描述细节、风格、构图…"
+                : "单行模式：每行一个 prompt\n例如：cyberpunk city at night\na watercolor fox"
+            }
             disabled={optimizeBusy}
           />
           {optimizeNotice ? (
@@ -482,8 +525,16 @@ export function StudioPage({
             </div>
           ) : null}
           <div className="composer-stats">
-            <span className="stat-pill">
-              Prompt <strong>{prompts.length}</strong>
+            <span
+              className="stat-pill"
+              title={
+                draft.promptMode === "block"
+                  ? "多行模式：整段算 1 条 prompt"
+                  : "单行模式：非空行数"
+              }
+            >
+              {draft.promptMode === "block" ? "整段" : "行数"}{" "}
+              <strong>{prompts.length}</strong>
             </span>
             <span className="stat-pill" title="生图数量（variants）">
               生图 <strong>{draft.variants}</strong>
@@ -493,7 +544,11 @@ export function StudioPage({
             </span>
             <span
               className="stat-pill"
-              title="总张数 = Prompt 条数 × 生图数量 × 并发数"
+              title={
+                draft.promptMode === "block"
+                  ? "总张数 = 1 × 生图数量 × 并发数"
+                  : "总张数 = Prompt 条数 × 生图数量 × 并发数"
+              }
             >
               总张数 <strong>{plannedJobs}</strong>
             </span>

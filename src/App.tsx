@@ -2,17 +2,23 @@ import { useEffect, useState } from "react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { HallPage } from "@/components/HallPage";
 import { SettingsPage } from "@/components/SettingsPage";
+import { StudioModeSwitch } from "@/components/StudioModeSwitch";
 import { StudioPage } from "@/components/StudioPage";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { useCommunityAuth } from "@/hooks/useCommunityAuth";
 import { useStudioQueue } from "@/hooks/useStudioQueue";
 import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
+import { loadStudioMode, saveStudioMode, type StudioMode } from "@/lib/studioMode";
+import { applyTheme, loadTheme, saveTheme, type UiTheme } from "@/lib/theme";
 
 type Tab = "studio" | "hall" | "settings";
 
 export default function App() {
   const [tab, setTab] = useState<Tab>("studio");
+  const [theme, setTheme] = useState<UiTheme>(() => loadTheme());
+  const [studioMode, setStudioMode] = useState<StudioMode>(() => loadStudioMode());
   const [settings, setSettings] = useState<StudioSettings>(() => {
     const initial = loadSettings();
     const key = typeof initial.apiKey === "string" ? initial.apiKey : "";
@@ -26,6 +32,10 @@ export default function App() {
     return initial;
   });
   const community = useCommunityAuth();
+
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
 
   // 队列挂在 App 层：切页也不会丢任务/结果
   const queue = useStudioQueue(settings);
@@ -64,7 +74,8 @@ export default function App() {
         <div className="brand">
           <div className="brand-mark" aria-hidden />
           <div className="brand-text">
-            <div className="brand-title">Ciallo Studio</div>
+            <div className="brand-kicker">Studio</div>
+            <div className="brand-title">Ciallo</div>
           </div>
         </div>
 
@@ -79,6 +90,22 @@ export default function App() {
                   ? "Ready"
                   : "Setup"}
           </div>
+          {tab === "studio" ? (
+            <StudioModeSwitch
+              mode={studioMode}
+              onChange={(mode) => {
+                saveStudioMode(mode);
+                setStudioMode(mode);
+              }}
+            />
+          ) : null}
+          <ThemeToggle
+            theme={theme}
+            onChange={(next) => {
+              saveTheme(next);
+              setTheme(next);
+            }}
+          />
           <nav className="nav-pills" aria-label="主导航">
             <button
               type="button"
@@ -116,6 +143,7 @@ export default function App() {
         {tab === "studio" ? (
           <ErrorBoundary label="生图页">
             <StudioPage
+              mode={studioMode}
               settings={settings}
               onOpenSettings={openSettings}
               onNeedLogin={openHallAuth}

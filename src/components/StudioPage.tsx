@@ -22,10 +22,12 @@ import {
   type StudioDraft,
   type StudioJob,
 } from "@/lib/studioQueue";
+import type { StudioMode } from "@/lib/studioMode";
 
 type Stats = { total: number; done: number; failed: number; active: number; running: number; queued: number };
 
 type Props = {
+  mode?: StudioMode;
   settings: StudioSettings;
   onOpenSettings: () => void;
   /** 未登录时跳转账号页 */
@@ -48,6 +50,7 @@ type Props = {
 };
 
 export function StudioPage({
+  mode = "console",
   settings,
   onOpenSettings,
   onNeedLogin,
@@ -421,48 +424,445 @@ export function StudioPage({
     }
   }
 
+  const feedbackBars = (
+    <>
+      {shareUiRevealed && shareCooldownLocked ? (
+        <div className="studio-feedback studio-feedback-warn" role="status">
+          <span className="studio-feedback-dot warn" aria-hidden />
+          <span className="studio-feedback-text">
+            分享冷却中 · 还剩 <strong>{shareRemainSec}</strong> 秒
+          </span>
+        </div>
+      ) : shareNotice ? (
+        <div
+          className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+          role="status"
+        >
+          <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
+          <span className="studio-feedback-text">{shareNotice.text}</span>
+        </div>
+      ) : null}
+      {!configured ? (
+        <div className="studio-feedback studio-feedback-muted" role="status">
+          <span className="studio-feedback-dot muted" aria-hidden />
+          <span className="studio-feedback-text">
+            {isLoggedIn
+              ? "尚未配置 API Key · 请到「设置」填写接口与密钥"
+              : "尚未配置 API Key · 请先登录，再到「设置」填写"}
+          </span>
+        </div>
+      ) : null}
+    </>
+  );
+
+  const promptGroups = useMemo(() => {
+    const order: string[] = [];
+    const map = new Map<string, StudioJob[]>();
+    for (const job of wallJobs) {
+      const key = job.prompt || "(empty)";
+      if (!map.has(key)) {
+        map.set(key, []);
+        order.push(key);
+      }
+      map.get(key)!.push(job);
+    }
+    return order.map((prompt) => ({ prompt, jobs: map.get(prompt)! }));
+  }, [wallJobs]);
+
+  const [chatParamsOpen, setChatParamsOpen] = useState(false);
+
+  const renderJobCard = (job: StudioJob) => {
+    const src = displayUrl(job);
+    const canSelect = job.status === "done" && Boolean(src || job.openUrl);
+    const isSelected = selected.has(job.id);
+    return (
+      <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
+        <span
+          className={`badge ${
+            job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
+          }`}
+        >
+          #{job.variant}/{job.variants}
+        </span>
+        {canSelect ? (
+          <label className="card-check" title="勾选下载">
+            <input
+              type="checkbox"
+              checked={isSelected}
+              disabled={downloading}
+              onChange={() => toggleOne(job.id)}
+            />
+          </label>
+        ) : null}
+        <div
+          className="card-media"
+          onClick={() => {
+            if (canSelect) toggleOne(job.id);
+          }}
+        >
+          {job.status === "done" && src ? (
+            <>
+              <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
+              <div className="card-overlay">
+                <a
+                  href={job.openUrl || src}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  打开原图
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={sharingId === job.id || shareCooldownLocked}
+                  title={
+                    shareCooldownLocked ? `冷却中，${shareRemainSec} 秒后可分享` : "分享到大厅"
+                  }
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void handleShareToHall(job);
+                  }}
+                >
+                  {sharingId === job.id
+                    ? "分享中…"
+                    : shareCooldownLocked
+                      ? `冷却 ${shareRemainSec}s`
+                      : "分享到大厅"}
+                </button>
+              </div>
+            </>
+          ) : job.status === "failed" ? (
+            <div
+              className="skeleton"
+              style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+            >
+              <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
+            </div>
+          ) : (
+            <div className="skeleton" />
+          )}
+        </div>
+        <div className="card-body">
+          <div className="card-meta">
+            <strong>#{job.variant}</strong>
+            {job.prompt}
+            {job.resolution ? ` · ${job.resolution}` : ""}
+          </div>
+        </div>
+      </article>
+    );
+  };
+
+  if (mode === "chat") {
+    return (
+      <div className="page studio-chat-layout">
+        <section className="panel studio-chat-card">
+          <div className="results-toolbar">
+            <div>
+              <div className="panel-kicker">Chat</div>
+              <h2 className="panel-title studio-wall-title">
+                对话流 · {successOnly ? wallJobs.length : stats.total} 张
+              </h2>
+            </div>
+            <div className="results-toolbar-actions">
+              <div className="kpi-row kpi-row-inline" aria-label="生成统计">
+                <div className="kpi">
+                  <div className="kpi-label">总数</div>
+                  <div className="kpi-value">{stats.total}</div>
+                </div>
+                <div className="kpi">
+                  <div className="kpi-label">完成</div>
+                  <div className="kpi-value">{stats.done}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                className={`chip gallery-filter-chip ${successOnly ? "active" : ""}`}
+                aria-pressed={successOnly}
+                onClick={toggleSuccessOnly}
+              >
+                仅成功
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                disabled={running || safeJobs.length === 0}
+                onClick={handleClear}
+              >
+                清空
+              </button>
+            </div>
+          </div>
+          {feedbackBars}
+          <div className="progress-track" aria-hidden>
+            <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
+          </div>
+          <div className="selection-bar">
+            <label className="select-all">
+              <input
+                type="checkbox"
+                checked={allSelected}
+                disabled={downloadableJobs.length === 0 || downloading}
+                onChange={toggleSelectAll}
+              />
+              <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+            </label>
+            <div className="selection-meta">
+              已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+            </div>
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={selectedCount === 0 || downloading}
+                onClick={clearSelection}
+              >
+                清除勾选
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={selectedCount === 0 || downloading}
+                onClick={handleDownloadSelected}
+              >
+                {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+              </button>
+            </div>
+          </div>
+
+          <div className="studio-chat-stream">
+            {safeJobs.length === 0 ? (
+              <div className="empty empty-compact gallery-empty">
+                <div className="empty-icon" aria-hidden />
+                <div>
+                  <span className="empty-title">还没有对话画面</span>
+                  <p className="empty-text">在同一卡片底部输入提示词并发送。结果会按提示词分组出现在时间线里。</p>
+                </div>
+              </div>
+            ) : promptGroups.length === 0 ? (
+              <div className="empty empty-compact gallery-empty">
+                <div className="empty-icon" aria-hidden />
+                <div>
+                  <span className="empty-title">暂无成功图片</span>
+                  <p className="empty-text">已开启「仅成功」。关闭开关可查看进行中或失败任务。</p>
+                </div>
+              </div>
+            ) : (
+              promptGroups.map((group) => (
+                <div key={group.prompt} className="studio-chat-turn">
+                  <div className="studio-chat-user">{group.prompt}</div>
+                  <div className="studio-chat-assistant">
+                    <div className="gallery">{group.jobs.map((job) => renderJobCard(job))}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="studio-chat-composer" aria-label="对话输入">
+            <div className="field">
+              <div className="label-row prompt-label-row">
+                <label htmlFor="prompts-chat">Prompt</label>
+                <div className="prompt-optimize-actions">
+                  <div className="segmented prompt-mode-segmented" role="group" aria-label="提示词模式">
+                    <button
+                      type="button"
+                      className={`chip ${draft.promptMode !== "block" ? "active" : ""}`}
+                      disabled={optimizeBusy || running}
+                      onClick={() => setDraft({ promptMode: "lines" })}
+                    >
+                      单行
+                    </button>
+                    <button
+                      type="button"
+                      className={`chip ${draft.promptMode === "block" ? "active" : ""}`}
+                      disabled={optimizeBusy || running}
+                      onClick={() => setDraft({ promptMode: "block" })}
+                    >
+                      多行
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="hall-chip prompt-optimize-btn"
+                    disabled={!canOptimize}
+                    onClick={() => void handleOptimizePrompt()}
+                  >
+                    {optimizeBusy ? "优化中…" : "优化"}
+                  </button>
+                  <button
+                    type="button"
+                    className="hall-chip"
+                    disabled={promptBeforeOptimize == null || optimizeBusy || running}
+                    onClick={handleUndoOptimize}
+                  >
+                    回退
+                  </button>
+                  <button
+                    type="button"
+                    className="hall-chip"
+                    disabled={!draft.promptText || optimizeBusy || running}
+                    onClick={handleClearPrompt}
+                  >
+                    清除
+                  </button>
+                </div>
+              </div>
+              <textarea
+                id="prompts-chat"
+                className="textarea"
+                value={draft.promptText}
+                onChange={(e) => setDraft({ promptText: e.target.value })}
+                placeholder={
+                  draft.promptMode === "block"
+                    ? "多行模式：整段作为同一张图的提示词"
+                    : "单行模式：每行一个 prompt，发送后批量生成"
+                }
+                disabled={optimizeBusy}
+              />
+              {optimizeNotice ? (
+                <div
+                  className={`studio-feedback ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+                  role="status"
+                  style={{ marginTop: 10, marginBottom: 0 }}
+                >
+                  <span className={`studio-feedback-dot ${optimizeNotice.ok ? "ok" : "warn"}`} aria-hidden />
+                  <span className="studio-feedback-text">{optimizeNotice.text}</span>
+                </div>
+              ) : null}
+            </div>
+            <div className="studio-chat-composer-actions">
+              <div className="composer-stats">
+                <span className="stat-pill">
+                  {draft.promptMode === "block" ? "整段" : "行数"} <strong>{prompts.length}</strong>
+                </span>
+                <span className="stat-pill">
+                  总张数 <strong>{plannedJobs}</strong>
+                </span>
+                {running ? <span className="stat-pill">生成中</span> : null}
+              </div>
+              <button
+                type="button"
+                className="hall-chip"
+                onClick={() => setChatParamsOpen((v) => !v)}
+                aria-expanded={chatParamsOpen}
+              >
+                {chatParamsOpen ? "收起参数" : "参数"}
+              </button>
+              <button type="button" className="btn btn-ghost" onClick={openConfigOrLogin}>
+                模型 {settings.model || "未选择"} →
+              </button>
+              <div className="btn-row" style={{ marginLeft: "auto" }}>
+                <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
+                  停止
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={running || prompts.length === 0}
+                  onClick={handleGenerate}
+                >
+                  {running ? "生成中…" : `发送 · ${plannedJobs}`}
+                </button>
+              </div>
+            </div>
+            {chatParamsOpen ? (
+              <div className="studio-chat-params">
+                <div className="studio-params-grid">
+                  <div className="studio-params-row">
+                    <div className="field">
+                      <label>数量</label>
+                      <div className="segmented">
+                        {VARIANT_OPTIONS.map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className={`chip ${draft.variants === n ? "active" : ""}`}
+                            onClick={() => setDraft({ variants: n })}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>并发</label>
+                      <div className="segmented">
+                        {CONCURRENCY_OPTIONS.map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            className={`chip ${draft.concurrency === n ? "active" : ""}`}
+                            onClick={() => setDraft({ concurrency: n })}
+                          >
+                            {n}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="field">
+                      <label>分辨率</label>
+                      <div className="segmented">
+                        {RESOLUTIONS.map((item) => {
+                          const allowed = modelCap.allowedResolutions.includes(item);
+                          return (
+                            <button
+                              key={item}
+                              type="button"
+                              className={`chip ${draft.resolution === item ? "active" : ""}`}
+                              disabled={!allowed}
+                              onClick={() => {
+                                if (allowed) setDraft({ resolution: item });
+                              }}
+                            >
+                              {item}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="studio-params-divider" role="separator" />
+                  <div className="field">
+                    <label>宽高比</label>
+                    <div className="segmented">
+                      {ASPECT_RATIOS.map((ratio) => (
+                        <button
+                          key={ratio}
+                          type="button"
+                          className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                          onClick={() => setDraft({ aspectRatio: ratio })}
+                        >
+                          {ratio}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
-    <div className="page studio-layout">
-      <section className="panel studio-stage">
+    <div className="page studio-console-layout">
+      <section className="panel studio-console-controls studio-stage">
         <div className="panel-head studio-stage-head">
           <div>
-            <div className="panel-kicker">Stage 01</div>
+            <div className="panel-kicker">Console</div>
             <h2 className="panel-title studio-display-title">
-              <span className="studio-display-line">Prompt</span>
-              <span className="studio-display-accent">Canvas</span>
+              <span className="studio-display-line">控制台</span>
+              <span className="studio-display-accent">批处理</span>
             </h2>
-            <p className="panel-desc studio-stage-desc">灵感工作台 · 写提示词，调参数，一键出图</p>
+            <p className="panel-desc studio-stage-desc">左栏调参 · 右侧出图 · 与对话模式共享队列</p>
           </div>
         </div>
 
-        {/* 轻量反馈：玻璃胶囊条，与 connection-chip / stat-pill 同系 */}
-        {shareUiRevealed && shareCooldownLocked ? (
-          <div className="studio-feedback studio-feedback-warn" role="status">
-            <span className="studio-feedback-dot warn" aria-hidden />
-            <span className="studio-feedback-text">
-              分享冷却中 · 还剩 <strong>{shareRemainSec}</strong> 秒
-            </span>
-          </div>
-        ) : shareNotice ? (
-          <div
-            className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
-            role="status"
-          >
-            <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
-            <span className="studio-feedback-text">{shareNotice.text}</span>
-          </div>
-        ) : null}
-
-        {!configured ? (
-          <div className="studio-feedback studio-feedback-muted" role="status">
-            <span className="studio-feedback-dot muted" aria-hidden />
-            <span className="studio-feedback-text">
-              {isLoggedIn
-                ? "尚未配置 API Key · 请到「设置」填写接口与密钥"
-                : "尚未配置 API Key · 请先登录，再到「设置」填写"}
-            </span>
-          </div>
-        ) : null}
+        {feedbackBars}
 
         <div className="field">
           <div className="label-row prompt-label-row">
@@ -688,7 +1088,7 @@ export function StudioPage({
         </div>
       </section>
 
-      <section className="panel results-panel studio-wall">
+      <section className="panel results-panel studio-wall studio-console-wall">
         <div className="results-toolbar">
           <div>
             <div className="panel-kicker">Results</div>
@@ -786,94 +1186,7 @@ export function StudioPage({
             </div>
           </div>
         ) : (
-          <div className="gallery">
-            {wallJobs.map((job) => {
-              const src = displayUrl(job);
-              const canSelect = job.status === "done" && Boolean(src || job.openUrl);
-              const isSelected = selected.has(job.id);
-              return (
-                <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
-                  <span
-                    className={`badge ${
-                      job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
-                    }`}
-                  >
-                    #{job.variant}/{job.variants}
-                  </span>
-
-                  {canSelect ? (
-                    <label className="card-check" title="勾选下载">
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        disabled={downloading}
-                        onChange={() => toggleOne(job.id)}
-                      />
-                    </label>
-                  ) : null}
-
-                  <div
-                    className="card-media"
-                    onClick={() => {
-                      if (canSelect) toggleOne(job.id);
-                    }}
-                  >
-                    {job.status === "done" && src ? (
-                      <>
-                        <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
-                        <div className="card-overlay">
-                          <a
-                            href={job.openUrl || src}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            打开原图
-                          </a>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            disabled={sharingId === job.id || shareCooldownLocked}
-                            title={
-                              shareCooldownLocked
-                                ? `冷却中，${shareRemainSec} 秒后可分享`
-                                : "分享到大厅"
-                            }
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleShareToHall(job);
-                            }}
-                          >
-                            {sharingId === job.id
-                              ? "分享中…"
-                              : shareCooldownLocked
-                                ? `冷却 ${shareRemainSec}s`
-                                : "分享到大厅"}
-                          </button>
-                        </div>
-                      </>
-                    ) : job.status === "failed" ? (
-                      <div
-                        className="skeleton"
-                        style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
-                      >
-                        <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
-                      </div>
-                    ) : (
-                      <div className="skeleton" />
-                    )}
-                  </div>
-                  <div className="card-body">
-                    <div className="card-meta">
-                      <strong>#{job.variant}</strong>
-                      {job.prompt}
-                      {job.resolution ? ` · ${job.resolution}` : ""}
-                    </div>
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+          <div className="gallery">{wallJobs.map((job) => renderJobCard(job))}</div>
         )}
       </section>
     </div>

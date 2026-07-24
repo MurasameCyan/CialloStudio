@@ -142,6 +142,10 @@ jobs:
           platforms: ${{ matrix.platform }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          build-args: |
+            CIALLO_BUILD_ID=${{ github.sha }}
+            CIALLO_TRACK_REF=${{ github.ref_name }}
+            CIALLO_GITHUB_REPO=${{ github.repository }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}

@@ -11,6 +11,12 @@ export type CialloRuntime = {
   communityMode: "mock" | "http";
   /** 社区 API base，默认 /api/community */
   communityApiBase: string;
+  /** 构建 SHA（短或全长）；空 = 用 Vite define / unknown */
+  buildId: string;
+  /** GitHub owner/repo，版本检测用 */
+  githubRepo: string;
+  /** 跟踪分支（默认 beta） */
+  trackRef: string;
 };
 
 declare global {
@@ -41,6 +47,13 @@ function readRuntime(): CialloRuntime {
     typeof raw?.communityApiBase === "string" && raw.communityApiBase.trim()
       ? raw.communityApiBase.trim()
       : "/api/community";
+  const buildId = typeof raw?.buildId === "string" ? raw.buildId.trim() : "";
+  const githubRepo =
+    typeof raw?.githubRepo === "string" && raw.githubRepo.trim()
+      ? raw.githubRepo.trim()
+      : "MurasameCyan/CialloStudio";
+  const trackRef =
+    typeof raw?.trackRef === "string" && raw.trackRef.trim() ? raw.trackRef.trim() : "beta";
   return {
     masterUsername: username || (hash ? "admin" : ""),
     masterPasswordSha256: hash,
@@ -48,6 +61,9 @@ function readRuntime(): CialloRuntime {
     mediaUploadToken,
     communityMode,
     communityApiBase,
+    buildId,
+    githubRepo,
+    trackRef,
   };
 }
 

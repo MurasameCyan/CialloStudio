@@ -8,6 +8,11 @@ import {
   resolveBrowserApiBase,
   type OpenAIModel,
 } from "@/lib/api";
+import {
+  checkForUpdate,
+  resolveBuildInfo,
+  type UpdateCheckResult,
+} from "@/lib/buildInfo";
 import type { CommunityUser } from "@/lib/community/types";
 import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
@@ -76,11 +81,32 @@ export function SettingsPage({
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaMsg, setMediaMsg] = useState("");
   const [mediaOk, setMediaOk] = useState<boolean | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateResult, setUpdateResult] = useState<UpdateCheckResult | null>(null);
+  const buildInfo = useMemo(() => resolveBuildInfo(), []);
 
   useEffect(() => {
     setMediaBaseDraft(getMediaBase());
     setMediaTokenDraft(getMediaUploadToken());
   }, []);
+
+  async function handleCheckUpdate() {
+    setUpdateBusy(true);
+    setUpdateResult(null);
+    try {
+      const result = await checkForUpdate();
+      setUpdateResult(result);
+      if (result.error) {
+        log("error", "版本检测失败", result.error);
+      } else if (result.hasUpdate) {
+        log("ok", "发现新版本", `${result.current} → ${result.latest}`);
+      } else {
+        log("ok", "已是最新", result.current);
+      }
+    } finally {
+      setUpdateBusy(false);
+    }
+  }
 
   useEffect(() => {
     if (!isStationMaster && section !== "api") {
@@ -306,6 +332,20 @@ export function SettingsPage({
     </div>
   );
 
+  const updateStatusText = (() => {
+    if (updateBusy) return "检查中…";
+    if (!updateResult) return "";
+    if (updateResult.error) return updateResult.error;
+    if (updateResult.hasUpdate) {
+      return `有更新 · ${updateResult.latest}${
+        updateResult.publishedAt
+          ? ` · ${new Date(updateResult.publishedAt).toLocaleDateString()}`
+          : ""
+      }`;
+    }
+    return `已是最新 · ${updateResult.latest || updateResult.current}`;
+  })();
+
   return (
     <div className="page admin-layout">
       <section className="panel admin-hero">
@@ -321,6 +361,51 @@ export function SettingsPage({
               )}
             </p>
           </div>
+        </div>
+
+        <div className="build-version-row" aria-label="版本信息">
+          <div className="build-version-meta">
+            <span className="admin-status-label">版本</span>
+            <a
+              className="build-version-hash mono-tight"
+              href={buildInfo.commitUrl}
+              target="_blank"
+              rel="noreferrer"
+              title={buildInfo.full || buildInfo.hash}
+            >
+              {buildInfo.hash}
+            </a>
+            {updateResult?.hasUpdate && updateResult.latest ? (
+              <span className="build-version-ref footer-note">
+                <a href={updateResult.htmlUrl} target="_blank" rel="noreferrer">
+                  最新 {updateResult.latest}
+                </a>
+              </span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost build-version-check"
+            disabled={updateBusy}
+            onClick={() => void handleCheckUpdate()}
+            title="对照 GitHub 跟踪分支 HEAD"
+          >
+            {updateBusy ? "检查中…" : "检查更新"}
+          </button>
+          {updateStatusText ? (
+            <span
+              className={`build-version-status footer-note${
+                updateResult?.error
+                  ? " build-version-status-err"
+                  : updateResult?.hasUpdate
+                    ? " build-version-status-new"
+                    : ""
+              }`}
+              title={updateStatusText}
+            >
+              {updateStatusText}
+            </span>
+          ) : null}
         </div>
 
         {isStationMaster ? (

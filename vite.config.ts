@@ -4,11 +4,53 @@ import { fileURLToPath, URL } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import http from "node:http";
 import https from "node:https";
+import { execSync } from "node:child_process";
 import {
   debugValidateUpstream,
   readUpstreamRawFromRequest,
   validateUpstreamOrigin,
 } from "./server/upstream-guard.mjs";
+
+/** Build-time git short SHA (Docker ARG / CI env wins over local git). */
+function resolveBuildId(): string {
+  const envKeys = [
+    "CIALLO_BUILD_ID",
+    "VITE_CIALLO_BUILD_ID",
+    "GIT_COMMIT",
+    "SOURCE_COMMIT",
+    "COMMIT_SHA",
+    "GITHUB_SHA",
+    "BUILD_ID",
+  ];
+  for (const key of envKeys) {
+    const v = (process.env[key] || "").trim().split(/\s+/)[0] || "";
+    if (/^[0-9a-fA-F]{7,40}$/.test(v)) return v.slice(0, 40).toLowerCase();
+  }
+  try {
+    return execSync("git rev-parse HEAD", {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 2000,
+    })
+      .trim()
+      .toLowerCase();
+  } catch {
+    return "unknown";
+  }
+}
+
+function resolveTrackRef(): string {
+  return (process.env.CIALLO_TRACK_REF || process.env.GITHUB_REF_NAME || "beta").trim() || "beta";
+}
+
+function resolveGithubRepo(): string {
+  const raw = (process.env.CIALLO_GITHUB_REPO || process.env.GITHUB_REPOSITORY || "MurasameCyan/CialloStudio")
+    .trim()
+    .replace(/^https:\/\/github\.com\//, "")
+    .replace(/^git@github\.com:/, "")
+    .replace(/\.git$/, "");
+  return raw || "MurasameCyan/CialloStudio";
+}
 
 /** hop-by-hop / 浏览器残留，转发到 Cloudflare 源站时容易把长 POST 搞坏 */
 const HOP_BY_HOP = new Set([
@@ -208,8 +250,17 @@ async function proxyToUpstream(req: IncomingMessage, res: ServerResponse): Promi
   });
 }
 
+const CIALLO_BUILD_ID = resolveBuildId();
+const CIALLO_TRACK_REF = resolveTrackRef();
+const CIALLO_GITHUB_REPO = resolveGithubRepo();
+
 export default defineConfig({
   plugins: [react(), cialloV1ProxyPlugin()],
+  define: {
+    __CIALLO_BUILD_ID__: JSON.stringify(CIALLO_BUILD_ID),
+    __CIALLO_TRACK_REF__: JSON.stringify(CIALLO_TRACK_REF),
+    __CIALLO_GITHUB_REPO__: JSON.stringify(CIALLO_GITHUB_REPO),
+  },
   resolve: {
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),

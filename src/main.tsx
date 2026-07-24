@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import "./styles/ios26.css";
+import "./styles/graphite.css";
 
 const root = document.getElementById("root");
 if (!root) {

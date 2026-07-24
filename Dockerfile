@@ -5,6 +5,14 @@ ARG NGINX_VERSION=1.27-alpine
 
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-alpine AS frontend-builder
 
+# 构建时注入 git SHA（CI: --build-arg CIALLO_BUILD_ID=$GITHUB_SHA）
+ARG CIALLO_BUILD_ID=
+ARG CIALLO_TRACK_REF=beta
+ARG CIALLO_GITHUB_REPO=MurasameCyan/CialloStudio
+ENV CIALLO_BUILD_ID=${CIALLO_BUILD_ID} \
+    CIALLO_TRACK_REF=${CIALLO_TRACK_REF} \
+    CIALLO_GITHUB_REPO=${CIALLO_GITHUB_REPO}
+
 WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -19,6 +27,10 @@ RUN npm run build
 
 FROM nginx:${NGINX_VERSION}
 
+ARG CIALLO_BUILD_ID=
+ARG CIALLO_TRACK_REF=beta
+ARG CIALLO_GITHUB_REPO=MurasameCyan/CialloStudio
+
 # 社区 API 用 Node；nginx 反代 /api/community
 RUN apk add --no-cache gettext curl nodejs \
   && mkdir -p /tmp/client_temp /tmp/proxy_temp /tmp/fastcgi_temp /tmp/uwsgi_temp /tmp/scgi_temp \
@@ -30,7 +42,8 @@ COPY server/community-api.mjs /opt/ciallo/community-api.mjs
 COPY server/upstream-guard.mjs /opt/ciallo/upstream-guard.mjs
 COPY server/v1-proxy.mjs /opt/ciallo/v1-proxy.mjs
 RUN chmod +x /entrypoint.sh \
-  && sed -i 's/\r$//' /entrypoint.sh
+  && sed -i 's/\r$//' /entrypoint.sh \
+  && printf '%s' "${CIALLO_BUILD_ID}" > /opt/ciallo/BUILD_ID
 
 COPY --from=frontend-builder /src/dist /usr/share/nginx/html
 
@@ -38,6 +51,9 @@ ENV CIALLO_MASTER_USERNAME=admin \
     CIALLO_MASTER_PASSWORD= \
     CIALLO_DATA_DIR=/data \
     CIALLO_COMMUNITY_PORT=8090 \
+    CIALLO_BUILD_ID=${CIALLO_BUILD_ID} \
+    CIALLO_TRACK_REF=${CIALLO_TRACK_REF} \
+    CIALLO_GITHUB_REPO=${CIALLO_GITHUB_REPO} \
     TZ=Asia/Shanghai
 
 VOLUME ["/data"]

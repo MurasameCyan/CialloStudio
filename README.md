@@ -104,6 +104,7 @@ npm run pack:media-worker:pages
 - **模型不可手输**，须先 **测试连接** 再点选 chip；标题右侧可 **筛选** 模型 ID
 - 优化默认 **复用生图上游**；「单独设定」后可填独立 Base/Key
 - 工作台：**优化提示词** → 覆盖输入框；**回退** → 恢复优化前内容
+- **版本**：设置页顶部显示构建短 SHA；点 **检查更新** 对照 GitHub 跟踪分支 HEAD（默认 `beta`，仅用户点击时请求）
 
 ## `.env` 变量
 
@@ -121,6 +122,9 @@ npm run pack:media-worker:pages
 | `CIALLO_DEBUG_UPSTREAM` | `1` | `1` 开调试接口；`0` 关 |
 | `CIALLO_V1_PROXY_PORT` | `8091` | 容器内 `/v1` 代理（一般不改） |
 | `CIALLO_COMMUNITY_PORT` | `8090` | 容器内社区 API（一般不改） |
+| `CIALLO_BUILD_ID` | 构建时写入 | 版本 SHA（CI/`docker build --build-arg`） |
+| `CIALLO_TRACK_REF` | `beta` | 版本检测跟踪分支 |
+| `CIALLO_GITHUB_REPO` | `MurasameCyan/CialloStudio` | 版本检测仓库 |
 | `TZ` | `Asia/Shanghai` | 时区 |
 
 见 [`.env.example`](.env.example)。

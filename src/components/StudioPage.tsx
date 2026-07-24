@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
 import {
@@ -23,6 +24,103 @@ import {
   type StudioJob,
 } from "@/lib/studioQueue";
 import type { StudioMode } from "@/lib/studioMode";
+
+const StudioJobCard = memo(function StudioJobCard({
+  job,
+  selected,
+  downloading,
+  sharingId,
+  shareLocked,
+  onToggle,
+  onShare,
+}: {
+  job: StudioJob;
+  selected: boolean;
+  downloading: boolean;
+  sharingId: string | null;
+  shareLocked: boolean;
+  onToggle: (id: string) => void;
+  onShare: (job: StudioJob) => void;
+}) {
+  const src = displayUrl(job);
+  const canSelect = job.status === "done" && Boolean(src || job.openUrl);
+  return (
+    <article className={`card ${selected ? "selected" : ""}`}>
+      <span
+        className={`badge ${
+          job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
+        }`}
+      >
+        #{job.variant}/{job.variants}
+      </span>
+      {canSelect ? (
+        <label className="card-check" title="勾选下载">
+          <input
+            type="checkbox"
+            checked={selected}
+            disabled={downloading}
+            onChange={() => onToggle(job.id)}
+          />
+        </label>
+      ) : null}
+      <div
+        className="card-media"
+        onClick={() => {
+          if (canSelect) onToggle(job.id);
+        }}
+      >
+        {job.status === "done" && src ? (
+          <>
+            <img
+              src={src}
+              alt={`${job.prompt} #${job.variant}`}
+              loading="lazy"
+              decoding="async"
+            />
+            <div className="card-overlay">
+              <a
+                href={job.openUrl || src}
+                target="_blank"
+                rel="noreferrer"
+                onClick={(e) => e.stopPropagation()}
+              >
+                打开原图
+              </a>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={sharingId === job.id || shareLocked}
+                title={shareLocked ? "分享冷却中" : "分享到大厅"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onShare(job);
+                }}
+              >
+                {sharingId === job.id ? "分享中…" : shareLocked ? "冷却中" : "分享到大厅"}
+              </button>
+            </div>
+          </>
+        ) : job.status === "failed" ? (
+          <div
+            className="skeleton"
+            style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
+          >
+            <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
+          </div>
+        ) : (
+          <div className="skeleton" />
+        )}
+      </div>
+      <div className="card-body">
+        <div className="card-meta">
+          <strong>#{job.variant}</strong>
+          {job.prompt}
+          {job.resolution ? ` · ${job.resolution}` : ""}
+        </div>
+      </div>
+    </article>
+  );
+});
 
 type Stats = { total: number; done: number; failed: number; active: number; running: number; queued: number };
 
@@ -77,7 +175,6 @@ export function StudioPage({
   /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
   const [shareNotice, setShareNotice] = useState<{ ok: boolean; text: string } | null>(null);
-  const [nowMs, setNowMs] = useState(() => Date.now());
   const [optimizeBusy, setOptimizeBusy] = useState(false);
   /** 优化前快照，供「回退」一次 */
   const [promptBeforeOptimize, setPromptBeforeOptimize] = useState<string | null>(null);
@@ -101,12 +198,7 @@ export function StudioPage({
       !running,
   );
 
-  const shareRemainSec = useMemo(() => {
-    if (!shareStatus) return 0;
-    return computeShareRemainSec(shareStatus.cooldownSec, shareStatus.lastShareAt, nowMs);
-  }, [shareStatus, nowMs]);
-
-  const shareCooldownLocked = shareRemainSec > 0;
+  const shareCooldownLocked = isShareCooling(shareStatus);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -130,30 +222,20 @@ export function StudioPage({
   }, [isLoggedIn]);
 
   useEffect(() => {
-    // 仅在已展示且仍在冷却时跑秒表，避免空闲时多余 tick
-    if (!shareUiRevealed || !shareStatus || shareStatus.cooldownSec <= 0 || !shareStatus.lastShareAt) {
-      return;
-    }
-    if (shareRemainSec <= 0) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), 1000);
-    return () => window.clearInterval(id);
-  }, [shareUiRevealed, shareStatus, shareRemainSec]);
-
-  useEffect(() => {
     if (!shareNotice) return;
-    // 冷却中的提示跟倒计时走，不自动关掉
+    // 冷却中的提示由独立 banner 展示，这里不自动关掉冷却文案
     if (!shareNotice.ok && /冷却/.test(shareNotice.text)) return;
     const id = window.setTimeout(() => setShareNotice(null), shareNotice.ok ? 2800 : 6000);
     return () => window.clearTimeout(id);
   }, [shareNotice]);
 
-  // 冷却结束：收起冷却条，回到默认不显示
-  useEffect(() => {
-    if (shareUiRevealed && shareStatus && shareStatus.cooldownSec > 0 && shareRemainSec <= 0) {
-      setShareUiRevealed(false);
-      setShareNotice((prev) => (prev && !prev.ok && /冷却/.test(prev.text) ? null : prev));
-    }
-  }, [shareUiRevealed, shareStatus, shareRemainSec]);
+  const [, setShareClock] = useState(0);
+  const handleShareCooldownExpired = useCallback(() => {
+    setShareUiRevealed(false);
+    setShareNotice((prev) => (prev && !prev.ok && /冷却/.test(prev.text) ? null : prev));
+    // one re-render so share buttons unlock without a 1Hz parent timer
+    setShareClock((n) => n + 1);
+  }, []);
 
   const safeJobs = Array.isArray(jobs) ? jobs : [];
   const wallJobs = useMemo(
@@ -196,16 +278,6 @@ export function StudioPage({
 
   const selectedCount = selected.size;
   const allSelected = downloadableJobs.length > 0 && selectedCount === downloadableJobs.length;
-
-  function toggleOne(id: string) {
-    if (!downloadableIds.has(id)) return;
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
 
   function selectAll() {
     setSelected(new Set(downloadableJobs.map((j) => j.id)));
@@ -331,12 +403,15 @@ export function StudioPage({
     onClear();
   }
 
-  async function handleShareToHall(job: StudioJob) {
+  const handleShareToHall = useCallback(async (job: StudioJob) => {
     const src = displayUrl(job) || job.openUrl;
     if (!src || job.status !== "done") return;
     setShareUiRevealed(true);
-    if (shareCooldownLocked) {
-      const text = `分享冷却中：还剩 ${shareRemainSec} 秒`;
+    if (isShareCooling(shareStatus)) {
+      const remain = shareStatus
+        ? computeShareRemainSec(shareStatus.cooldownSec, shareStatus.lastShareAt)
+        : 0;
+      const text = remain > 0 ? `分享冷却中：还剩 ${remain} 秒` : "分享冷却中";
       setShareNotice({ ok: false, text });
       log("warn", text);
       return;
@@ -381,17 +456,14 @@ export function StudioPage({
       try {
         const st = await communityApi.getShareStatus();
         setShareStatus(st);
-        setNowMs(Date.now());
         nextCooldown = st.cooldownSec;
       } catch {
         // ignore refresh errors
       }
-      // 有冷却：直接展示倒计时；无冷却：仅短暂成功提示
+      // 有冷却：由独立 banner 倒计时；无冷却：仅短暂成功提示
       if (nextCooldown && nextCooldown > 0) {
-        setShareNotice({
-          ok: false,
-          text: `分享冷却中：还剩 ${nextCooldown} 秒`,
-        });
+        setShareNotice(null);
+        setShareUiRevealed(true);
       } else {
         setShareNotice({ ok: true, text: "已分享到大厅" });
         setShareUiRevealed(false);
@@ -410,11 +482,8 @@ export function StudioPage({
         try {
           const st = await communityApi.getShareStatus();
           setShareStatus(st);
-          setNowMs(Date.now());
-          setShareNotice({
-            ok: false,
-            text: `分享冷却中：还剩 ${computeShareRemainSec(st.cooldownSec, st.lastShareAt)} 秒`,
-          });
+          setShareNotice(null);
+          setShareUiRevealed(true);
         } catch {
           // ignore
         }
@@ -422,26 +491,35 @@ export function StudioPage({
     } finally {
       setSharingId(null);
     }
-  }
+  }, [
+    draft.aspectRatio,
+    draft.resolution,
+    onNeedLogin,
+    onSharedToHall,
+    settings.model,
+    shareStatus,
+  ]);
 
   const feedbackBars = (
     <>
-      {shareUiRevealed && shareCooldownLocked ? (
-        <div className="studio-feedback studio-feedback-warn" role="status">
-          <span className="studio-feedback-dot warn" aria-hidden />
-          <span className="studio-feedback-text">
-            分享冷却中 · 还剩 <strong>{shareRemainSec}</strong> 秒
-          </span>
-        </div>
-      ) : shareNotice ? (
-        <div
-          className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
-          role="status"
-        >
-          <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
-          <span className="studio-feedback-text">{shareNotice.text}</span>
-        </div>
-      ) : null}
+      <ShareCooldownBanner
+        shareStatus={shareStatus}
+        revealed={shareUiRevealed}
+        onExpired={handleShareCooldownExpired}
+      />
+      {!shareUiRevealed || !shareCooldownLocked
+        ? shareNotice
+          ? (
+            <div
+              className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+              role="status"
+            >
+              <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
+              <span className="studio-feedback-text">{shareNotice.text}</span>
+            </div>
+          )
+          : null
+        : null}
       {!configured ? (
         <div className="studio-feedback studio-feedback-muted" role="status">
           <span className="studio-feedback-dot muted" aria-hidden />
@@ -471,88 +549,30 @@ export function StudioPage({
 
   const [chatParamsOpen, setChatParamsOpen] = useState(false);
 
-  const renderJobCard = (job: StudioJob) => {
-    const src = displayUrl(job);
-    const canSelect = job.status === "done" && Boolean(src || job.openUrl);
-    const isSelected = selected.has(job.id);
-    return (
-      <article key={job.id} className={`card ${isSelected ? "selected" : ""}`}>
-        <span
-          className={`badge ${
-            job.status === "done" ? "done" : job.status === "failed" ? "failed" : "running"
-          }`}
-        >
-          #{job.variant}/{job.variants}
-        </span>
-        {canSelect ? (
-          <label className="card-check" title="勾选下载">
-            <input
-              type="checkbox"
-              checked={isSelected}
-              disabled={downloading}
-              onChange={() => toggleOne(job.id)}
-            />
-          </label>
-        ) : null}
-        <div
-          className="card-media"
-          onClick={() => {
-            if (canSelect) toggleOne(job.id);
-          }}
-        >
-          {job.status === "done" && src ? (
-            <>
-              <img src={src} alt={`${job.prompt} #${job.variant}`} loading="lazy" />
-              <div className="card-overlay">
-                <a
-                  href={job.openUrl || src}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  打开原图
-                </a>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={sharingId === job.id || shareCooldownLocked}
-                  title={
-                    shareCooldownLocked ? `冷却中，${shareRemainSec} 秒后可分享` : "分享到大厅"
-                  }
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void handleShareToHall(job);
-                  }}
-                >
-                  {sharingId === job.id
-                    ? "分享中…"
-                    : shareCooldownLocked
-                      ? `冷却 ${shareRemainSec}s`
-                      : "分享到大厅"}
-                </button>
-              </div>
-            </>
-          ) : job.status === "failed" ? (
-            <div
-              className="skeleton"
-              style={{ animation: "none", display: "grid", placeItems: "center", padding: 16 }}
-            >
-              <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
-            </div>
-          ) : (
-            <div className="skeleton" />
-          )}
-        </div>
-        <div className="card-body">
-          <div className="card-meta">
-            <strong>#{job.variant}</strong>
-            {job.prompt}
-            {job.resolution ? ` · ${job.resolution}` : ""}
-          </div>
-        </div>
-      </article>
-    );
-  };
+  const handleToggleSelected = useCallback((id: string) => {
+    setSelected((prev) => {
+      if (!downloadableIds.has(id) && !prev.has(id)) return prev;
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, [downloadableIds]);
+
+  const renderJobCard = (job: StudioJob) => (
+    <StudioJobCard
+      key={job.id}
+      job={job}
+      selected={selected.has(job.id)}
+      downloading={downloading}
+      sharingId={sharingId}
+      shareLocked={shareCooldownLocked}
+      onToggle={handleToggleSelected}
+      onShare={(j) => {
+        void handleShareToHall(j);
+      }}
+    />
+  );
 
   if (mode === "chat") {
     return (

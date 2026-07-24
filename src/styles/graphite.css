@@ -66,14 +66,50 @@ html[data-theme="dark"] body {
     radial-gradient(900px 480px at 10% -10%, rgba(59, 130, 246, 0.12), transparent 55%),
     radial-gradient(700px 400px at 100% 0%, rgba(99, 102, 241, 0.08), transparent 50%),
     linear-gradient(180deg, #12151c 0%, #0f1115 45%, #0c0e12 100%);
-  background-attachment: fixed;
+  /* fixed backgrounds force continuous repaints while scrolling */
+  background-attachment: scroll;
 }
 
 html[data-theme="light"] body {
   background:
     radial-gradient(900px 480px at 10% -10%, rgba(37, 99, 235, 0.08), transparent 55%),
     linear-gradient(180deg, #f8fafc 0%, #f4f6fa 50%, #eef2f7 100%);
-  background-attachment: fixed;
+  background-attachment: scroll;
+}
+
+/* Graphite: solid panels, skip heavy glass blur on every card */
+html[data-theme="dark"] .panel,
+html[data-theme="light"] .panel {
+  background: var(--bg-elevated);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+html[data-theme="dark"] .glass-bar,
+html[data-theme="light"] .glass-bar {
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+}
+
+html[data-theme="dark"] .gallery .card,
+html[data-theme="light"] .gallery .card {
+  content-visibility: auto;
+  contain-intrinsic-size: 280px;
+}
+
+html[data-theme="dark"] .skeleton,
+html[data-theme="light"] .skeleton {
+  animation: none;
+  background: var(--bg-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="dark"] *,
+  html[data-theme="light"] * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* Header controls */

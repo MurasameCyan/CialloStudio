@@ -2626,6 +2626,7 @@ a {
   white-space: pre-wrap;
   -webkit-line-clamp: unset;
   line-clamp: unset;
+  max-height: none;
 }
 
 .hall-actions {
@@ -2848,8 +2849,18 @@ a {
   width: min(440px, 100%);
   max-height: calc(100dvh - 24px);
   overflow: auto;
+  overflow-x: hidden;
   margin: 0;
   animation: hall-slide 0.28s var(--ease);
+  scrollbar-width: none; /* Firefox: hide scrollbar, keep wheel scroll */
+  -ms-overflow-style: none; /* legacy Edge */
+  scrollbar-gutter: auto;
+}
+
+.hall-drawer::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none; /* Chrome / Safari */
 }
 
 @keyframes hall-slide {

@@ -2592,6 +2592,13 @@ a {
   color: var(--text-tertiary);
 }
 
+.hall-prompt-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
 .hall-prompt-copy {
   flex: 0 0 auto;
 }
@@ -2601,13 +2608,24 @@ a {
   font-size: 14px;
   line-height: 1.55;
   color: var(--text);
-  white-space: pre-wrap;
   word-break: break-word;
-  overflow: visible;
+}
+
+.hall-prompt-full.is-collapsed {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+  white-space: normal;
+}
+
+.hall-prompt-full.is-expanded {
   display: block;
+  overflow: visible;
+  white-space: pre-wrap;
   -webkit-line-clamp: unset;
   line-clamp: unset;
-  max-height: none;
 }
 
 .hall-actions {

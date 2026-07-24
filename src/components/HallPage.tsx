@@ -98,6 +98,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   const [busy, setBusy] = useState(false);
   const [forceAuth, setForceAuth] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
 
   const needLogin = useCallback(() => {
     setForceAuth(true);
@@ -153,6 +154,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
 
   async function openPost(post: GalleryPost) {
     setPromptCopied(false);
+    setPromptExpanded(false);
     setActive(post);
     setCommentBody("");
     try {
@@ -351,27 +353,40 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             <div className="hall-prompt-block">
               <div className="hall-prompt-head">
                 <span className="hall-prompt-label">提示词</span>
-                <button
-                  type="button"
-                  className="btn btn-ghost btn-sm hall-prompt-copy"
-                  disabled={!active.prompt?.trim()}
-                  onClick={() => {
-                    void (async () => {
-                      const ok = await copyText(active.prompt || "");
-                      if (ok) {
-                        setPromptCopied(true);
-                        log("ok", "提示词已复制");
-                        window.setTimeout(() => setPromptCopied(false), 1800);
-                      } else {
-                        log("error", "复制提示词失败");
-                      }
-                    })();
-                  }}
-                >
-                  {promptCopied ? "已复制" : "复制"}
-                </button>
+                <div className="hall-prompt-actions">
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    disabled={!active.prompt?.trim()}
+                    aria-expanded={promptExpanded}
+                    onClick={() => setPromptExpanded((v) => !v)}
+                  >
+                    {promptExpanded ? "收起" : "展开"}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm hall-prompt-copy"
+                    disabled={!active.prompt?.trim()}
+                    onClick={() => {
+                      void (async () => {
+                        const ok = await copyText(active.prompt || "");
+                        if (ok) {
+                          setPromptCopied(true);
+                          log("ok", "提示词已复制");
+                          window.setTimeout(() => setPromptCopied(false), 1800);
+                        } else {
+                          log("error", "复制提示词失败");
+                        }
+                      })();
+                    }}
+                  >
+                    {promptCopied ? "已复制" : "复制"}
+                  </button>
+                </div>
               </div>
-              <p className="hall-prompt-full">{active.prompt}</p>
+              <p className={`hall-prompt-full ${promptExpanded ? "is-expanded" : "is-collapsed"}`}>
+                {active.prompt}
+              </p>
             </div>
             {active.caption ? <p className="panel-desc">{active.caption}</p> : null}
             <div className="hall-meta">

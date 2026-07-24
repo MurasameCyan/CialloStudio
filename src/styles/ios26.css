@@ -367,8 +367,57 @@ a {
   box-sizing: border-box;
 }
 
+/* Stage + Result Wall (Kinetic Void shell; works for both themes) */
+.studio-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 18px;
+  min-height: 0;
+  align-items: start;
+  width: 100%;
+}
+
+.studio-layout > .panel,
+.studio-stage,
+.studio-wall {
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.studio-display-title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.02em;
+  line-height: 0.92;
+  letter-spacing: -0.05em;
+}
+
+.studio-display-line {
+  display: block;
+}
+
+.studio-display-accent {
+  display: block;
+  color: var(--accent);
+}
+
+.studio-stage-desc {
+  margin: 8px 0 0;
+}
+
+.brand-kicker {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  line-height: 1.2;
+}
+
 @media (max-width: 980px) {
-  .grid-2 {
+  .grid-2,
+  .studio-layout {
     grid-template-columns: 1fr;
   }
 
@@ -1326,7 +1375,8 @@ a {
 .admin-layout > .panel,
 .admin-layout > .admin-log-panel,
 .admin-layout > .log-panel,
-.admin-layout > .admin-form-panel {
+.admin-layout > .admin-form-panel,
+.admin-layout > .theme-atelier {
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -1454,6 +1504,84 @@ a {
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin-bottom: 8px;
+}
+
+/* 设置页：版本 SHA + 检查更新（对照 GitHub track ref HEAD） */
+.build-version-row {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.45);
+  border: 1px solid var(--separator);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  .build-version-row {
+    background: rgba(255, 255, 255, 0.05);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+}
+
+.build-version-meta {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.build-version-meta .admin-status-label {
+  display: inline;
+  margin-bottom: 0;
+  line-height: 1;
+}
+
+.build-version-hash {
+  font-size: 14px;
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.build-version-hash:hover {
+  text-decoration: underline;
+}
+
+.build-version-ref {
+  margin: 0;
+}
+
+.build-version-check {
+  flex: 0 0 auto;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 14px;
+}
+
+.build-version-status {
+  flex: 1 1 140px;
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.build-version-status-new {
+  color: var(--system-blue, #007aff);
+  font-weight: 650;
+}
+
+.build-version-status-err {
+  color: var(--system-red, #ff3b30);
 }
 
 .admin-status-value {
@@ -2062,8 +2190,25 @@ a {
   order: 1;
 }
 
+.results-toolbar-actions .gallery-filter-chip {
+  order: 1;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
 .results-toolbar-actions .btn {
   order: 2;
+}
+
+.studio-wall-filter-hint {
+  margin-left: 6px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--text-tertiary);
 }
 
 /* 生图：操作条 + 参数区合并为一张卡片 */
@@ -2117,6 +2262,19 @@ a {
   border: 0;
   background: var(--separator);
   opacity: 0.9;
+}
+
+/* 数量 | 并发 | 分辨率 组间竖向分隔 */
+.studio-params-vsep {
+  flex: 0 0 1px;
+  width: 1px;
+  align-self: stretch;
+  min-height: 58px;
+  margin: 0 4px;
+  border: 0;
+  background: var(--separator);
+  opacity: 0.9;
+  pointer-events: none;
 }
 
 .studio-params-grid {
@@ -2196,6 +2354,11 @@ a {
 }
 
 @media (max-width: 560px) {
+  /* 窄屏换行时竖线易错位，改靠间距区分 */
+  .studio-params-vsep {
+    display: none;
+  }
+
   .studio-toolbar {
     flex-direction: column;
     align-items: stretch;

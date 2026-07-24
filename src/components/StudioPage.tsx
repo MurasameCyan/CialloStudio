@@ -79,6 +79,14 @@ export function StudioPage({
   /** 优化前快照，供「回退」一次 */
   const [promptBeforeOptimize, setPromptBeforeOptimize] = useState<string | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  /** 图片墙：仅展示 status=done 的卡片 */
+  const [successOnly, setSuccessOnly] = useState(() => {
+    try {
+      return localStorage.getItem("ciallo.gallery.successOnly") === "1";
+    } catch {
+      return false;
+    }
+  });
 
   const optimizeEndpoint = useMemo(() => resolvePromptOptimizeEndpoint(settings), [settings]);
   const canOptimize = Boolean(
@@ -145,6 +153,10 @@ export function StudioPage({
   }, [shareUiRevealed, shareStatus, shareRemainSec]);
 
   const safeJobs = Array.isArray(jobs) ? jobs : [];
+  const wallJobs = useMemo(
+    () => (successOnly ? safeJobs.filter((job) => job && job.status === "done") : safeJobs),
+    [safeJobs, successOnly],
+  );
   const downloadableJobs = useMemo(
     () =>
       safeJobs.filter(
@@ -152,6 +164,18 @@ export function StudioPage({
       ),
     [safeJobs],
   );
+
+  function toggleSuccessOnly() {
+    setSuccessOnly((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ciallo.gallery.successOnly", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
   const downloadableIds = useMemo(() => new Set(downloadableJobs.map((j) => j.id)), [downloadableJobs]);
 
   // 清理已不存在或不可下载的勾选
@@ -398,12 +422,16 @@ export function StudioPage({
   }
 
   return (
-    <div className="page grid-2">
-      <section className="panel">
-        <div className="panel-head">
+    <div className="page studio-layout">
+      <section className="panel studio-stage">
+        <div className="panel-head studio-stage-head">
           <div>
-            <div className="panel-kicker">Create</div>
-            <h2 className="panel-title">灵感工作台</h2>
+            <div className="panel-kicker">Stage 01</div>
+            <h2 className="panel-title studio-display-title">
+              <span className="studio-display-line">Prompt</span>
+              <span className="studio-display-accent">Canvas</span>
+            </h2>
+            <p className="panel-desc studio-stage-desc">灵感工作台 · 写提示词，调参数，一键出图</p>
           </div>
         </div>
 
@@ -597,6 +625,7 @@ export function StudioPage({
                     ))}
                   </div>
                 </div>
+                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                 <div className="field">
                   <label>并发</label>
                   <div className="segmented">
@@ -612,6 +641,7 @@ export function StudioPage({
                     ))}
                   </div>
                 </div>
+                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                 <div className="field">
                   <label>分辨率</label>
                   <div className="segmented">
@@ -635,6 +665,7 @@ export function StudioPage({
                   </div>
                 </div>
               </div>
+              <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">
                 <div className="field">
                   <label>宽高比</label>
@@ -657,11 +688,16 @@ export function StudioPage({
         </div>
       </section>
 
-      <section className="panel results-panel">
+      <section className="panel results-panel studio-wall">
         <div className="results-toolbar">
           <div>
-            <div className="panel-kicker">Gallery</div>
-            <h2 className="panel-title">图片墙 · {stats.total} 张</h2>
+            <div className="panel-kicker">Results</div>
+            <h2 className="panel-title studio-wall-title">
+              图片墙 · {successOnly ? wallJobs.length : stats.total} 张
+              {successOnly && stats.total > wallJobs.length ? (
+                <span className="studio-wall-filter-hint">（仅成功）</span>
+              ) : null}
+            </h2>
           </div>
           <div className="results-toolbar-actions">
             {/* KPI 始终占位，避免点生成后工具栏突然插入导致图片墙下移 */}
@@ -675,6 +711,15 @@ export function StudioPage({
                 <div className="kpi-value">{stats.done}</div>
               </div>
             </div>
+            <button
+              type="button"
+              className={`chip gallery-filter-chip ${successOnly ? "active" : ""}`}
+              aria-pressed={successOnly}
+              title={successOnly ? "当前仅显示生成成功" : "显示全部（含进行中/失败）"}
+              onClick={toggleSuccessOnly}
+            >
+              仅成功
+            </button>
             <button
               type="button"
               className="btn btn-danger btn-sm"
@@ -732,9 +777,17 @@ export function StudioPage({
               <p className="empty-text">写好提示词后点「开始生成」。结果与队列会自动保留。</p>
             </div>
           </div>
+        ) : wallJobs.length === 0 ? (
+          <div className="empty empty-compact gallery-empty">
+            <div className="empty-icon" aria-hidden />
+            <div>
+              <span className="empty-title">暂无成功图片</span>
+              <p className="empty-text">已开启「仅成功」。关闭开关可查看进行中或失败任务。</p>
+            </div>
+          </div>
         ) : (
           <div className="gallery">
-            {safeJobs.map((job) => {
+            {wallJobs.map((job) => {
               const src = displayUrl(job);
               const canSelect = job.status === "done" && Boolean(src || job.openUrl);
               const isSelected = selected.has(job.id);

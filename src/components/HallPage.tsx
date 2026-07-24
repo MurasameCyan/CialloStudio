@@ -5,6 +5,33 @@ import { fallbackPostImageUrl, resolvePostImageUrl } from "@/lib/community/postI
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 
+async function copyText(text: string): Promise<boolean> {
+  const value = text.trim();
+  if (!value) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 const PAGE_SIZE = 24;
 
 type Props = {
@@ -70,6 +97,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   const [rating, setRating] = useState(5);
   const [busy, setBusy] = useState(false);
   const [forceAuth, setForceAuth] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
 
   const needLogin = useCallback(() => {
     setForceAuth(true);
@@ -124,6 +152,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   }
 
   async function openPost(post: GalleryPost) {
+    setPromptCopied(false);
     setActive(post);
     setCommentBody("");
     try {
@@ -319,7 +348,31 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             <div className="hall-drawer-media">
               <HallPostImage key={active.id} post={active} alt={active.prompt} />
             </div>
-            <p className="hall-prompt-full">{active.prompt}</p>
+            <div className="hall-prompt-block">
+              <div className="hall-prompt-head">
+                <span className="hall-prompt-label">提示词</span>
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm hall-prompt-copy"
+                  disabled={!active.prompt?.trim()}
+                  onClick={() => {
+                    void (async () => {
+                      const ok = await copyText(active.prompt || "");
+                      if (ok) {
+                        setPromptCopied(true);
+                        log("ok", "提示词已复制");
+                        window.setTimeout(() => setPromptCopied(false), 1800);
+                      } else {
+                        log("error", "复制提示词失败");
+                      }
+                    })();
+                  }}
+                >
+                  {promptCopied ? "已复制" : "复制"}
+                </button>
+              </div>
+              <p className="hall-prompt-full">{active.prompt}</p>
+            </div>
             {active.caption ? <p className="panel-desc">{active.caption}</p> : null}
             <div className="hall-meta">
               <span>{active.model || "—"}</span>

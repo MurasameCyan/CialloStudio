@@ -2572,12 +2572,42 @@ a {
   overflow: hidden;
 }
 
-.hall-prompt-full {
+.hall-prompt-block {
   margin: 12px 0 4px;
+  display: grid;
+  gap: 8px;
+}
+
+.hall-prompt-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.hall-prompt-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+
+.hall-prompt-copy {
+  flex: 0 0 auto;
+}
+
+.hall-prompt-full {
+  margin: 0;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
   color: var(--text);
+  white-space: pre-wrap;
   word-break: break-word;
+  overflow: visible;
+  display: block;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  max-height: none;
 }
 
 .hall-actions {

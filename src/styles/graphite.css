@@ -142,6 +142,27 @@ html[data-theme="light"] body {
   top: 12px;
   max-height: calc(100dvh - 100px);
   overflow: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+
+.studio-console-controls::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Keep prompt box from flashing a scrollbar track */
+.studio-console-controls .textarea {
+  overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.studio-console-controls .textarea::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 @media (max-width: 980px) {

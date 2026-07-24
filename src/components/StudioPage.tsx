@@ -851,17 +851,6 @@ export function StudioPage({
   return (
     <div className="page studio-console-layout">
       <section className="panel studio-console-controls studio-stage">
-        <div className="panel-head studio-stage-head">
-          <div>
-            <div className="panel-kicker">Console</div>
-            <h2 className="panel-title studio-display-title">
-              <span className="studio-display-line">控制台</span>
-              <span className="studio-display-accent">批处理</span>
-            </h2>
-            <p className="panel-desc studio-stage-desc">左栏调参 · 右侧出图 · 与对话模式共享队列</p>
-          </div>
-        </div>
-
         {feedbackBars}
 
         <div className="field">

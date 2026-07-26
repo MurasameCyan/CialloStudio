@@ -578,76 +578,78 @@ export function StudioPage({
     return (
       <div className="page studio-chat-layout">
         <section className="panel studio-chat-card">
-          <div className="results-toolbar">
-            <div>
-              <div className="panel-kicker">Chat</div>
-              <h2 className="panel-title studio-wall-title">
-                对话流 · {successOnly ? wallJobs.length : stats.total} 张
-              </h2>
-            </div>
-            <div className="results-toolbar-actions">
-              <div className="kpi-row kpi-row-inline" aria-label="生成统计">
-                <div className="kpi">
-                  <div className="kpi-label">总数</div>
-                  <div className="kpi-value">{stats.total}</div>
-                </div>
-                <div className="kpi">
-                  <div className="kpi-label">完成</div>
-                  <div className="kpi-value">{stats.done}</div>
-                </div>
+          <div className="studio-chat-header">
+            <div className="results-toolbar">
+              <div>
+                <div className="panel-kicker">Chat</div>
+                <h2 className="panel-title studio-wall-title">
+                  对话流 · {successOnly ? wallJobs.length : stats.total} 张
+                </h2>
               </div>
-              <button
-                type="button"
-                className={`chip gallery-filter-chip ${successOnly ? "active" : ""}`}
-                aria-pressed={successOnly}
-                onClick={toggleSuccessOnly}
-              >
-                仅成功
-              </button>
-              <button
-                type="button"
-                className="btn btn-danger btn-sm"
-                disabled={running || safeJobs.length === 0}
-                onClick={handleClear}
-              >
-                清空
-              </button>
+              <div className="results-toolbar-actions">
+                <div className="kpi-row kpi-row-inline" aria-label="生成统计">
+                  <div className="kpi">
+                    <div className="kpi-label">总数</div>
+                    <div className="kpi-value">{stats.total}</div>
+                  </div>
+                  <div className="kpi">
+                    <div className="kpi-label">完成</div>
+                    <div className="kpi-value">{stats.done}</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className={`chip gallery-filter-chip ${successOnly ? "active" : ""}`}
+                  aria-pressed={successOnly}
+                  onClick={toggleSuccessOnly}
+                >
+                  仅成功
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm"
+                  disabled={running || safeJobs.length === 0}
+                  onClick={handleClear}
+                >
+                  清空
+                </button>
+              </div>
             </div>
-          </div>
-          {feedbackBars}
-          <div className="progress-track" aria-hidden>
-            <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
-          </div>
-          <div className="selection-bar">
-            <label className="select-all">
-              <input
-                type="checkbox"
-                checked={allSelected}
-                disabled={downloadableJobs.length === 0 || downloading}
-                onChange={toggleSelectAll}
-              />
-              <span>{allSelected ? "取消全选" : "全选已完成"}</span>
-            </label>
-            <div className="selection-meta">
-              已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+            {feedbackBars}
+            <div className="progress-track" aria-hidden>
+              <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
             </div>
-            <div className="btn-row">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={selectedCount === 0 || downloading}
-                onClick={clearSelection}
-              >
-                清除勾选
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={selectedCount === 0 || downloading}
-                onClick={handleDownloadSelected}
-              >
-                {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-              </button>
+            <div className="selection-bar">
+              <label className="select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  disabled={downloadableJobs.length === 0 || downloading}
+                  onChange={toggleSelectAll}
+                />
+                <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+              </label>
+              <div className="selection-meta">
+                已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+              </div>
+              <div className="btn-row">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  disabled={selectedCount === 0 || downloading}
+                  onClick={clearSelection}
+                >
+                  清除勾选
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary btn-sm"
+                  disabled={selectedCount === 0 || downloading}
+                  onClick={handleDownloadSelected}
+                >
+                  {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+                </button>
+              </div>
             </div>
           </div>
 

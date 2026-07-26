@@ -212,13 +212,16 @@ html[data-theme="light"] .skeleton {
   }
 }
 
-/* Chat layout — stream + composer share one panel card */
+/* Chat layout — fixed header/composer, only mid stream scrolls */
 .studio-chat-layout {
   display: flex;
   flex-direction: column;
   width: 100%;
-  min-height: calc(100dvh - 120px);
+  height: calc(100dvh - 118px);
+  max-height: calc(100dvh - 118px);
+  min-height: 0;
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .studio-chat-card {
@@ -226,19 +229,35 @@ html[data-theme="light"] .skeleton {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
   width: 100%;
   box-sizing: border-box;
   overflow: hidden;
 }
 
+.studio-chat-header {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
 .studio-chat-stream {
   flex: 1 1 auto;
-  min-height: 220px;
-  overflow: auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 12px 4px 16px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.studio-chat-stream::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .studio-chat-turn {
@@ -269,15 +288,16 @@ html[data-theme="light"] .skeleton {
 
 .studio-chat-composer {
   flex: 0 0 auto;
-  margin-top: auto;
+  margin-top: 0;
   padding: 12px 4px 2px;
   border-top: 1px solid var(--separator);
-  background: transparent;
+  background: var(--bg-elevated);
   box-shadow: none;
   position: static;
   max-width: none;
   width: 100%;
   box-sizing: border-box;
+  z-index: 2;
 }
 
 .studio-chat-composer .dock-textarea,

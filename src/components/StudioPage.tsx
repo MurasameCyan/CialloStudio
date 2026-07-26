@@ -31,6 +31,7 @@ const StudioJobCard = memo(function StudioJobCard({
   downloading,
   sharingId,
   shareLocked,
+  alreadyShared,
   onToggle,
   onShare,
 }: {
@@ -39,11 +40,26 @@ const StudioJobCard = memo(function StudioJobCard({
   downloading: boolean;
   sharingId: string | null;
   shareLocked: boolean;
+  alreadyShared: boolean;
   onToggle: (id: string) => void;
   onShare: (job: StudioJob) => void;
 }) {
   const src = displayUrl(job);
   const canSelect = job.status === "done" && Boolean(src || job.openUrl);
+  const shareBusy = sharingId === job.id;
+  const shareDisabled = alreadyShared || shareBusy || shareLocked;
+  const shareLabel = alreadyShared
+    ? "已分享"
+    : shareBusy
+      ? "分享中…"
+      : shareLocked
+        ? "冷却中"
+        : "分享到大厅";
+  const shareTitle = alreadyShared
+    ? "该图已分享，不可重复分享"
+    : shareLocked
+      ? "分享冷却中"
+      : "分享到大厅";
   return (
     <article className={`card ${selected ? "selected" : ""}`}>
       <span
@@ -88,15 +104,15 @@ const StudioJobCard = memo(function StudioJobCard({
               </a>
               <button
                 type="button"
-                className="btn btn-primary btn-sm"
-                disabled={sharingId === job.id || shareLocked}
-                title={shareLocked ? "分享冷却中" : "分享到大厅"}
+                className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
+                disabled={shareDisabled}
+                title={shareTitle}
                 onClick={(e) => {
                   e.stopPropagation();
-                  onShare(job);
+                  if (!alreadyShared) onShare(job);
                 }}
               >
-                {sharingId === job.id ? "分享中…" : shareLocked ? "冷却中" : "分享到大厅"}
+                {shareLabel}
               </button>
             </div>
           </>
@@ -132,8 +148,6 @@ type Props = {
   onNeedLogin?: () => void;
   /** 是否已登录社区账号（未配置 Key 时决定去登录还是去设置） */
   isLoggedIn?: boolean;
-  /** 分享成功后可选跳转大厅 */
-  onSharedToHall?: () => void;
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
@@ -153,7 +167,6 @@ export function StudioPage({
   onOpenSettings,
   onNeedLogin,
   isLoggedIn = false,
-  onSharedToHall,
   draft,
   setDraft,
   jobs,
@@ -171,6 +184,8 @@ export function StudioPage({
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
+  /** 本会话已成功分享过的 job id，禁止重复点分享 */
+  const [sharedJobIds, setSharedJobIds] = useState<Set<string>>(() => new Set());
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
@@ -406,6 +421,10 @@ export function StudioPage({
   const handleShareToHall = useCallback(async (job: StudioJob) => {
     const src = displayUrl(job) || job.openUrl;
     if (!src || job.status !== "done") return;
+    if (sharedJobIds.has(job.id)) {
+      setShareNotice({ ok: true, text: "该图已分享" });
+      return;
+    }
     setShareUiRevealed(true);
     if (isShareCooling(shareStatus)) {
       const remain = shareStatus
@@ -452,6 +471,11 @@ export function StudioPage({
         resolution: job.resolution || draft.resolution,
       });
       log("ok", "已分享到大厅");
+      setSharedJobIds((prev) => {
+        const next = new Set(prev);
+        next.add(job.id);
+        return next;
+      });
       let nextCooldown = shareStatus?.cooldownSec;
       try {
         const st = await communityApi.getShareStatus();
@@ -460,17 +484,13 @@ export function StudioPage({
       } catch {
         // ignore refresh errors
       }
-      // 有冷却：由独立 banner 倒计时；无冷却：仅短暂成功提示
+      // 有冷却：由独立 banner 倒计时；无冷却：短暂成功提示。不再自动跳转大厅。
       if (nextCooldown && nextCooldown > 0) {
         setShareNotice(null);
         setShareUiRevealed(true);
       } else {
         setShareNotice({ ok: true, text: "已分享到大厅" });
         setShareUiRevealed(false);
-      }
-      // 稍后再跳转大厅，让工作台先显示反馈
-      if (onSharedToHall) {
-        window.setTimeout(() => onSharedToHall(), nextCooldown && nextCooldown > 0 ? 1600 : 900);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -495,9 +515,9 @@ export function StudioPage({
     draft.aspectRatio,
     draft.resolution,
     onNeedLogin,
-    onSharedToHall,
     settings.model,
     shareStatus,
+    sharedJobIds,
   ]);
 
   const feedbackBars = (
@@ -567,6 +587,7 @@ export function StudioPage({
       downloading={downloading}
       sharingId={sharingId}
       shareLocked={shareCooldownLocked}
+      alreadyShared={sharedJobIds.has(job.id)}
       onToggle={handleToggleSelected}
       onShare={(j) => {
         void handleShareToHall(j);

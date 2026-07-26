@@ -148,7 +148,6 @@ export default function App() {
               onOpenSettings={openSettings}
               onNeedLogin={openHallAuth}
               isLoggedIn={isLoggedIn}
-              onSharedToHall={() => setTab("hall")}
               draft={queue.draft}
               setDraft={queue.setDraft}
               jobs={queue.jobs}

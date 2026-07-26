@@ -106,7 +106,7 @@ const StudioJobCard = memo(function StudioJobCard({
               </a>
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="card-overlay-action"
                 title="页内大图预览"
                 onClick={(e) => {
                   e.stopPropagation();
@@ -632,7 +632,15 @@ export function StudioPage({
     />
   );
 
-  const previewSrc = previewJob ? displayUrl(previewJob) || previewJob.openUrl : undefined;
+  // Prefer the same display source as the card thumbnail (blob/data first), then openUrl.
+  const previewSrc = previewJob
+    ? (typeof previewJob.imageUrl === "string" && previewJob.imageUrl
+        ? previewJob.imageUrl
+        : displayUrl(previewJob) || previewJob.openUrl)
+    : undefined;
+  const previewOpenHref =
+    previewJob?.openUrl ||
+    (previewSrc && !previewSrc.startsWith("blob:") ? previewSrc : undefined);
   const previewLightbox = previewJob && previewSrc ? (
     <div
       className="studio-lightbox-backdrop"
@@ -652,21 +660,27 @@ export function StudioPage({
             <span>{previewJob.prompt}</span>
           </div>
           <div className="studio-lightbox-actions">
-            <a
-              className="btn btn-secondary btn-sm"
-              href={previewJob.openUrl || previewSrc}
-              target="_blank"
-              rel="noreferrer"
-            >
-              打开原图
-            </a>
+            {previewOpenHref ? (
+              <a
+                className="btn btn-secondary btn-sm"
+                href={previewOpenHref}
+                target="_blank"
+                rel="noreferrer"
+              >
+                打开原图
+              </a>
+            ) : null}
             <button type="button" className="btn btn-ghost btn-sm" onClick={closePreview}>
               关闭
             </button>
           </div>
         </div>
         <div className="studio-lightbox-media">
-          <img src={previewSrc} alt={previewJob.prompt || "大图预览"} />
+          <img
+            src={previewSrc}
+            alt={previewJob.prompt || "大图预览"}
+            decoding="async"
+          />
         </div>
       </div>
     </div>

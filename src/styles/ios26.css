@@ -948,8 +948,10 @@ a {
   opacity: 1;
 }
 
-.card-overlay a {
+.card-overlay a,
+.card-overlay .card-overlay-action {
   color: white;
+  font: inherit;
   font-size: 12px;
   font-weight: 700;
   padding: 7px 11px;
@@ -958,6 +960,14 @@ a {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.25);
+  cursor: pointer;
+  text-decoration: none;
+  line-height: 1.2;
+}
+
+.card-overlay .card-overlay-action:hover,
+.card-overlay a:hover {
+  background: rgba(255, 255, 255, 0.28);
 }
 
 .card-body {
@@ -3220,6 +3230,7 @@ a {
   border: var(--hairline);
   box-shadow: var(--shadow-lg);
   box-sizing: border-box;
+  overflow: hidden;
 }
 
 .studio-lightbox-top {
@@ -3228,6 +3239,7 @@ a {
   justify-content: space-between;
   gap: 12px;
   min-width: 0;
+  flex: 0 0 auto;
 }
 
 .studio-lightbox-meta {
@@ -3259,13 +3271,18 @@ a {
 }
 
 .studio-lightbox-media {
-  min-height: 0;
-  flex: 1 1 auto;
-  display: grid;
-  place-items: center;
+  /* Content-sized: avoid flex:1 + min-height:0 collapsing the image to 0px */
+  flex: 0 1 auto;
+  min-height: 200px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: auto;
   border-radius: var(--radius-md);
   background: rgba(0, 0, 0, 0.28);
+  padding: 8px;
+  box-sizing: border-box;
 }
 
 .studio-lightbox-media img {
@@ -3298,6 +3315,10 @@ a {
 
   .studio-lightbox-top {
     flex-wrap: wrap;
+  }
+
+  .studio-lightbox-media {
+    min-height: 160px;
   }
 
   .studio-lightbox-media img {

@@ -409,8 +409,21 @@ export async function generateImage(input: {
   n?: number;
   aspectRatio?: string;
   resolution?: string;
+  /** 单张参考图：URL 或 data URL / base64（grok-imagine 图+文） */
+  imageUrl?: string;
+  /** 多参考图；与 imageUrl 二选一优先 imageUrls */
+  imageUrls?: string[];
   signal?: AbortSignal;
 }): Promise<ImageResult[]> {
+  const refs = (input.imageUrls?.filter((u) => typeof u === "string" && u.trim()) ?? []).map((u) =>
+    u.trim(),
+  );
+  const single =
+    refs.length === 0 && typeof input.imageUrl === "string" && input.imageUrl.trim()
+      ? input.imageUrl.trim()
+      : undefined;
+  const hasRef = refs.length > 0 || Boolean(single);
+
   log("info", "开始生图", {
     model: input.model,
     prompt: input.prompt,
@@ -419,20 +432,32 @@ export async function generateImage(input: {
     resolution: input.resolution ?? "1k",
     baseUrl: input.baseUrl,
     requestBase: resolveBrowserApiBase(input.baseUrl),
+    reference: hasRef ? (refs.length > 0 ? `images×${refs.length}` : "image_url") : "none",
   });
+
+  const body: Record<string, unknown> = {
+    model: input.model,
+    prompt: input.prompt,
+    n: input.n ?? 1,
+    aspect_ratio: input.aspectRatio ?? "1:1",
+    resolution: input.resolution ?? "1k",
+    response_format: "url",
+    stream: false,
+  };
+
+  // xAI grok-imagine：image_url / image_urls（URL 或 base64 data URL）
+  if (refs.length === 1) {
+    body.image_url = refs[0];
+  } else if (refs.length > 1) {
+    body.image_urls = refs;
+  } else if (single) {
+    body.image_url = single;
+  }
 
   const payload = await apiRequest(input.baseUrl, input.apiKey, "/images/generations", {
     method: "POST",
     signal: input.signal,
-    body: {
-      model: input.model,
-      prompt: input.prompt,
-      n: input.n ?? 1,
-      aspect_ratio: input.aspectRatio ?? "1:1",
-      resolution: input.resolution ?? "1k",
-      response_format: "url",
-      stream: false,
-    },
+    body,
   });
 
   if (!isRecord(payload) || !Array.isArray(payload.data)) {

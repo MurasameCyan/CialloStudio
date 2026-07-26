@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -34,6 +34,7 @@ const StudioJobCard = memo(function StudioJobCard({
   alreadyShared,
   onToggle,
   onPreview,
+  onUseAsReference,
   onShare,
 }: {
   job: StudioJob;
@@ -44,6 +45,7 @@ const StudioJobCard = memo(function StudioJobCard({
   alreadyShared: boolean;
   onToggle: (id: string) => void;
   onPreview: (job: StudioJob) => void;
+  onUseAsReference: (job: StudioJob) => void;
   onShare: (job: StudioJob) => void;
 }) {
   const src = displayUrl(job);
@@ -114,6 +116,17 @@ const StudioJobCard = memo(function StudioJobCard({
                 }}
               >
                 显示大图
+              </button>
+              <button
+                type="button"
+                className="card-overlay-action"
+                title="用作图+文参考图"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUseAsReference(job);
+                }}
+              >
+                作参考
               </button>
               <button
                 type="button"
@@ -207,6 +220,9 @@ export function StudioPage({
   const [optimizeBusy, setOptimizeBusy] = useState(false);
   /** 优化前快照，供「回退」一次 */
   const [promptBeforeOptimize, setPromptBeforeOptimize] = useState<string | null>(null);
+  const [referenceError, setReferenceError] = useState<string | null>(null);
+  const referenceInputRef = useRef<HTMLInputElement | null>(null);
+  const referenceInputChatRef = useRef<HTMLInputElement | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
   /** 图片墙：仅展示 status=done 的卡片 */
   const [successOnly, setSuccessOnly] = useState(() => {
@@ -449,6 +465,121 @@ export function StudioPage({
     log("info", "已清空提示词");
   }
 
+  function clearReferenceImage() {
+    setDraft({ referenceImageUrl: undefined, referenceImageName: undefined });
+    setReferenceError(null);
+    if (referenceInputRef.current) referenceInputRef.current.value = "";
+    if (referenceInputChatRef.current) referenceInputChatRef.current.value = "";
+    log("info", "已清除参考图");
+  }
+
+  function readReferenceFile(file: File) {
+    setReferenceError(null);
+    if (!file.type.startsWith("image/")) {
+      setReferenceError("请选择图片文件");
+      return;
+    }
+    // 过大 data URL 会拖慢请求；提示但仍允许（上游可能拒绝）
+    const maxBytes = 8 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      setReferenceError("图片超过 8MB，建议压缩后再试");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : "";
+      if (!result.startsWith("data:image/")) {
+        setReferenceError("无法读取图片");
+        return;
+      }
+      setDraft({
+        referenceImageUrl: result,
+        referenceImageName: file.name || "reference.png",
+      });
+      log("ok", "已加载参考图", { name: file.name, size: file.size, type: file.type });
+    };
+    reader.onerror = () => setReferenceError("读取图片失败");
+    reader.readAsDataURL(file);
+  }
+
+  function handleReferenceInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) readReferenceFile(file);
+  }
+
+  function useJobAsReference(job: StudioJob) {
+    const src =
+      (typeof job.imageUrl === "string" && job.imageUrl) ||
+      displayUrl(job) ||
+      job.openUrl;
+    if (!src) {
+      setReferenceError("该结果没有可用图片地址");
+      return;
+    }
+    setDraft({
+      referenceImageUrl: src,
+      referenceImageName: `job-${job.id.slice(0, 8)}.jpg`,
+    });
+    setReferenceError(null);
+    log("ok", "已用结果图作为参考图", { jobId: job.id });
+  }
+
+  const referencePicker = (inputRef: React.RefObject<HTMLInputElement | null>, inputId: string) => (
+    <div className="reference-picker">
+      <div className="reference-picker-head">
+        <span className="reference-picker-label">参考图 · 图+文</span>
+        <div className="reference-picker-actions">
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="file"
+            accept="image/*"
+            hidden
+            disabled={running || optimizeBusy}
+            onChange={handleReferenceInputChange}
+          />
+          <button
+            type="button"
+            className="hall-chip"
+            disabled={running || optimizeBusy}
+            onClick={() => inputRef.current?.click()}
+          >
+            {draft.referenceImageUrl ? "更换" : "上传"}
+          </button>
+          {draft.referenceImageUrl ? (
+            <button
+              type="button"
+              className="hall-chip"
+              disabled={running || optimizeBusy}
+              onClick={clearReferenceImage}
+            >
+              清除
+            </button>
+          ) : null}
+        </div>
+      </div>
+      {draft.referenceImageUrl ? (
+        <div className="reference-picker-preview">
+          <img src={draft.referenceImageUrl} alt={draft.referenceImageName || "参考图"} />
+          <div className="reference-picker-meta">
+            <span className="reference-picker-name" title={draft.referenceImageName}>
+              {draft.referenceImageName || "参考图已就绪"}
+            </span>
+            <span className="reference-picker-hint">生成时将与提示词一并发送（grok-imagine）</span>
+          </div>
+        </div>
+      ) : (
+        <p className="reference-picker-empty">可选：上传参考图，实现图片+文字再生成</p>
+      )}
+      {referenceError ? (
+        <div className="studio-feedback studio-feedback-warn" role="status" style={{ marginTop: 8, marginBottom: 0 }}>
+          <span className="studio-feedback-dot warn" aria-hidden />
+          <span className="studio-feedback-text">{referenceError}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+
   function handleClear() {
     clearSelection();
     onClear();
@@ -626,6 +757,7 @@ export function StudioPage({
       alreadyShared={sharedJobIds.has(job.id)}
       onToggle={handleToggleSelected}
       onPreview={handlePreviewJob}
+      onUseAsReference={useJobAsReference}
       onShare={(j) => {
         void handleShareToHall(j);
       }}
@@ -900,6 +1032,7 @@ export function StudioPage({
                   <span className="studio-feedback-text">{optimizeNotice.text}</span>
                 </div>
               ) : null}
+              {referencePicker(referenceInputChatRef, "reference-image-chat")}
             </div>
             <div className="studio-chat-composer-actions">
               <div className="composer-stats">
@@ -909,6 +1042,7 @@ export function StudioPage({
                 <span className="stat-pill">
                   总张数 <strong>{plannedJobs}</strong>
                 </span>
+                {draft.referenceImageUrl ? <span className="stat-pill">含参考图</span> : null}
                 {running ? <span className="stat-pill">生成中</span> : null}
               </div>
               <button
@@ -1111,6 +1245,7 @@ export function StudioPage({
               <span className="studio-feedback-text">{optimizeNotice.text}</span>
             </div>
           ) : null}
+          {referencePicker(referenceInputRef, "reference-image-console")}
           <div className="composer-stats">
             <span
               className="stat-pill"
@@ -1129,6 +1264,11 @@ export function StudioPage({
             <span className="stat-pill" title="同时请求数，也会乘进总张数">
               并发 <strong>{draft.concurrency}</strong>
             </span>
+            {draft.referenceImageUrl ? (
+              <span className="stat-pill" title="本次生成将附带参考图">
+                含参考图
+              </span>
+            ) : null}
             <span
               className="stat-pill"
               title={

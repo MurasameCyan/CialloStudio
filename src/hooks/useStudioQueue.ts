@@ -240,8 +240,16 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             concurrency,
             resolution,
             model: currentSettings.model,
+            hasReference: Boolean(
+              typeof currentDraft.referenceImageUrl === "string" &&
+                currentDraft.referenceImageUrl.trim(),
+            ),
           });
 
+          const ref =
+            typeof currentDraft.referenceImageUrl === "string"
+              ? currentDraft.referenceImageUrl.trim()
+              : "";
           const images = await generateImage({
             baseUrl: currentSettings.baseUrl,
             apiKey,
@@ -250,6 +258,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             n: 1,
             aspectRatio,
             resolution,
+            imageUrl: ref || undefined,
             signal: controller.signal,
           });
 

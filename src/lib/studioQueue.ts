@@ -32,6 +32,13 @@ export type StudioDraft = {
   appendResults: boolean;
   /** 单行拆分 / 多行整段 */
   promptMode: PromptMode;
+  /**
+   * 参考图（图+文）：data URL / http(s) URL。
+   * 仅会话内使用，不写入 localStorage（体积大）。
+   */
+  referenceImageUrl?: string;
+  /** 参考图文件名，仅 UI 展示 */
+  referenceImageName?: string;
 };
 
 // v2：清空旧版结果墙历史（v1 曾默认追加，容易看起来像「点一次出十几张」）
@@ -242,10 +249,12 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
 
 export function saveDraft(draft: StudioDraft): void {
   try {
+    // 参考图可能是数 MB 的 data URL，禁止持久化以免撑爆 localStorage
+    const { referenceImageUrl: _ref, referenceImageName: _name, ...rest } = draft;
     localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
-        ...draft,
+        ...rest,
         variants: clampVariants(draft.variants),
         concurrency: clampConcurrency(draft.concurrency),
         promptMode: normalizePromptMode(draft.promptMode),

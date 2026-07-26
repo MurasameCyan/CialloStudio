@@ -33,6 +33,7 @@ const StudioJobCard = memo(function StudioJobCard({
   shareLocked,
   alreadyShared,
   onToggle,
+  onPreview,
   onShare,
 }: {
   job: StudioJob;
@@ -42,6 +43,7 @@ const StudioJobCard = memo(function StudioJobCard({
   shareLocked: boolean;
   alreadyShared: boolean;
   onToggle: (id: string) => void;
+  onPreview: (job: StudioJob) => void;
   onShare: (job: StudioJob) => void;
 }) {
   const src = displayUrl(job);
@@ -102,6 +104,17 @@ const StudioJobCard = memo(function StudioJobCard({
               >
                 打开原图
               </a>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                title="页内大图预览"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPreview(job);
+                }}
+              >
+                显示大图
+              </button>
               <button
                 type="button"
                 className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
@@ -186,6 +199,7 @@ export function StudioPage({
   const [sharingId, setSharingId] = useState<string | null>(null);
   /** 本会话已成功分享过的 job id，禁止重复点分享 */
   const [sharedJobIds, setSharedJobIds] = useState<Set<string>>(() => new Set());
+  const [previewJob, setPreviewJob] = useState<StudioJob | null>(null);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
@@ -251,6 +265,28 @@ export function StudioPage({
     // one re-render so share buttons unlock without a 1Hz parent timer
     setShareClock((n) => n + 1);
   }, []);
+
+  const handlePreviewJob = useCallback((job: StudioJob) => {
+    setPreviewJob(job);
+  }, []);
+
+  const closePreview = useCallback(() => {
+    setPreviewJob(null);
+  }, []);
+
+  useEffect(() => {
+    if (!previewJob) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setPreviewJob(null);
+    }
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [previewJob]);
 
   const safeJobs = Array.isArray(jobs) ? jobs : [];
   const wallJobs = useMemo(
@@ -589,11 +625,52 @@ export function StudioPage({
       shareLocked={shareCooldownLocked}
       alreadyShared={sharedJobIds.has(job.id)}
       onToggle={handleToggleSelected}
+      onPreview={handlePreviewJob}
       onShare={(j) => {
         void handleShareToHall(j);
       }}
     />
   );
+
+  const previewSrc = previewJob ? displayUrl(previewJob) || previewJob.openUrl : undefined;
+  const previewLightbox = previewJob && previewSrc ? (
+    <div
+      className="studio-lightbox-backdrop"
+      role="presentation"
+      onClick={closePreview}
+    >
+      <div
+        className="studio-lightbox"
+        role="dialog"
+        aria-modal="true"
+        aria-label="大图预览"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="studio-lightbox-top">
+          <div className="studio-lightbox-meta" title={previewJob.prompt}>
+            <strong>#{previewJob.variant}</strong>
+            <span>{previewJob.prompt}</span>
+          </div>
+          <div className="studio-lightbox-actions">
+            <a
+              className="btn btn-secondary btn-sm"
+              href={previewJob.openUrl || previewSrc}
+              target="_blank"
+              rel="noreferrer"
+            >
+              打开原图
+            </a>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={closePreview}>
+              关闭
+            </button>
+          </div>
+        </div>
+        <div className="studio-lightbox-media">
+          <img src={previewSrc} alt={previewJob.prompt || "大图预览"} />
+        </div>
+      </div>
+    </div>
+  ) : null;
 
   if (mode === "chat") {
     return (
@@ -887,6 +964,7 @@ export function StudioPage({
             ) : null}
           </div>
         </section>
+        {previewLightbox}
       </div>
     );
   }
@@ -1221,6 +1299,7 @@ export function StudioPage({
           <div className="gallery">{wallJobs.map((job) => renderJobCard(job))}</div>
         )}
       </section>
+      {previewLightbox}
     </div>
   );
 }

@@ -7,7 +7,7 @@ import {
   type ShareStatus,
 } from "@/lib/community/types";
 import { downloadJobs } from "@/lib/download";
-import { getImageModelCapability } from "@/lib/imageModels";
+import { getImageModelCapability, isImageEditModel } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
 import {
@@ -32,6 +32,7 @@ const StudioJobCard = memo(function StudioJobCard({
   sharingId,
   shareLocked,
   alreadyShared,
+  allowReference,
   onToggle,
   onPreview,
   onUseAsReference,
@@ -43,6 +44,7 @@ const StudioJobCard = memo(function StudioJobCard({
   sharingId: string | null;
   shareLocked: boolean;
   alreadyShared: boolean;
+  allowReference: boolean;
   onToggle: (id: string) => void;
   onPreview: (job: StudioJob) => void;
   onUseAsReference: (job: StudioJob) => void;
@@ -117,17 +119,19 @@ const StudioJobCard = memo(function StudioJobCard({
               >
                 显示大图
               </button>
-              <button
-                type="button"
-                className="card-overlay-action"
-                title="用作图+文参考图"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onUseAsReference(job);
-                }}
-              >
-                作参考
-              </button>
+              {allowReference ? (
+                <button
+                  type="button"
+                  className="card-overlay-action"
+                  title="用作图+文参考图"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onUseAsReference(job);
+                  }}
+                >
+                  作参考
+                </button>
+              ) : null}
               <button
                 type="button"
                 className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
@@ -207,6 +211,20 @@ export function StudioPage({
 }: Props) {
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
+  const showReferencePicker = useMemo(
+    () => isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
+    [settings.model],
+  );
+
+  // 切到非编辑模型时清掉参考图，避免误带到文生图请求
+  useEffect(() => {
+    if (showReferencePicker) return;
+    if (!draft.referenceImageUrl && !draft.referenceImageName) return;
+    setDraft({ referenceImageUrl: undefined, referenceImageName: undefined });
+    setReferenceError(null);
+    if (referenceInputRef.current) referenceInputRef.current.value = "";
+    if (referenceInputChatRef.current) referenceInputChatRef.current.value = "";
+  }, [showReferencePicker, draft.referenceImageUrl, draft.referenceImageName, setDraft]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -565,7 +583,9 @@ export function StudioPage({
             <span className="reference-picker-name" title={draft.referenceImageName}>
               {draft.referenceImageName || "参考图已就绪"}
             </span>
-            <span className="reference-picker-hint">生成时将与提示词一并发送（grok-imagine）</span>
+            <span className="reference-picker-hint">
+              仅图生图模型可用 · 将走 /images/edits
+            </span>
           </div>
         </div>
       ) : (
@@ -755,6 +775,7 @@ export function StudioPage({
       sharingId={sharingId}
       shareLocked={shareCooldownLocked}
       alreadyShared={sharedJobIds.has(job.id)}
+      allowReference={showReferencePicker}
       onToggle={handleToggleSelected}
       onPreview={handlePreviewJob}
       onUseAsReference={useJobAsReference}
@@ -1032,7 +1053,9 @@ export function StudioPage({
                   <span className="studio-feedback-text">{optimizeNotice.text}</span>
                 </div>
               ) : null}
-              {referencePicker(referenceInputChatRef, "reference-image-chat")}
+              {showReferencePicker
+                ? referencePicker(referenceInputChatRef, "reference-image-chat")
+                : null}
             </div>
             <div className="studio-chat-composer-actions">
               <div className="composer-stats">
@@ -1042,7 +1065,9 @@ export function StudioPage({
                 <span className="stat-pill">
                   总张数 <strong>{plannedJobs}</strong>
                 </span>
-                {draft.referenceImageUrl ? <span className="stat-pill">含参考图</span> : null}
+                {showReferencePicker && draft.referenceImageUrl ? (
+                  <span className="stat-pill">含参考图</span>
+                ) : null}
                 {running ? <span className="stat-pill">生成中</span> : null}
               </div>
               <button
@@ -1245,7 +1270,9 @@ export function StudioPage({
               <span className="studio-feedback-text">{optimizeNotice.text}</span>
             </div>
           ) : null}
-          {referencePicker(referenceInputRef, "reference-image-console")}
+          {showReferencePicker
+            ? referencePicker(referenceInputRef, "reference-image-console")
+            : null}
           <div className="composer-stats">
             <span
               className="stat-pill"
@@ -1264,7 +1291,7 @@ export function StudioPage({
             <span className="stat-pill" title="同时请求数，也会乘进总张数">
               并发 <strong>{draft.concurrency}</strong>
             </span>
-            {draft.referenceImageUrl ? (
+            {showReferencePicker && draft.referenceImageUrl ? (
               <span className="stat-pill" title="本次生成将附带参考图">
                 含参考图
               </span>

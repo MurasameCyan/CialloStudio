@@ -246,10 +246,23 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             ),
           });
 
+          // 仅编辑模型（如 grok-imagine-image-edit）携带参考图 → /images/edits
+          const modelId =
+            typeof currentSettings.model === "string" ? currentSettings.model.trim() : "";
+          const isEdit =
+            modelId === "grok-imagine-image-edit" ||
+            /imagine.*image.*edit|image.*edit|img.?edit/i.test(modelId);
           const ref =
-            typeof currentDraft.referenceImageUrl === "string"
+            isEdit && typeof currentDraft.referenceImageUrl === "string"
               ? currentDraft.referenceImageUrl.trim()
               : "";
+          if (isEdit && !ref) {
+            throw new ApiError(
+              400,
+              "当前为图生图模型，请先上传参考图",
+              "missing_reference_image",
+            );
+          }
           const images = await generateImage({
             baseUrl: currentSettings.baseUrl,
             apiKey,

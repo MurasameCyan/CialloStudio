@@ -32,6 +32,17 @@ export function getImageModelCapability(model: string): ImageModelCapability {
   const id = model.trim();
   if (CAPABILITIES[id]) return CAPABILITIES[id];
 
+  // 图+文编辑模型（grok2api /images/edits）
+  if (isImageEditModel(id)) {
+    return {
+      id,
+      label: "Image Edit",
+      supportsResolution: true,
+      allowedResolutions: ["1k", "2k"],
+      note: "图生图编辑模型：需参考图 + 提示词，走 /images/edits。",
+    };
+  }
+
   // 名称里带 quality / 非 lite 的 imagine 模型，按可调分辨率处理
   if (/imagine.*quality|quality.*imagine/i.test(id)) {
     return {
@@ -60,6 +71,19 @@ export function getImageModelCapability(model: string): ImageModelCapability {
     allowedResolutions: ["1k"],
     note: "当前模型可能不是图片模型，或不支持分辨率参数。",
   };
+}
+
+/**
+ * 是否支持图+文参考图输入（grok2api: POST /images/edits）。
+ * 仅编辑类模型显示参考图上传区，如 grok-imagine-image-edit。
+ */
+export function isImageEditModel(model: string): boolean {
+  const id = model.trim().toLowerCase();
+  if (!id) return false;
+  if (id === "grok-imagine-image-edit") return true;
+  // 兼容带前缀/后缀的 edit 图片模型 id
+  if (/imagine.*image.*edit|image.*edit|img.?edit/i.test(id)) return true;
+  return false;
 }
 
 export function normalizeResolutionForModel(model: string, resolution: string): ResolutionOption {

@@ -401,6 +401,54 @@ export async function listModels(input: {
   return models;
 }
 
+/** blob:/http(s)/data: → 可供 grok2api image.url 使用的 data URL 或 http(s) */
+async function normalizeReferenceImageUrl(
+  raw: string,
+  signal?: AbortSignal,
+): Promise<string> {
+  const value = raw.trim();
+  if (!value) {
+    throw new ApiError(400, "参考图地址为空", "empty_reference");
+  }
+  if (value.startsWith("data:image/")) return value;
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+
+  // 卡片展示常用 blob:；编辑接口需要 data URL / 可下载 http(s)
+  if (value.startsWith("blob:")) {
+    try {
+      const response = await fetch(value, { signal });
+      if (!response.ok) {
+        throw new ApiError(response.status, "读取参考图失败", "reference_blob_fetch_failed");
+      }
+      const blob = await response.blob();
+      if (!blob.size) {
+        throw new ApiError(400, "参考图为空", "reference_empty");
+      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = typeof reader.result === "string" ? reader.result : "";
+          if (!result.startsWith("data:")) reject(new Error("参考图转码失败"));
+          else resolve(result);
+        };
+        reader.onerror = () => reject(new Error("参考图转码失败"));
+        reader.readAsDataURL(blob);
+      });
+      return dataUrl;
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(
+        400,
+        error instanceof Error ? error.message : "参考图处理失败",
+        "reference_blob_convert_failed",
+      );
+    }
+  }
+
+  // 同源 /v1/media 等：原样返回，由上游自行拉取（多数网关要求 data/http）
+  return value;
+}
+
 export async function generateImage(input: {
   baseUrl: string;
   apiKey: string;
@@ -409,22 +457,27 @@ export async function generateImage(input: {
   n?: number;
   aspectRatio?: string;
   resolution?: string;
-  /** 单张参考图：URL 或 data URL / base64（grok-imagine 图+文） */
+  /** 单张参考图：URL / data URL / blob:（会转 data URL） */
   imageUrl?: string;
   /** 多参考图；与 imageUrl 二选一优先 imageUrls */
   imageUrls?: string[];
   signal?: AbortSignal;
 }): Promise<ImageResult[]> {
-  const refs = (input.imageUrls?.filter((u) => typeof u === "string" && u.trim()) ?? []).map((u) =>
+  const rawRefs = (input.imageUrls?.filter((u) => typeof u === "string" && u.trim()) ?? []).map((u) =>
     u.trim(),
   );
   const single =
-    refs.length === 0 && typeof input.imageUrl === "string" && input.imageUrl.trim()
+    rawRefs.length === 0 && typeof input.imageUrl === "string" && input.imageUrl.trim()
       ? input.imageUrl.trim()
       : undefined;
-  const hasRef = refs.length > 0 || Boolean(single);
+  const sourceRefs = rawRefs.length > 0 ? rawRefs : single ? [single] : [];
+  const hasRef = sourceRefs.length > 0;
 
-  log("info", "开始生图", {
+  // grok2api：图+文走 POST /images/edits，字段为 image / images: { url }
+  // 纯文生图仍走 /images/generations
+  const path = hasRef ? "/images/edits" : "/images/generations";
+
+  log("info", hasRef ? "开始图+文编辑" : "开始生图", {
     model: input.model,
     prompt: input.prompt,
     n: input.n ?? 1,
@@ -432,29 +485,47 @@ export async function generateImage(input: {
     resolution: input.resolution ?? "1k",
     baseUrl: input.baseUrl,
     requestBase: resolveBrowserApiBase(input.baseUrl),
-    reference: hasRef ? (refs.length > 0 ? `images×${refs.length}` : "image_url") : "none",
+    path,
+    reference: hasRef ? `images×${sourceRefs.length}` : "none",
   });
 
-  const body: Record<string, unknown> = {
-    model: input.model,
-    prompt: input.prompt,
-    n: input.n ?? 1,
-    aspect_ratio: input.aspectRatio ?? "1:1",
-    resolution: input.resolution ?? "1k",
-    response_format: "url",
-    stream: false,
-  };
-
-  // xAI grok-imagine：image_url / image_urls（URL 或 base64 data URL）
-  if (refs.length === 1) {
-    body.image_url = refs[0];
-  } else if (refs.length > 1) {
-    body.image_urls = refs;
-  } else if (single) {
-    body.image_url = single;
+  let body: Record<string, unknown>;
+  if (hasRef) {
+    const normalized: string[] = [];
+    for (const ref of sourceRefs) {
+      normalized.push(await normalizeReferenceImageUrl(ref, input.signal));
+    }
+    if (normalized.length === 0) {
+      throw new ApiError(400, "参考图无效", "invalid_reference");
+    }
+    // grok2api imageEditJSONRequest：不认 aspect_ratio / stream；resolution 仅 1k|2k
+    const resolutionRaw = String(input.resolution ?? "1k").trim().toLowerCase();
+    const resolution = resolutionRaw === "2k" ? "2k" : "1k";
+    body = {
+      model: input.model,
+      prompt: input.prompt,
+      n: input.n ?? 1,
+      resolution,
+      response_format: "url",
+    };
+    if (normalized.length === 1) {
+      body.image = { url: normalized[0] };
+    } else {
+      body.images = normalized.map((url) => ({ url }));
+    }
+  } else {
+    body = {
+      model: input.model,
+      prompt: input.prompt,
+      n: input.n ?? 1,
+      aspect_ratio: input.aspectRatio ?? "1:1",
+      resolution: input.resolution ?? "1k",
+      response_format: "url",
+      stream: false,
+    };
   }
 
-  const payload = await apiRequest(input.baseUrl, input.apiKey, "/images/generations", {
+  const payload = await apiRequest(input.baseUrl, input.apiKey, path, {
     method: "POST",
     signal: input.signal,
     body,

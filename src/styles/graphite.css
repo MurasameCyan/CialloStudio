@@ -171,13 +171,15 @@ html[data-theme="light"] .skeleton {
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
+  align-self: start;
 }
 
 .studio-console-controls {
-  position: sticky;
-  top: 12px;
-  max-height: calc(100dvh - 100px);
-  overflow: auto;
+  /* 不用 sticky top 偏移，避免与右侧 Results 顶边错位 */
+  position: relative;
+  top: auto;
+  max-height: none;
+  overflow: visible;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* legacy Edge */
 }

@@ -1195,7 +1195,8 @@ a {
   margin-bottom: 14px;
   /* 标题 + 右侧 KPI/芯片 两行时仍保持稳定占位，减少换行跳动 */
   min-height: 52px;
-  align-items: center;
+  /* 与左侧 Console 标题顶边齐平（勿用 center，会把 kicker 顶下去） */
+  align-items: flex-start;
 }
 
 .results-panel .progress-track {
@@ -1385,12 +1386,38 @@ a {
   width: 100%;
 }
 
-.studio-console-head {
+/* 左右栏标题条统一：同高、同顶对齐、同 margin */
+.studio-console-layout > .panel > .results-toolbar:first-child,
+.studio-console-layout > .results-panel > .results-toolbar:first-child {
+  margin-top: 0;
   margin-bottom: 14px;
+  min-height: 52px;
+  align-items: flex-start;
 }
 
-.studio-console-head .panel-title {
+.studio-console-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 0;
+  margin-bottom: 14px;
+  min-height: 52px;
+}
+
+.studio-console-head .panel-title,
+.studio-console-layout .results-toolbar .panel-title {
   margin: 0;
+}
+
+.studio-console-layout > .panel > .results-toolbar:first-child .panel-kicker,
+.studio-console-layout > .results-panel > .results-toolbar:first-child .panel-kicker {
+  margin-top: 0;
+  margin-bottom: 10px;
+}
+
+.studio-console-layout > .panel {
+  align-self: start;
 }
 
 .prompt-optimize-actions {

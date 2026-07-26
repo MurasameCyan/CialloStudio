@@ -641,6 +641,22 @@ export function StudioPage({
   const previewOpenHref =
     previewJob?.openUrl ||
     (previewSrc && !previewSrc.startsWith("blob:") ? previewSrc : undefined);
+  const previewAlreadyShared = previewJob ? sharedJobIds.has(previewJob.id) : false;
+  const previewShareBusy = previewJob ? sharingId === previewJob.id : false;
+  const previewShareDisabled =
+    !previewJob || previewAlreadyShared || previewShareBusy || shareCooldownLocked;
+  const previewShareLabel = previewAlreadyShared
+    ? "已分享"
+    : previewShareBusy
+      ? "分享中…"
+      : shareCooldownLocked
+        ? "冷却中"
+        : "分享到大厅";
+  const previewShareTitle = previewAlreadyShared
+    ? "该图已分享，不可重复分享"
+    : shareCooldownLocked
+      ? "分享冷却中"
+      : "分享到大厅";
   const previewLightbox = previewJob && previewSrc ? (
     <div
       className="studio-lightbox-backdrop"
@@ -654,7 +670,22 @@ export function StudioPage({
         aria-label="大图预览"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="studio-lightbox-top">
+        <button
+          type="button"
+          className="studio-lightbox-close"
+          aria-label="关闭预览"
+          onClick={closePreview}
+        >
+          ×
+        </button>
+        <div className="studio-lightbox-media">
+          <img
+            src={previewSrc}
+            alt={previewJob.prompt || "大图预览"}
+            decoding="async"
+          />
+        </div>
+        <div className="studio-lightbox-bottom">
           <div className="studio-lightbox-meta" title={previewJob.prompt}>
             <strong>#{previewJob.variant}</strong>
             <span>{previewJob.prompt}</span>
@@ -670,17 +701,21 @@ export function StudioPage({
                 打开原图
               </a>
             ) : null}
+            <button
+              type="button"
+              className={`btn btn-sm ${previewAlreadyShared ? "btn-shared" : "btn-primary"}`}
+              disabled={previewShareDisabled}
+              title={previewShareTitle}
+              onClick={() => {
+                if (!previewAlreadyShared) void handleShareToHall(previewJob);
+              }}
+            >
+              {previewShareLabel}
+            </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={closePreview}>
               关闭
             </button>
           </div>
-        </div>
-        <div className="studio-lightbox-media">
-          <img
-            src={previewSrc}
-            alt={previewJob.prompt || "大图预览"}
-            decoding="async"
-          />
         </div>
       </div>
     </div>

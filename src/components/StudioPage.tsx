@@ -542,61 +542,76 @@ export function StudioPage({
     log("ok", "已用结果图作为参考图", { jobId: job.id });
   }
 
-  const referencePicker = (inputRef: React.RefObject<HTMLInputElement | null>, inputId: string) => (
-    <div className="reference-picker">
-      <div className="reference-picker-head">
-        <span className="reference-picker-label">参考图 · 图+文</span>
-        <div className="reference-picker-actions">
-          <input
-            ref={inputRef}
-            id={inputId}
-            type="file"
-            accept="image/*"
-            hidden
-            disabled={running || optimizeBusy}
-            onChange={handleReferenceInputChange}
-          />
-          <button
-            type="button"
-            className="hall-chip"
-            disabled={running || optimizeBusy}
-            onClick={() => inputRef.current?.click()}
-          >
-            {draft.referenceImageUrl ? "更换" : "上传"}
-          </button>
-          {draft.referenceImageUrl ? (
+  const referencePicker = (
+    inputRef: React.RefObject<HTMLInputElement | null>,
+    inputId: string,
+    compact = false,
+  ) => (
+    <div className={`reference-picker ${compact ? "reference-picker-compact" : ""}`}>
+      <div className="field reference-picker-field">
+        <div className="label-row prompt-label-row">
+          <label htmlFor={inputId}>参考图</label>
+          <div className="reference-picker-actions">
+            <input
+              ref={inputRef}
+              id={inputId}
+              type="file"
+              accept="image/*"
+              hidden
+              disabled={running || optimizeBusy}
+              onChange={handleReferenceInputChange}
+            />
             <button
               type="button"
               className="hall-chip"
               disabled={running || optimizeBusy}
-              onClick={clearReferenceImage}
+              onClick={() => inputRef.current?.click()}
             >
-              清除
+              {draft.referenceImageUrl ? "更换" : "上传"}
             </button>
-          ) : null}
-        </div>
-      </div>
-      {draft.referenceImageUrl ? (
-        <div className="reference-picker-preview">
-          <img src={draft.referenceImageUrl} alt={draft.referenceImageName || "参考图"} />
-          <div className="reference-picker-meta">
-            <span className="reference-picker-name" title={draft.referenceImageName}>
-              {draft.referenceImageName || "参考图已就绪"}
-            </span>
-            <span className="reference-picker-hint">
-              仅图生图模型可用 · 将走 /images/edits
-            </span>
+            {draft.referenceImageUrl ? (
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={running || optimizeBusy}
+                onClick={clearReferenceImage}
+              >
+                清除
+              </button>
+            ) : null}
           </div>
         </div>
-      ) : (
-        <p className="reference-picker-empty">可选：上传参考图，实现图片+文字再生成</p>
-      )}
-      {referenceError ? (
-        <div className="studio-feedback studio-feedback-warn" role="status" style={{ marginTop: 8, marginBottom: 0 }}>
-          <span className="studio-feedback-dot warn" aria-hidden />
-          <span className="studio-feedback-text">{referenceError}</span>
-        </div>
-      ) : null}
+        {draft.referenceImageUrl ? (
+          <div className="reference-picker-preview">
+            <img src={draft.referenceImageUrl} alt={draft.referenceImageName || "参考图"} />
+            <div className="reference-picker-meta">
+              <span className="reference-picker-name" title={draft.referenceImageName}>
+                {draft.referenceImageName || "参考图已就绪"}
+              </span>
+              <span className="reference-picker-hint">图 + 提示词 · /images/edits</span>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            className="reference-picker-drop"
+            disabled={running || optimizeBusy}
+            onClick={() => inputRef.current?.click()}
+          >
+            点击上传参考图（必填）
+          </button>
+        )}
+        {referenceError ? (
+          <div
+            className="studio-feedback studio-feedback-warn"
+            role="status"
+            style={{ marginTop: 8, marginBottom: 0 }}
+          >
+            <span className="studio-feedback-dot warn" aria-hidden />
+            <span className="studio-feedback-text">{referenceError}</span>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 
@@ -1053,10 +1068,7 @@ export function StudioPage({
                   <span className="studio-feedback-text">{optimizeNotice.text}</span>
                 </div>
               ) : null}
-              {showReferencePicker
-                ? referencePicker(referenceInputChatRef, "reference-image-chat")
-                : null}
-            </div>
+              </div>
             <div className="studio-chat-composer-actions">
               <div className="composer-stats">
                 <span className="stat-pill">
@@ -1097,6 +1109,12 @@ export function StudioPage({
             </div>
             {chatParamsOpen ? (
               <div className="studio-chat-params">
+                {showReferencePicker ? (
+                  <>
+                    {referencePicker(referenceInputChatRef, "reference-image-chat", true)}
+                    <div className="studio-params-divider" role="separator" />
+                  </>
+                ) : null}
                 <div className="studio-params-grid">
                   <div className="studio-params-row">
                     <div className="field">
@@ -1270,9 +1288,6 @@ export function StudioPage({
               <span className="studio-feedback-text">{optimizeNotice.text}</span>
             </div>
           ) : null}
-          {showReferencePicker
-            ? referencePicker(referenceInputRef, "reference-image-console")
-            : null}
           <div className="composer-stats">
             <span
               className="stat-pill"
@@ -1311,7 +1326,7 @@ export function StudioPage({
         </div>
 
         <div className="studio-options">
-          {/* 操作 + 参数合并为一张玻璃卡片，风格统一 */}
+          {/* 操作 + 参数 + 参考图合并为一张卡片 */}
           <div className="option-block option-block-studio">
             <div className="studio-toolbar">
               <div className="btn-row studio-toolbar-actions">
@@ -1333,6 +1348,13 @@ export function StudioPage({
             </div>
 
             <div className="studio-params-divider" role="separator" />
+
+            {showReferencePicker ? (
+              <>
+                {referencePicker(referenceInputRef, "reference-image-console")}
+                <div className="studio-params-divider" role="separator" />
+              </>
+            ) : null}
 
             <div className="studio-params-grid">
               <div className="studio-params-row">

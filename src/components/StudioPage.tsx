@@ -1198,6 +1198,13 @@ export function StudioPage({
   return (
     <div className="page studio-console-layout">
       <section className="panel studio-console-controls studio-stage">
+        <div className="results-toolbar studio-console-head">
+          <div>
+            <div className="panel-kicker">Console</div>
+            <h2 className="panel-title studio-wall-title">灵感创作台</h2>
+          </div>
+        </div>
+
         {feedbackBars}
 
         <div className="field">

@@ -1312,7 +1312,6 @@ export function StudioPage({
                         ))}
                       </div>
                     </div>
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     <div className="field">
                       <label>分辨率</label>
                       <div className="segmented">
@@ -1590,7 +1589,6 @@ export function StudioPage({
                     ))}
                   </div>
                 </div>
-                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                 <div className="field">
                   <label>分辨率</label>
                   <div className="segmented">

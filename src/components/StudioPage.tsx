@@ -1296,6 +1296,7 @@ export function StudioPage({
                         ))}
                       </div>
                     </div>
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     <div className="field">
                       <label>并发</label>
                       <div className="segmented">
@@ -1311,6 +1312,7 @@ export function StudioPage({
                         ))}
                       </div>
                     </div>
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     <div className="field">
                       <label>分辨率</label>
                       <div className="segmented">
@@ -1332,6 +1334,7 @@ export function StudioPage({
                         })}
                       </div>
                     </div>
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     <div className="field">
                       <label>自动重试</label>
                       <div
@@ -1358,19 +1361,21 @@ export function StudioPage({
                     </div>
                   </div>
                   <div className="studio-params-divider" role="separator" />
-                  <div className="field">
-                    <label>宽高比</label>
-                    <div className="segmented">
-                      {ASPECT_RATIOS.map((ratio) => (
-                        <button
-                          key={ratio}
-                          type="button"
-                          className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                          onClick={() => setDraft({ aspectRatio: ratio })}
-                        >
-                          {ratio}
-                        </button>
-                      ))}
+                  <div className="studio-params-row studio-params-row-aspect">
+                    <div className="field">
+                      <label>宽高比</label>
+                      <div className="segmented">
+                        {ASPECT_RATIOS.map((ratio) => (
+                          <button
+                            key={ratio}
+                            type="button"
+                            className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+                            onClick={() => setDraft({ aspectRatio: ratio })}
+                          >
+                            {ratio}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>

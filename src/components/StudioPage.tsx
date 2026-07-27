@@ -838,14 +838,6 @@ export function StudioPage({
         aria-label="大图预览"
         onClick={(e) => e.stopPropagation()}
       >
-        <button
-          type="button"
-          className="studio-lightbox-close"
-          aria-label="关闭预览"
-          onClick={closePreview}
-        >
-          ×
-        </button>
         <div className="studio-lightbox-media">
           <img
             src={previewSrc}
@@ -880,8 +872,14 @@ export function StudioPage({
             >
               {previewShareLabel}
             </button>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={closePreview}>
-              关闭
+            <button
+              type="button"
+              className="studio-lightbox-close"
+              aria-label="关闭预览"
+              title="关闭"
+              onClick={closePreview}
+            >
+              ×
             </button>
           </div>
         </div>

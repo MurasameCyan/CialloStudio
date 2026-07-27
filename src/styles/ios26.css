@@ -3403,10 +3403,8 @@ a {
 }
 
 .studio-lightbox-close {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  z-index: 2;
+  position: static;
+  flex: 0 0 auto;
   width: 34px;
   height: 34px;
   border: 1px solid var(--separator);
@@ -3418,6 +3416,7 @@ a {
   cursor: pointer;
   display: grid;
   place-items: center;
+  padding: 0;
 }
 
 .studio-lightbox-close:hover {

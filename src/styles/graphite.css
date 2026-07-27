@@ -179,6 +179,7 @@ html[data-theme="light"] .skeleton {
   position: relative;
   top: auto;
   max-height: none;
+  /* 历史下拉需溢出可见 */
   overflow: visible;
   scrollbar-width: none; /* Firefox */
   -ms-overflow-style: none; /* legacy Edge */
@@ -295,11 +296,13 @@ html[data-theme="light"] .skeleton {
   border-top: 1px solid var(--separator);
   background: var(--bg-elevated);
   box-shadow: none;
-  position: static;
+  position: relative;
   max-width: none;
   width: 100%;
   box-sizing: border-box;
   z-index: 2;
+  /* 历史下拉需溢出可见 */
+  overflow: visible;
 }
 
 .studio-chat-composer .dock-textarea,

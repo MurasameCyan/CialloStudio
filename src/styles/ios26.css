@@ -286,6 +286,12 @@ a {
   overflow: hidden;
 }
 
+/* 控制台：允许历史下拉溢出面板，避免被裁切 */
+.studio-console-controls.panel,
+.studio-console-layout > .studio-console-controls {
+  overflow: visible;
+}
+
 @media (prefers-color-scheme: dark) {
   .panel {
     background:
@@ -1253,6 +1259,17 @@ a {
   margin: 0;
 }
 
+/* 灵感创作台：无 Prompt 文案，操作条右对齐且不换行抖动 */
+.prompt-label-row-actions-only {
+  justify-content: flex-end;
+}
+
+.prompt-label-row-actions-only .prompt-optimize-actions {
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  width: 100%;
+}
+
 /* 参考图：与数量/宽高比同一套 field 标签节奏，顶边对齐 */
 .reference-picker {
   margin: 0;
@@ -1431,15 +1448,41 @@ a {
   position: relative;
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
+}
+
+.prompt-history > .hall-chip {
+  min-width: 4.6em;
+  justify-content: center;
+  gap: 4px;
+}
+
+.prompt-history-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 2ch;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+.prompt-optimize-btn {
+  min-width: 4.2em;
+  justify-content: center;
+}
+
+.prompt-action-label {
+  display: inline-block;
+  min-width: 3em;
+  text-align: center;
 }
 
 .prompt-history-panel {
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 40;
-  width: min(360px, 78vw);
-  max-height: min(280px, 42vh);
+  z-index: 80;
+  width: min(420px, 86vw);
+  max-height: min(360px, 52vh);
   display: flex;
   flex-direction: column;
   border-radius: 14px;
@@ -1447,6 +1490,12 @@ a {
   background: var(--bg-solid);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
+}
+
+/* 对话模式输入区在底部：历史向上展开，避免被 layout overflow 裁切 */
+.studio-chat-composer .prompt-history-panel {
+  top: auto;
+  bottom: calc(100% + 8px);
 }
 
 .prompt-history-list {

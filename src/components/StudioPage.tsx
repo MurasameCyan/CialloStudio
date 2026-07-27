@@ -435,7 +435,10 @@ export function StudioPage({
         title={promptHistory.length ? `历史提示词 ${promptHistory.length} 条` : "暂无历史提示词"}
         onClick={() => setHistoryOpen((v) => !v)}
       >
-        历史{promptHistory.length ? ` ${promptHistory.length}` : ""}
+        历史
+        <span className="prompt-history-count" aria-hidden>
+          {promptHistory.length > 0 ? promptHistory.length : "·"}
+        </span>
       </button>
       {historyOpen ? (
         <div className="prompt-history-panel" role="listbox" aria-label="历史提示词">
@@ -1096,9 +1099,8 @@ export function StudioPage({
 
           <div className="studio-chat-composer" aria-label="对话输入">
             <div className="field">
-              <div className="label-row prompt-label-row">
-                <label htmlFor="prompts-chat">Prompt</label>
-                <div className="prompt-optimize-actions">
+              <div className="label-row prompt-label-row prompt-label-row-actions-only">
+                <div className="prompt-optimize-actions" role="toolbar" aria-label="提示词操作">
                   <div className="segmented prompt-mode-segmented" role="group" aria-label="提示词模式">
                     <button
                       type="button"
@@ -1124,7 +1126,7 @@ export function StudioPage({
                     disabled={!canOptimize}
                     onClick={() => void handleOptimizePrompt()}
                   >
-                    {optimizeBusy ? "优化中…" : "优化"}
+                    <span className="prompt-action-label">{optimizeBusy ? "优化中" : "优化"}</span>
                   </button>
                   <button
                     type="button"
@@ -1146,6 +1148,7 @@ export function StudioPage({
               </div>
               <textarea
                 id="prompts-chat"
+                aria-label="提示词"
                 className="textarea"
                 value={draft.promptText}
                 onChange={(e) => setDraft({ promptText: e.target.value })}
@@ -1306,9 +1309,8 @@ export function StudioPage({
         {feedbackBars}
 
         <div className="field">
-          <div className="label-row prompt-label-row">
-            <label htmlFor="prompts">Prompt</label>
-            <div className="prompt-optimize-actions">
+          <div className="label-row prompt-label-row prompt-label-row-actions-only">
+            <div className="prompt-optimize-actions" role="toolbar" aria-label="提示词操作">
               <div className="segmented prompt-mode-segmented" role="group" aria-label="提示词模式">
                 <button
                   type="button"
@@ -1347,7 +1349,7 @@ export function StudioPage({
                 }
                 onClick={() => void handleOptimizePrompt()}
               >
-                {optimizeBusy ? "优化中…" : "优化"}
+                <span className="prompt-action-label">{optimizeBusy ? "优化中" : "优化"}</span>
               </button>
               <button
                 type="button"
@@ -1371,6 +1373,7 @@ export function StudioPage({
           </div>
           <textarea
             id="prompts"
+            aria-label="提示词"
             className="textarea"
             value={draft.promptText}
             onChange={(e) => setDraft({ promptText: e.target.value })}

@@ -11,6 +11,13 @@ import { getImageModelCapability, isImageEditModel } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
 import {
+  loadPromptHistory,
+  promptHistoryPreview,
+  pushPromptHistory,
+  savePromptHistory,
+  type PromptHistoryItem,
+} from "@/lib/promptHistory";
+import {
   ASPECT_RATIOS,
   RESOLUTIONS,
   resolvePromptOptimizeEndpoint,
@@ -239,8 +246,11 @@ export function StudioPage({
   /** 优化前快照，供「回退」一次 */
   const [promptBeforeOptimize, setPromptBeforeOptimize] = useState<string | null>(null);
   const [referenceError, setReferenceError] = useState<string | null>(null);
+  const [promptHistory, setPromptHistory] = useState<PromptHistoryItem[]>(() => loadPromptHistory());
+  const [historyOpen, setHistoryOpen] = useState(false);
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
   const referenceInputChatRef = useRef<HTMLInputElement | null>(null);
+  const historyWrapRef = useRef<HTMLDivElement | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
   /** 图片墙：仅展示 status=done 的卡片 */
   const [successOnly, setSuccessOnly] = useState(() => {
@@ -405,6 +415,7 @@ export function StudioPage({
       openConfigOrLogin();
       return;
     }
+    if (draft.promptText.trim()) rememberPrompt(draft.promptText);
     try {
       await onStart();
     } catch (error) {
@@ -412,6 +423,91 @@ export function StudioPage({
       log("error", "启动生成失败", message);
     }
   }
+
+  const promptHistoryMenu = (
+    <div className="prompt-history" ref={historyWrapRef}>
+      <button
+        type="button"
+        className={`hall-chip ${historyOpen ? "active" : ""}`}
+        disabled={optimizeBusy || running}
+        aria-expanded={historyOpen}
+        aria-haspopup="listbox"
+        title={promptHistory.length ? `历史提示词 ${promptHistory.length} 条` : "暂无历史提示词"}
+        onClick={() => setHistoryOpen((v) => !v)}
+      >
+        历史{promptHistory.length ? ` ${promptHistory.length}` : ""}
+      </button>
+      {historyOpen ? (
+        <div className="prompt-history-panel" role="listbox" aria-label="历史提示词">
+          {promptHistory.length === 0 ? (
+            <div className="prompt-history-empty">暂无历史 · 生成或优化后会自动记录</div>
+          ) : (
+            <>
+              <div className="prompt-history-list">
+                {promptHistory.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    className="prompt-history-item"
+                    title={item.text}
+                    onClick={() => applyHistoryPrompt(item)}
+                  >
+                    <span className="prompt-history-index">{index + 1}</span>
+                    <span className="prompt-history-text">{promptHistoryPreview(item.text)}</span>
+                  </button>
+                ))}
+              </div>
+              <div className="prompt-history-footer">
+                <button type="button" className="hall-chip" onClick={clearPromptHistory}>
+                  清空历史
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  function rememberPrompt(text: string) {
+    setPromptHistory((prev) => {
+      const next = pushPromptHistory(prev, text);
+      if (next !== prev) savePromptHistory(next);
+      return next;
+    });
+  }
+
+  function applyHistoryPrompt(item: PromptHistoryItem) {
+    setDraft({ promptText: item.text });
+    setPromptBeforeOptimize(null);
+    setOptimizeNotice({ ok: true, text: "已载入历史提示词" });
+    setHistoryOpen(false);
+    log("info", "载入历史提示词", { id: item.id, preview: promptHistoryPreview(item.text, 40) });
+  }
+
+  function clearPromptHistory() {
+    setPromptHistory([]);
+    savePromptHistory([]);
+    setHistoryOpen(false);
+    log("info", "已清空提示词历史");
+  }
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    function onDoc(e: MouseEvent) {
+      if (!historyWrapRef.current?.contains(e.target as Node)) setHistoryOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setHistoryOpen(false);
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [historyOpen]);
 
   async function handleOptimizePrompt() {
     const ep = resolvePromptOptimizeEndpoint(settings);
@@ -435,6 +531,7 @@ export function StudioPage({
       setOptimizeNotice({ ok: false, text: "请先输入提示词" });
       return;
     }
+    rememberPrompt(current);
     setOptimizeBusy(true);
     setOptimizeNotice(null);
     try {
@@ -447,6 +544,7 @@ export function StudioPage({
       });
       setPromptBeforeOptimize(current);
       setDraft({ promptText: optimized });
+      rememberPrompt(optimized);
       setOptimizeNotice({ ok: true, text: "已优化并覆盖输入框 · 可点「回退」恢复" });
       log("ok", "提示词优化完成", {
         model: ep.model,
@@ -477,6 +575,7 @@ export function StudioPage({
 
   function handleClearPrompt() {
     if (!draft.promptText) return;
+    rememberPrompt(draft.promptText);
     setDraft({ promptText: "" });
     setPromptBeforeOptimize(null);
     setOptimizeNotice(null);
@@ -1018,6 +1117,7 @@ export function StudioPage({
                       多行
                     </button>
                   </div>
+                  {promptHistoryMenu}
                   <button
                     type="button"
                     className="hall-chip prompt-optimize-btn"
@@ -1229,6 +1329,7 @@ export function StudioPage({
                   多行
                 </button>
               </div>
+              {promptHistoryMenu}
               <button
                 type="button"
                 className="hall-chip prompt-optimize-btn"
@@ -1246,7 +1347,7 @@ export function StudioPage({
                 }
                 onClick={() => void handleOptimizePrompt()}
               >
-                {optimizeBusy ? "优化中…" : "优化提示词"}
+                {optimizeBusy ? "优化中…" : "优化"}
               </button>
               <button
                 type="button"

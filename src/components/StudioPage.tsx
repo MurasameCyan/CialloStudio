@@ -1244,7 +1244,11 @@ export function StudioPage({
                 {showReferencePicker && draft.referenceImageUrl ? (
                   <span className="stat-pill">含参考图</span>
                 ) : null}
-                {running ? <span className="stat-pill">生成中</span> : null}
+                {running && draft.autoRetry ? (
+                  <span className="stat-pill" title="失败任务会自动重试直到成功或停止">
+                    自动重试
+                  </span>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -1523,7 +1527,11 @@ export function StudioPage({
             >
               总张数 <strong>{plannedJobs}</strong>
             </span>
-            {running ? <span className="stat-pill">生成中</span> : null}
+            {running && draft.autoRetry ? (
+              <span className="stat-pill" title="失败任务会自动重试直到成功或停止">
+                自动重试
+              </span>
+            ) : null}
           </div>
         </div>
 

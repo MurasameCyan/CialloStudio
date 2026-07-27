@@ -30,6 +30,8 @@ export type StudioDraft = {
   concurrency: number;
   /** 新生成是否追加到结果墙；false=只保留本次 */
   appendResults: boolean;
+  /** 失败后自动重试当前子任务，直到成功或用户停止 */
+  autoRetry: boolean;
   /** 单行拆分 / 多行整段 */
   promptMode: PromptMode;
   /**
@@ -220,6 +222,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
         concurrency: clampConcurrency(defaults.concurrency),
         appendResults: false,
+        autoRetry: defaults.autoRetry === true,
         promptMode: normalizePromptMode(defaults.promptMode),
       };
     }
@@ -232,6 +235,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
       // 缺省 / 非 boolean 一律 false：替换结果墙
       appendResults: parsed.appendResults === true,
+      autoRetry: parsed.autoRetry === true,
       promptMode: normalizePromptMode(
         parsed.promptMode ?? defaults.promptMode ?? "lines",
       ),
@@ -242,6 +246,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       variants: clampVariants(defaults.variants ?? DEFAULT_VARIANTS),
       concurrency: clampConcurrency(defaults.concurrency),
       appendResults: false,
+      autoRetry: false,
       promptMode: normalizePromptMode(defaults.promptMode),
     };
   }
@@ -257,6 +262,8 @@ export function saveDraft(draft: StudioDraft): void {
         ...rest,
         variants: clampVariants(draft.variants),
         concurrency: clampConcurrency(draft.concurrency),
+        appendResults: draft.appendResults === true,
+        autoRetry: draft.autoRetry === true,
         promptMode: normalizePromptMode(draft.promptMode),
       }),
     );

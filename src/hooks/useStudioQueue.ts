@@ -44,6 +44,41 @@ type QueueApi = {
 
 const DEFAULT_PROMPT = "a cute orange cat sitting on a windowsill, soft daylight, minimal";
 
+function isAbortError(error: unknown): boolean {
+  return (
+    (error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
+/** 配置类错误重试无意义；其余（网络/5xx/空图）可自动重试 */
+function isAutoRetryableError(error: unknown): boolean {
+  if (isAbortError(error)) return false;
+  if (error instanceof ApiError) {
+    if (error.code === "missing_reference_image" || error.code === "missing_api_key") return false;
+    if (error.status === 401 || error.status === 403) return false;
+  }
+  return true;
+}
+
+function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) {
+      reject(new DOMException("Aborted", "AbortError"));
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      window.clearTimeout(timer);
+      reject(new DOMException("Aborted", "AbortError"));
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
 export function useStudioQueue(settings: StudioSettings): QueueApi {
   const [draft, setDraftState] = useState<StudioDraft>(() =>
     loadDraft({
@@ -53,6 +88,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       variants: DEFAULT_VARIANTS,
       concurrency: clampConcurrency(settings.concurrency),
       appendResults: false,
+      autoRetry: false,
       promptMode: "lines",
     }),
   );
@@ -115,6 +151,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             : clampConcurrency(prev.concurrency),
         appendResults:
           patch.appendResults !== undefined ? patch.appendResults === true : prev.appendResults === true,
+        autoRetry: patch.autoRetry !== undefined ? patch.autoRetry === true : prev.autoRetry === true,
         promptMode:
           patch.promptMode !== undefined
             ? normalizePromptMode(patch.promptMode)
@@ -156,6 +193,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const concurrency = clampConcurrency(Number(currentDraft.concurrency));
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
+    const autoRetry = currentDraft.autoRetry === true;
     const resolution = normalizeResolutionForModel(currentSettings.model, currentDraft.resolution);
     const aspectRatio = currentDraft.aspectRatio;
 
@@ -193,7 +231,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const perPrompt = variants * concurrency;
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式`,
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"}`,
       {
         concurrency,
         effectiveWorkers,
@@ -202,6 +240,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         promptCount: currentPrompts.length,
         batchLength: batch.length,
         appendResults,
+        autoRetry,
         aspectRatio,
         resolution,
         model: currentSettings.model,
@@ -234,12 +273,13 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             throw new DOMException("Aborted", "AbortError");
           }
 
-          patchJob(job.id, { status: "running" });
+          patchJob(job.id, { status: "running", error: undefined });
           log("info", `子任务 ${job.variant}/${job.variants} 开始 ${job.id}`, {
             batchId: job.batchId,
             concurrency,
             resolution,
             model: currentSettings.model,
+            autoRetry,
             hasReference: Boolean(
               typeof currentDraft.referenceImageUrl === "string" &&
                 currentDraft.referenceImageUrl.trim(),
@@ -263,46 +303,80 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
               "missing_reference_image",
             );
           }
-          const images = await generateImage({
-            baseUrl: currentSettings.baseUrl,
-            apiKey,
-            model: currentSettings.model,
-            prompt: job.prompt,
-            n: 1,
-            aspectRatio,
-            resolution,
-            imageUrl: ref || undefined,
-            signal: controller.signal,
-          });
 
-          // 只取第一张：即使上游 data[] 多图也不扩成多卡片
-          const first = images[0];
-          const imageUrl = first?.url;
-          if (!imageUrl) {
-            throw new ApiError(200, "未返回图片 URL", "invalid_response");
+          let attempt = 0;
+          for (;;) {
+            if (controller.signal.aborted) {
+              throw new DOMException("Aborted", "AbortError");
+            }
+            attempt += 1;
+            try {
+              const images = await generateImage({
+                baseUrl: currentSettings.baseUrl,
+                apiKey,
+                model: currentSettings.model,
+                prompt: job.prompt,
+                n: 1,
+                aspectRatio,
+                resolution,
+                imageUrl: ref || undefined,
+                signal: controller.signal,
+              });
+
+              // 只取第一张：即使上游 data[] 多图也不扩成多卡片
+              const first = images[0];
+              const imageUrl = first?.url;
+              if (!imageUrl) {
+                throw new ApiError(200, "未返回图片 URL", "invalid_response");
+              }
+              if (images.length > 1) {
+                log("warn", `上游返回 ${images.length} 张，本任务只采用第 1 张`, { jobId: job.id });
+              }
+
+              // imageUrl：优先 generateImage 已 blob 化的展示地址（<img> 可直接用）
+              // openUrl：同源 /v1/media 路径，打开原图 / 持久化时靠 cookie 代理
+              const openUrl =
+                first?.openUrl ||
+                (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
+                  ? undefined
+                  : rewriteMediaUrl(imageUrl, currentSettings.baseUrl));
+
+              const display = imageUrl;
+              const persistable =
+                openUrl ||
+                (!imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:") ? imageUrl : undefined);
+
+              log("ok", `子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, {
+                display: display.startsWith("blob:") ? "blob:…" : display,
+                openUrl: persistable,
+                attempts: attempt,
+              });
+              return { imageUrl: display, openUrl: persistable };
+            } catch (error) {
+              // 运行中也可关掉开关，立即停止后续重试
+              const retryEnabled = draftRef.current.autoRetry === true;
+              if (!retryEnabled || !isAutoRetryableError(error) || controller.signal.aborted) {
+                throw error;
+              }
+              const waitMs = Math.min(8000, 1000 * 2 ** Math.min(attempt - 1, 3));
+              const reason =
+                error instanceof ApiError
+                  ? error.message
+                  : error instanceof Error
+                    ? error.message
+                    : "生成失败";
+              log(
+                "warn",
+                `子任务 ${job.variant}/${job.variants} 失败，${waitMs}ms 后自动重试 #${attempt + 1} ${job.id}`,
+                reason,
+              );
+              patchJob(job.id, {
+                status: "running",
+                error: `自动重试中 · 第 ${attempt} 次失败：${reason.slice(0, 120)}`,
+              });
+              await waitForRetry(waitMs, controller.signal);
+            }
           }
-          if (images.length > 1) {
-            log("warn", `上游返回 ${images.length} 张，本任务只采用第 1 张`, { jobId: job.id });
-          }
-
-          // imageUrl：优先 generateImage 已 blob 化的展示地址（<img> 可直接用）
-          // openUrl：同源 /v1/media 路径，打开原图 / 持久化时靠 cookie 代理
-          const openUrl =
-            first?.openUrl ||
-            (imageUrl.startsWith("blob:") || imageUrl.startsWith("data:")
-              ? undefined
-              : rewriteMediaUrl(imageUrl, currentSettings.baseUrl));
-
-          const display = imageUrl;
-          const persistable =
-            openUrl ||
-            (!imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:") ? imageUrl : undefined);
-
-          log("ok", `子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, {
-            display: display.startsWith("blob:") ? "blob:…" : display,
-            openUrl: persistable,
-          });
-          return { imageUrl: display, openUrl: persistable };
         },
         {
           onInFlightChange: (n) => setInFlight(n),

@@ -2592,7 +2592,7 @@ a {
   opacity: 0.9;
 }
 
-/* 数量 | 并发 | 分辨率 组间竖向分隔 */
+/* 数量 | 并发 | 分辨率 | 自动重试 组间竖向分隔 */
 .studio-params-vsep {
   flex: 0 0 1px;
   width: 1px;
@@ -2612,7 +2612,7 @@ a {
   box-sizing: border-box;
 }
 
-/* 第一行：数量 | 并发 | 分辨率
+/* 第一行：数量 | 并发 | 分辨率 | 自动重试
    按内容宽度排布，避免 0.8fr 空列导致「并发→分辨率」视觉间距偏大 */
 .studio-params-row {
   display: flex;

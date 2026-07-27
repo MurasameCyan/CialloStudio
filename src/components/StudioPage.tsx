@@ -1332,30 +1332,29 @@ export function StudioPage({
                         })}
                       </div>
                     </div>
-                  </div>
-                  <div className="studio-params-divider" role="separator" />
-                  <div className="field">
-                    <label>自动重试</label>
-                    <div
-                      className="segmented"
-                      role="group"
-                      aria-label="自动重试"
-                      title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
-                    >
-                      <button
-                        type="button"
-                        className={`chip ${!draft.autoRetry ? "active" : ""}`}
-                        onClick={() => setDraft({ autoRetry: false })}
+                    <div className="field">
+                      <label>自动重试</label>
+                      <div
+                        className="segmented"
+                        role="group"
+                        aria-label="自动重试"
+                        title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
                       >
-                        关
-                      </button>
-                      <button
-                        type="button"
-                        className={`chip ${draft.autoRetry ? "active" : ""}`}
-                        onClick={() => setDraft({ autoRetry: true })}
-                      >
-                        开
-                      </button>
+                        <button
+                          type="button"
+                          className={`chip ${!draft.autoRetry ? "active" : ""}`}
+                          onClick={() => setDraft({ autoRetry: false })}
+                        >
+                          关
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.autoRetry ? "active" : ""}`}
+                          onClick={() => setDraft({ autoRetry: true })}
+                        >
+                          开
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="studio-params-divider" role="separator" />
@@ -1609,9 +1608,7 @@ export function StudioPage({
                     })}
                   </div>
                 </div>
-              </div>
-              <div className="studio-params-divider" role="separator" />
-              <div className="studio-params-row">
+                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                 <div className="field">
                   <label>自动重试</label>
                   <div

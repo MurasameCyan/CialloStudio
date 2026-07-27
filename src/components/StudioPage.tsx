@@ -1312,6 +1312,8 @@ export function StudioPage({
                         ))}
                       </div>
                     </div>
+                    {/* 对话模式：并发与分辨率之间保留竖线；控制台不加 */}
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     <div className="field">
                       <label>分辨率</label>
                       <div className="segmented">

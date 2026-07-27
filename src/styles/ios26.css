@@ -1476,26 +1476,18 @@ a {
   text-align: center;
 }
 
+/* fixed + portal 到 body，彻底避开 panel/grid overflow 与邻栏叠层裁切 */
 .prompt-history-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  width: min(420px, 86vw);
-  max-height: min(360px, 52vh);
+  position: fixed;
+  z-index: 1200;
   display: flex;
   flex-direction: column;
+  box-sizing: border-box;
   border-radius: 14px;
   border: var(--hairline);
   background: var(--bg-solid);
   box-shadow: var(--shadow-lg);
   overflow: hidden;
-}
-
-/* 对话模式输入区在底部：历史向上展开，避免被 layout overflow 裁切 */
-.studio-chat-composer .prompt-history-panel {
-  top: auto;
-  bottom: calc(100% + 8px);
 }
 
 .prompt-history-list {

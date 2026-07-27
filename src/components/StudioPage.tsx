@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -248,9 +249,16 @@ export function StudioPage({
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [promptHistory, setPromptHistory] = useState<PromptHistoryItem[]>(() => loadPromptHistory());
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyPanelStyle, setHistoryPanelStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
   const referenceInputRef = useRef<HTMLInputElement | null>(null);
   const referenceInputChatRef = useRef<HTMLInputElement | null>(null);
   const historyWrapRef = useRef<HTMLDivElement | null>(null);
+  const historyPanelRef = useRef<HTMLDivElement | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
   /** 图片墙：仅展示 status=done 的卡片 */
   const [successOnly, setSuccessOnly] = useState(() => {
@@ -424,6 +432,69 @@ export function StudioPage({
     }
   }
 
+  function updateHistoryPanelPosition() {
+    const anchor = historyWrapRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const pad = 12;
+    const gap = 8;
+    const width = Math.min(420, Math.max(280, window.innerWidth - pad * 2));
+    const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+    const spaceAbove = rect.top - gap - pad;
+    const preferBelow = spaceBelow >= 200 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.min(360, Math.max(160, preferBelow ? spaceBelow : spaceAbove));
+    let left = rect.right - width;
+    left = Math.max(pad, Math.min(left, window.innerWidth - width - pad));
+    const top = preferBelow ? rect.bottom + gap : Math.max(pad, rect.top - gap - maxHeight);
+    setHistoryPanelStyle({ top, left, width, maxHeight });
+  }
+
+  const promptHistoryPanel =
+    historyOpen && historyPanelStyle
+      ? createPortal(
+          <div
+            ref={historyPanelRef}
+            className="prompt-history-panel"
+            role="listbox"
+            aria-label="历史提示词"
+            style={{
+              top: historyPanelStyle.top,
+              left: historyPanelStyle.left,
+              width: historyPanelStyle.width,
+              maxHeight: historyPanelStyle.maxHeight,
+            }}
+          >
+            {promptHistory.length === 0 ? (
+              <div className="prompt-history-empty">暂无历史 · 生成或优化后会自动记录</div>
+            ) : (
+              <>
+                <div className="prompt-history-list">
+                  {promptHistory.map((item, index) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="option"
+                      className="prompt-history-item"
+                      title={item.text}
+                      onClick={() => applyHistoryPrompt(item)}
+                    >
+                      <span className="prompt-history-index">{index + 1}</span>
+                      <span className="prompt-history-text">{promptHistoryPreview(item.text)}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="prompt-history-footer">
+                  <button type="button" className="hall-chip" onClick={clearPromptHistory}>
+                    清空历史
+                  </button>
+                </div>
+              </>
+            )}
+          </div>,
+          document.body,
+        )
+      : null;
+
   const promptHistoryMenu = (
     <div className="prompt-history" ref={historyWrapRef}>
       <button
@@ -440,36 +511,7 @@ export function StudioPage({
           {promptHistory.length > 0 ? promptHistory.length : "·"}
         </span>
       </button>
-      {historyOpen ? (
-        <div className="prompt-history-panel" role="listbox" aria-label="历史提示词">
-          {promptHistory.length === 0 ? (
-            <div className="prompt-history-empty">暂无历史 · 生成或优化后会自动记录</div>
-          ) : (
-            <>
-              <div className="prompt-history-list">
-                {promptHistory.map((item, index) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    role="option"
-                    className="prompt-history-item"
-                    title={item.text}
-                    onClick={() => applyHistoryPrompt(item)}
-                  >
-                    <span className="prompt-history-index">{index + 1}</span>
-                    <span className="prompt-history-text">{promptHistoryPreview(item.text)}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="prompt-history-footer">
-                <button type="button" className="hall-chip" onClick={clearPromptHistory}>
-                  清空历史
-                </button>
-              </div>
-            </>
-          )}
-        </div>
-      ) : null}
+      {promptHistoryPanel}
     </div>
   );
 
@@ -496,10 +538,31 @@ export function StudioPage({
     log("info", "已清空提示词历史");
   }
 
+  useLayoutEffect(() => {
+    if (!historyOpen) {
+      setHistoryPanelStyle(null);
+      return;
+    }
+    updateHistoryPanelPosition();
+    function onReposition() {
+      updateHistoryPanelPosition();
+    }
+    window.addEventListener("resize", onReposition);
+    // capture scroll from nested containers too
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [historyOpen, mode]);
+
   useEffect(() => {
     if (!historyOpen) return;
     function onDoc(e: MouseEvent) {
-      if (!historyWrapRef.current?.contains(e.target as Node)) setHistoryOpen(false);
+      const target = e.target as Node;
+      if (historyWrapRef.current?.contains(target)) return;
+      if (historyPanelRef.current?.contains(target)) return;
+      setHistoryOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") setHistoryOpen(false);

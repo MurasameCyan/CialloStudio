@@ -2652,7 +2652,7 @@ a {
   opacity: 0.9;
 }
 
-/* 竖向分隔：控制台为 数量 | 并发+分辨率 | 自动重试；对话模式为 数量 | 并发 | 分辨率 | 自动重试 */
+/* 竖向分隔：数量 | 并发 | 分辨率 等基础参数组 */
 .studio-params-vsep {
   flex: 0 0 1px;
   width: 1px;
@@ -2672,7 +2672,7 @@ a {
   box-sizing: border-box;
 }
 
-/* 第一行：数量 | 并发 | 分辨率 | 自动重试
+/* 第一行：数量 | 并发 | 分辨率
    按内容宽度排布，避免 0.8fr 空列导致「并发→分辨率」视觉间距偏大 */
 .studio-params-row {
   display: flex;
@@ -2681,6 +2681,30 @@ a {
   row-gap: 12px;
   align-items: flex-start;
   width: 100%;
+}
+
+/* 高级：自动重试 / 后台任务 胶囊开关 */
+.studio-params-row-advanced > .field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
+.studio-advanced-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+}
+
+.studio-params-row .chip.studio-toggle-chip {
+  min-width: 5.5em;
+  user-select: none;
+}
+
+.studio-params-row .chip.studio-toggle-chip:not(.active) {
+  opacity: 0.78;
 }
 
 /* 第二行：宽高比独占整行 */

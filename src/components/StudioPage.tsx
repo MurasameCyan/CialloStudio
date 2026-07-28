@@ -96,8 +96,15 @@ const StudioJobCard = memo(function StudioJobCard({
       ) : null}
       <div
         className="card-media"
+        title={canSelect ? "单击选中 · 双击大图" : undefined}
         onClick={() => {
           if (canSelect) onToggle(job.id);
+        }}
+        onDoubleClick={(e) => {
+          if (!(job.status === "done" && src)) return;
+          e.preventDefault();
+          e.stopPropagation();
+          onPreview(job);
         }}
       >
         {job.status === "done" && src ? (
@@ -107,6 +114,7 @@ const StudioJobCard = memo(function StudioJobCard({
               alt={`${job.prompt} #${job.variant}`}
               loading="lazy"
               decoding="async"
+              draggable={false}
             />
             <div className="card-overlay">
               <a
@@ -222,6 +230,36 @@ export function StudioPage({
   onClear,
 }: Props) {
   const backgroundEnabled = canBackgroundTasks && draft.backgroundTasks === true;
+
+  const advancedParams = (
+    <div className="studio-params-row studio-params-row-advanced">
+      <div className="field">
+        <label>高级</label>
+        <div className="studio-advanced-toggles" role="group" aria-label="高级">
+          <button
+            type="button"
+            className={`chip studio-toggle-chip ${draft.autoRetry ? "active" : ""}`}
+            aria-pressed={draft.autoRetry}
+            title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
+            onClick={() => setDraft({ autoRetry: !draft.autoRetry })}
+          >
+            自动重试
+          </button>
+          {canBackgroundTasks ? (
+            <button
+              type="button"
+              className={`chip studio-toggle-chip ${draft.backgroundTasks ? "active" : ""}`}
+              aria-pressed={draft.backgroundTasks}
+              title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
+              onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
+            >
+              后台任务
+            </button>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const showReferencePicker = useMemo(
@@ -1423,61 +1461,9 @@ export function StudioPage({
                         })}
                       </div>
                     </div>
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    <div className="field">
-                      <label>自动重试</label>
-                      <div
-                        className="segmented"
-                        role="group"
-                        aria-label="自动重试"
-                        title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
-                      >
-                        <button
-                          type="button"
-                          className={`chip ${!draft.autoRetry ? "active" : ""}`}
-                          onClick={() => setDraft({ autoRetry: false })}
-                        >
-                          关
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.autoRetry ? "active" : ""}`}
-                          onClick={() => setDraft({ autoRetry: true })}
-                        >
-                          开
-                        </button>
-                      </div>
-                    </div>
-                    {canBackgroundTasks ? (
-                      <>
-                        <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                        <div className="field">
-                          <label>后台任务</label>
-                          <div
-                            className="segmented"
-                            role="group"
-                            aria-label="后台任务"
-                            title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
-                          >
-                            <button
-                              type="button"
-                              className={`chip ${!draft.backgroundTasks ? "active" : ""}`}
-                              onClick={() => setDraft({ backgroundTasks: false })}
-                            >
-                              关
-                            </button>
-                            <button
-                              type="button"
-                              className={`chip ${draft.backgroundTasks ? "active" : ""}`}
-                              onClick={() => setDraft({ backgroundTasks: true })}
-                            >
-                              开
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    ) : null}
                   </div>
+                  <div className="studio-params-divider" role="separator" />
+                  {advancedParams}
                   <div className="studio-params-divider" role="separator" />
                   <div className="studio-params-row studio-params-row-aspect">
                     <div className="field">
@@ -1739,61 +1725,9 @@ export function StudioPage({
                     })}
                   </div>
                 </div>
-                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                <div className="field">
-                  <label>自动重试</label>
-                  <div
-                    className="segmented"
-                    role="group"
-                    aria-label="自动重试"
-                    title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
-                  >
-                    <button
-                      type="button"
-                      className={`chip ${!draft.autoRetry ? "active" : ""}`}
-                      onClick={() => setDraft({ autoRetry: false })}
-                    >
-                      关
-                    </button>
-                    <button
-                      type="button"
-                      className={`chip ${draft.autoRetry ? "active" : ""}`}
-                      onClick={() => setDraft({ autoRetry: true })}
-                    >
-                      开
-                    </button>
-                  </div>
-                </div>
-                {canBackgroundTasks ? (
-                  <>
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    <div className="field">
-                      <label>后台任务</label>
-                      <div
-                        className="segmented"
-                        role="group"
-                        aria-label="后台任务"
-                        title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
-                      >
-                        <button
-                          type="button"
-                          className={`chip ${!draft.backgroundTasks ? "active" : ""}`}
-                          onClick={() => setDraft({ backgroundTasks: false })}
-                        >
-                          关
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.backgroundTasks ? "active" : ""}`}
-                          onClick={() => setDraft({ backgroundTasks: true })}
-                        >
-                          开
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : null}
               </div>
+              <div className="studio-params-divider" role="separator" />
+              {advancedParams}
               <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">
                 <div className="field">

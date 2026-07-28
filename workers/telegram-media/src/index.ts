@@ -283,8 +283,18 @@ async function handleMediaGet(
   }
 
   const headers = new Headers(cors);
-  const ct = upstream.headers.get("content-type") || guessMime(file.file_path);
+  // Telegram 常给 application/octet-stream；优先按 file_path 猜图片 MIME，便于浏览器内联展示
+  const guessed = guessMime(file.file_path);
+  const upstreamCt = (upstream.headers.get("content-type") || "").toLowerCase();
+  const ct =
+    guessed !== "application/octet-stream"
+      ? guessed
+      : upstreamCt.startsWith("image/")
+        ? upstreamCt
+        : upstreamCt || "image/jpeg";
   headers.set("content-type", ct);
+  // 明确 inline，避免被当成附件下载
+  headers.set("content-disposition", `inline; filename="ciallo-media${extFromMime(ct)}"`);
   headers.set("cache-control", "public, max-age=31536000, immutable");
   if (file.file_size) headers.set("content-length", String(file.file_size));
   headers.set("x-ciallo-media-id", fileId);
@@ -298,7 +308,18 @@ function guessMime(path: string): string {
   if (p.endsWith(".webp")) return "image/webp";
   if (p.endsWith(".gif")) return "image/gif";
   if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+  // documents/file_N 无扩展名时，默认按 JPEG 图片服务（Studio 上传多为图）
+  if (/\/file_\d+$/i.test(p) || /documents\//i.test(p)) return "image/jpeg";
   return "application/octet-stream";
+}
+
+function extFromMime(ct: string): string {
+  const t = ct.toLowerCase();
+  if (t.includes("png")) return ".png";
+  if (t.includes("webp")) return ".webp";
+  if (t.includes("gif")) return ".gif";
+  if (t.includes("jpeg") || t.includes("jpg")) return ".jpg";
+  return ".bin";
 }
 
 function route(pathname: string): { name: "health" | "upload" | "media" | "root"; fileId?: string } | null {

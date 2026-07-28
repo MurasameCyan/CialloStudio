@@ -2,17 +2,17 @@ import { useCallback, useEffect, useState } from "react";
 import { MessageCircle } from "lucide-react";
 import { HallAuthPanel } from "@/components/HallAuthPanel";
 import { communityApi } from "@/lib/community/client";
-import { fallbackPostImageUrl, resolvePostImageUrl } from "@/lib/community/postImage";
+import {
+  fallbackPostImageUrl,
+  openOriginalImageInNewTab,
+  resolvePostImageUrl,
+} from "@/lib/community/postImage";
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 
-function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "mediaId">) {
-  const url = resolvePostImageUrl(post);
-  if (!url) {
-    log("warn", "原图地址不可用");
-    return;
-  }
-  window.open(url, "_blank", "noopener,noreferrer");
+function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "mediaId" | "prompt">) {
+  const ok = openOriginalImageInNewTab(post, post.prompt?.trim() || "原图预览");
+  if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
 }
 
 function CommentIcon() {
@@ -592,14 +592,19 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                 <span>{active.prompt}</span>
               </div>
               <div className="studio-lightbox-actions">
-                <a
+                <button
+                  type="button"
                   className="btn btn-secondary btn-sm"
-                  href={lightboxSrc}
-                  target="_blank"
-                  rel="noreferrer"
+                  onClick={() => {
+                    const ok = openOriginalImageInNewTab(
+                      lightboxSrc,
+                      active.prompt?.trim() || "原图预览",
+                    );
+                    if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
+                  }}
                 >
                   打开原图
-                </a>
+                </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxSrc(null)}>
                   关闭
                 </button>

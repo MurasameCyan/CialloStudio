@@ -26,8 +26,8 @@ import {
   type StudioSettings,
 } from "@/lib/settings";
 import {
-  CONCURRENCY_OPTIONS,
   VARIANT_OPTIONS,
+  concurrencyOptionsForCap,
   displayUrl,
   type StudioDraft,
   type StudioJob,
@@ -198,6 +198,8 @@ type Props = {
   isLoggedIn?: boolean;
   /** 后台任务开关：站长/VIP 或站长开启的普通用户 */
   canBackgroundTasks?: boolean;
+  /** 当前用户组并发上限（>2 时显示对应并发按钮） */
+  concurrencyCap?: number;
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
@@ -228,6 +230,7 @@ export function StudioPage({
   onNeedLogin,
   isLoggedIn = false,
   canBackgroundTasks = false,
+  concurrencyCap = 2,
   draft,
   setDraft,
   jobs,
@@ -254,6 +257,10 @@ export function StudioPage({
   /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
   const generateLocked = running || enqueueBusy;
   const stopEnabled = running || serverMode;
+  const concurrencyOptions = useMemo(
+    () => concurrencyOptionsForCap(concurrencyCap),
+    [concurrencyCap],
+  );
   /** 高级：内联在分辨率右侧，不单独占行 */
   const advancedField = (
     <div className="field studio-advanced-field">
@@ -448,13 +455,11 @@ export function StudioPage({
       </div>
     ) : null;
 
+  /** 仅展示失败/警告类队列提示；成功类（清除/入队）不打扰创作台 */
   const queueNoticeBanner =
-    queueNotice ? (
-      <div
-        className={`studio-feedback ${queueNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"} studio-queue-notice`}
-        role="status"
-      >
-        <span className={`studio-feedback-dot ${queueNotice.ok ? "ok" : "warn"}`} aria-hidden />
+    queueNotice && !queueNotice.ok ? (
+      <div className="studio-feedback studio-feedback-warn studio-queue-notice" role="status">
+        <span className="studio-feedback-dot warn" aria-hidden />
         <span className="studio-feedback-text">{queueNotice.text}</span>
         {onClearQueueNotice ? (
           <button type="button" className="btn btn-ghost btn-sm" onClick={onClearQueueNotice}>
@@ -1647,12 +1652,13 @@ export function StudioPage({
                     <div className="field">
                       <label>并发</label>
                       <div className="segmented">
-                        {CONCURRENCY_OPTIONS.map((n) => (
+                        {concurrencyOptions.map((n) => (
                           <button
                             key={n}
                             type="button"
                             className={`chip ${draft.concurrency === n ? "active" : ""}`}
                             onClick={() => setDraft({ concurrency: n })}
+                            title={n > 2 ? `用户组并发上限 ${concurrencyCap}` : undefined}
                           >
                             {n}
                           </button>
@@ -1904,12 +1910,13 @@ export function StudioPage({
                 <div className="field">
                   <label>并发</label>
                   <div className="segmented">
-                    {CONCURRENCY_OPTIONS.map((n) => (
+                    {concurrencyOptions.map((n) => (
                       <button
                         key={n}
                         type="button"
                         className={`chip ${draft.concurrency === n ? "active" : ""}`}
                         onClick={() => setDraft({ concurrency: n })}
+                        title={n > 2 ? `用户组并发上限 ${concurrencyCap}` : undefined}
                       >
                         {n}
                       </button>

@@ -3810,6 +3810,102 @@ a {
   gap: 12px;
 }
 
+.admin-fields-3 {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .admin-fields-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.user-policy-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+.user-policy-switch-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.user-policy-switch {
+  position: relative;
+  flex: 0 0 auto;
+  width: 64px;
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: rgba(120, 120, 128, 0.28);
+  cursor: pointer;
+  transition: background 0.18s ease;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.04);
+}
+
+.user-policy-switch.is-on {
+  background: rgba(52, 199, 89, 0.95);
+}
+
+.user-policy-switch-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.22);
+  transition: transform 0.18s ease;
+}
+
+.user-policy-switch.is-on .user-policy-switch-knob {
+  transform: translateX(30px);
+}
+
+.user-policy-switch-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding-left: 14px;
+  font-size: 11px;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.92);
+  pointer-events: none;
+  opacity: 0;
+}
+
+.user-policy-switch.is-on .user-policy-switch-text {
+  padding-left: 0;
+  padding-right: 16px;
+  opacity: 1;
+}
+
+.user-policy-switch:not(.is-on) .user-policy-switch-text {
+  padding-left: 16px;
+  padding-right: 0;
+  color: var(--text-secondary);
+  opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+  .user-policy-switch-row {
+    background: rgba(255, 255, 255, 0.05);
+  }
+}
+
 /* 用户组：与工具栏 chip/segmented 同系，避免原生 select 在深色下看不清 */
 .user-role-segmented {
   flex-wrap: nowrap;

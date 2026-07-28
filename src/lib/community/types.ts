@@ -22,21 +22,26 @@ export type ShareCooldownConfig = {
 
 /**
  * 服务端任务队列策略（站长在用户池配置）。
- * - userLimit / vipLimit：该角色同时排队中（queued+running）上限
- * - 站长不限制
+ * - userLimit / vipLimit：该角色同时排队中（queued+running）上限；站长排队不限
+ * - user/vip/admin Concurrency：灵感创作台可选并发上限（普通默认2 / VIP3 / 站长5）
  * - userBackgroundEnabled：普通用户是否可用后台队列（默认关）
  */
 export type QueuePolicyConfig = {
   userLimit: number;
   vipLimit: number;
+  userConcurrency: number;
+  vipConcurrency: number;
+  adminConcurrency: number;
   userBackgroundEnabled: boolean;
 };
 
 /** 当前登录用户可见的队列策略（含本人权限） */
 export type MyQueuePolicy = QueuePolicyConfig & {
   canBackground: boolean;
-  /** null = 不限制（站长） */
+  /** null = 不限制（站长排队） */
   myLimit: number | null;
+  /** 本人创作台并发可选上限 */
+  myConcurrency: number;
 };
 
 /** 当前登录用户的分享冷却状态（任意登录用户可读） */
@@ -66,6 +71,9 @@ export const DEFAULT_SHARE_COOLDOWN: ShareCooldownConfig = {
 export const DEFAULT_QUEUE_POLICY: QueuePolicyConfig = {
   userLimit: 1,
   vipLimit: 3,
+  userConcurrency: 2,
+  vipConcurrency: 3,
+  adminConcurrency: 5,
   userBackgroundEnabled: false,
 };
 
@@ -179,16 +187,40 @@ export function queueLimitForRole(
   return cfg.userLimit;
 }
 
+/** 按角色取创作台并发上限 */
+export function concurrencyLimitForRole(
+  role: UserRole | null | undefined,
+  policy?: QueuePolicyConfig | null,
+): number {
+  const cfg = normalizeQueuePolicy(policy);
+  if (role === "admin") return cfg.adminConcurrency;
+  if (role === "vip") return cfg.vipConcurrency;
+  return cfg.userConcurrency;
+}
+
 export function clampQueueLimit(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(100, Math.max(1, Math.round(n)));
 }
 
+/** 并发上限配置：1–8 */
+export function clampConcurrencyCap(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(8, Math.max(1, Math.round(n)));
+}
+
 export function normalizeQueuePolicy(raw?: Partial<QueuePolicyConfig> | null): QueuePolicyConfig {
   return {
     userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
     vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userConcurrency: clampConcurrencyCap(raw?.userConcurrency, DEFAULT_QUEUE_POLICY.userConcurrency),
+    vipConcurrency: clampConcurrencyCap(raw?.vipConcurrency, DEFAULT_QUEUE_POLICY.vipConcurrency),
+    adminConcurrency: clampConcurrencyCap(
+      raw?.adminConcurrency,
+      DEFAULT_QUEUE_POLICY.adminConcurrency,
+    ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };
 }

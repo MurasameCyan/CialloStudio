@@ -139,7 +139,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       setQueuePolicyDraft(next);
       setOk(true);
       setMessage(
-        `已保存队列策略：普通上限 ${next.userLimit} · VIP 上限 ${next.vipLimit} · 普通后台 ${next.userBackgroundEnabled ? "开" : "关"}（站长不限）`,
+        `已保存队列策略：排队 普通${next.userLimit}/VIP${next.vipLimit} · 并发 普通${next.userConcurrency}/VIP${next.vipConcurrency}/站长${next.adminConcurrency} · 普通后台 ${next.userBackgroundEnabled ? "开" : "关"}`,
       );
       log("ok", "队列策略已保存", next);
     } catch (e) {
@@ -380,9 +380,10 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           <div>
             <div className="admin-block-label">服务端队列策略</div>
             <p className="footer-note" style={{ marginTop: 4 }}>
-              排队中任务上限：普通默认 1 · VIP 默认 3 · 站长不限。当前生效：普通{" "}
-              {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 普通后台{" "}
-              {queuePolicy.userBackgroundEnabled ? "开" : "关"}
+              排队上限：普通 {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 站长不限。并发上限：普通{" "}
+              {queuePolicy.userConcurrency} · VIP {queuePolicy.vipConcurrency} · 站长{" "}
+              {queuePolicy.adminConcurrency}。普通后台{" "}
+              {queuePolicy.userBackgroundEnabled ? "开" : "关"}。
             </p>
           </div>
           <button
@@ -394,10 +395,14 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
             {queuePolicyBusy ? "保存中…" : "保存队列"}
           </button>
         </div>
-        <div className="admin-fields-2" style={{ marginTop: 10 }}>
+
+        <div className="admin-block-label" style={{ marginTop: 12 }}>
+          排队上限
+        </div>
+        <div className="admin-fields-2" style={{ marginTop: 8 }}>
           <div className="field">
             <div className="label-row">
-              <label htmlFor="ql-user">普通用户上限</label>
+              <label htmlFor="ql-user">普通用户</label>
             </div>
             <input
               id="ql-user"
@@ -413,7 +418,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           </div>
           <div className="field">
             <div className="label-row">
-              <label htmlFor="ql-vip">VIP 上限</label>
+              <label htmlFor="ql-vip">VIP</label>
             </div>
             <input
               id="ql-vip"
@@ -428,24 +433,99 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
             />
           </div>
         </div>
-        <div className="field" style={{ marginTop: 12 }}>
-          <label className="select-all" htmlFor="ql-user-bg">
+
+        <div className="admin-block-label" style={{ marginTop: 14 }}>
+          并发上限（灵感创作台）
+        </div>
+        <p className="footer-note" style={{ marginTop: 4 }}>
+          默认：普通 2 · VIP 3 · 站长 5。超过 2 时创作台会显示对应并发按钮。
+        </p>
+        <div className="admin-fields-3" style={{ marginTop: 8 }}>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="qc-user">普通用户</label>
+            </div>
             <input
-              id="ql-user-bg"
-              type="checkbox"
-              checked={queuePolicyDraft.userBackgroundEnabled}
+              id="qc-user"
+              className="control"
+              type="number"
+              min={1}
+              max={8}
+              value={queuePolicyDraft.userConcurrency}
               onChange={(e) =>
                 setQueuePolicyDraft((p) => ({
                   ...p,
-                  userBackgroundEnabled: e.target.checked,
+                  userConcurrency: Number(e.target.value),
                 }))
               }
             />
-            <span>允许普通用户开启后台队列（默认关闭）</span>
-          </label>
-          <p className="footer-note" style={{ marginTop: 6 }}>
-            开启后，普通用户可在灵感创作台使用「后台任务」并提交服务端队列；关闭则仅站长 / VIP 可用。
-          </p>
+          </div>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="qc-vip">VIP</label>
+            </div>
+            <input
+              id="qc-vip"
+              className="control"
+              type="number"
+              min={1}
+              max={8}
+              value={queuePolicyDraft.vipConcurrency}
+              onChange={(e) =>
+                setQueuePolicyDraft((p) => ({
+                  ...p,
+                  vipConcurrency: Number(e.target.value),
+                }))
+              }
+            />
+          </div>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="qc-admin">站长</label>
+            </div>
+            <input
+              id="qc-admin"
+              className="control"
+              type="number"
+              min={1}
+              max={8}
+              value={queuePolicyDraft.adminConcurrency}
+              onChange={(e) =>
+                setQueuePolicyDraft((p) => ({
+                  ...p,
+                  adminConcurrency: Number(e.target.value),
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="user-policy-switch-row" style={{ marginTop: 14 }}>
+          <div className="user-policy-switch-copy">
+            <div className="admin-block-label">普通用户后台队列</div>
+            <p className="footer-note" style={{ marginTop: 4 }}>
+              开启后普通用户可在创作台使用「后台任务」入队；关闭则仅站长 / VIP。默认关闭。
+            </p>
+          </div>
+          <button
+            type="button"
+            id="ql-user-bg"
+            className={`user-policy-switch ${queuePolicyDraft.userBackgroundEnabled ? "is-on" : ""}`}
+            role="switch"
+            aria-checked={queuePolicyDraft.userBackgroundEnabled}
+            aria-label="允许普通用户开启后台队列"
+            onClick={() =>
+              setQueuePolicyDraft((p) => ({
+                ...p,
+                userBackgroundEnabled: !p.userBackgroundEnabled,
+              }))
+            }
+          >
+            <span className="user-policy-switch-knob" aria-hidden />
+            <span className="user-policy-switch-text">
+              {queuePolicyDraft.userBackgroundEnabled ? "开" : "关"}
+            </span>
+          </button>
         </div>
       </div>
 

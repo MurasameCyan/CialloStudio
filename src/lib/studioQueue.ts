@@ -57,7 +57,17 @@ const MAX_JOBS = 120;
 const LEGACY_KEYS = ["ciallo-studio.jobs.v1", "ciallo-studio.draft.v1"] as const;
 
 export const VARIANT_OPTIONS = [1, 2, 3, 4, 5] as const;
+/** 基础并发选项；超过 2 的档位由用户组并发上限动态追加 */
 export const CONCURRENCY_OPTIONS = [1, 2] as const;
+
+/** 按用户组上限生成可选并发列表：始终含 1、2；上限>2 时追加到上限 */
+export function concurrencyOptionsForCap(maxCap: number): number[] {
+  const cap = Math.min(8, Math.max(1, Math.round(Number(maxCap)) || 2));
+  const opts: number[] = [1, 2];
+  for (let n = 3; n <= cap; n += 1) opts.push(n);
+  // 上限 <2 时只保留到 cap
+  return opts.filter((n) => n <= cap);
+}
 /** 默认每条 prompt 只出 1 张，避免用户以为选了 1:1 却生成 4 张 */
 export const DEFAULT_VARIANTS = 1;
 

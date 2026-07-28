@@ -67,6 +67,12 @@ export default function App() {
                 : community.user?.role === "vip"
                   ? DEFAULT_QUEUE_POLICY.vipLimit
                   : DEFAULT_QUEUE_POLICY.userLimit,
+            myConcurrency:
+              community.user?.role === "admin"
+                ? DEFAULT_QUEUE_POLICY.adminConcurrency
+                : community.user?.role === "vip"
+                  ? DEFAULT_QUEUE_POLICY.vipConcurrency
+                  : DEFAULT_QUEUE_POLICY.userConcurrency,
           });
         }
       }
@@ -76,8 +82,17 @@ export default function App() {
     };
   }, [community.user]);
 
+  const concurrencyCap =
+    typeof queuePolicy?.myConcurrency === "number" && queuePolicy.myConcurrency > 0
+      ? queuePolicy.myConcurrency
+      : community.user?.role === "admin"
+        ? DEFAULT_QUEUE_POLICY.adminConcurrency
+        : community.user?.role === "vip"
+          ? DEFAULT_QUEUE_POLICY.vipConcurrency
+          : DEFAULT_QUEUE_POLICY.userConcurrency;
+
   // 队列挂在 App 层：切页也不会丢任务/结果
-  const queue = useStudioQueue(settings);
+  const queue = useStudioQueue(settings, { concurrencyCap });
   const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const isLoggedIn = Boolean(community.user);
   const isStationMaster = community.user?.role === "admin";
@@ -252,6 +267,7 @@ export default function App() {
               onNeedLogin={openHallAuth}
               isLoggedIn={isLoggedIn}
               canBackgroundTasks={allowBackgroundTasks}
+              concurrencyCap={concurrencyCap}
               draft={queue.draft}
               setDraft={queue.setDraft}
               jobs={queue.jobs}

@@ -113,11 +113,15 @@ export function normalizeBaseUrl(value: string): string {
   }
 }
 
-export function clampConcurrency(value: unknown): number {
+/**
+ * 创作台 / 全局并发数值钳制。
+ * maxCap 默认 8（策略层再按用户组收紧可选按钮）。
+ */
+export function clampConcurrency(value: unknown, maxCap = 8): number {
   const n = typeof value === "number" ? value : Number(value);
+  const cap = Math.min(8, Math.max(1, Math.round(Number(maxCap)) || 8));
   if (!Number.isFinite(n)) return 1;
-  // 同时请求上限仅 1 / 2
-  return Math.min(2, Math.max(1, Math.round(n)));
+  return Math.min(cap, Math.max(1, Math.round(n)));
 }
 
 /** 解析提示词优化实际使用的上游 + 模型 */

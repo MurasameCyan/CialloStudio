@@ -26,6 +26,7 @@ import {
   DEFAULT_SHARE_COOLDOWN,
   canUseBackgroundTasks,
   computeShareRemainSec,
+  concurrencyLimitForRole,
   normalizeQueuePolicy,
   normalizeShareCooldown,
   queueLimitForRole,
@@ -580,6 +581,7 @@ export const mockCommunity = {
       ...policy,
       canBackground: canUseBackgroundTasks(role, policy),
       myLimit: queueLimitForRole(role, policy),
+      myConcurrency: concurrencyLimitForRole(role, policy),
     };
   },
 

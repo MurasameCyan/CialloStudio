@@ -137,14 +137,21 @@ function waitForRetry(ms: number, signal: AbortSignal): Promise<void> {
   });
 }
 
-export function useStudioQueue(settings: StudioSettings): QueueApi {
+export function useStudioQueue(
+  settings: StudioSettings,
+  options?: { concurrencyCap?: number },
+): QueueApi {
+  const concurrencyCap = Math.min(8, Math.max(1, Math.round(Number(options?.concurrencyCap)) || 2));
+  const concurrencyCapRef = useRef(concurrencyCap);
+  concurrencyCapRef.current = concurrencyCap;
+
   const [draft, setDraftState] = useState<StudioDraft>(() =>
     loadDraft({
       promptText: DEFAULT_PROMPT,
       aspectRatio: settings.aspectRatio,
       resolution: settings.resolution,
       variants: DEFAULT_VARIANTS,
-      concurrency: clampConcurrency(settings.concurrency),
+      concurrency: clampConcurrency(settings.concurrency, concurrencyCap),
       appendResults: false,
       autoRetry: false,
       backgroundTasks: false,
@@ -231,16 +238,28 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
 
   const clearQueueNotice = useCallback(() => setQueueNotice(null), []);
 
+  // 用户组并发上限变化时，把 draft 收回到 cap 内
+  useEffect(() => {
+    setDraftState((prev) => {
+      const nextVal = clampConcurrency(prev.concurrency, concurrencyCap);
+      if (nextVal === prev.concurrency) return prev;
+      const next = { ...prev, concurrency: nextVal };
+      draftRef.current = next;
+      return next;
+    });
+  }, [concurrencyCap]);
+
   const setDraft = useCallback((patch: Partial<StudioDraft>) => {
     setDraftState((prev) => {
+      const cap = concurrencyCapRef.current;
       const next: StudioDraft = {
         ...prev,
         ...patch,
         variants: patch.variants !== undefined ? clampVariants(Number(patch.variants)) : clampVariants(prev.variants),
         concurrency:
           patch.concurrency !== undefined
-            ? clampConcurrency(Number(patch.concurrency))
-            : clampConcurrency(prev.concurrency),
+            ? clampConcurrency(Number(patch.concurrency), cap)
+            : clampConcurrency(prev.concurrency, cap),
         appendResults:
           patch.appendResults !== undefined ? patch.appendResults === true : prev.appendResults === true,
         autoRetry: patch.autoRetry !== undefined ? patch.autoRetry === true : prev.autoRetry === true,
@@ -278,7 +297,6 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     setRunning(false);
     setInFlight(0);
     setServerMode(false);
-    setQueueNotice({ ok: true, text: "已停止本地/服务端进行中任务" });
     log("warn", "用户停止：已 abort / 取消进行中的子任务");
     void refreshServerQueue();
   }, [refreshServerQueue, stopServerPolling]);
@@ -397,10 +415,11 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         stopServerPolling();
         setInFlight(0);
         setServerMode(false);
-        setQueueNotice({
-          ok: true,
-          text: `已取消全部进行中任务${result.cancelled ? ` · ${result.cancelled}` : ""}`,
-        });
+        // 成功类批量操作：只记日志，不在创作台弹提示条
+        log(
+          "ok",
+          `已取消全部进行中任务${result.cancelled ? ` · ${result.cancelled}` : ""}`,
+        );
         return;
       }
 
@@ -411,10 +430,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         setInFlight(0);
         setServerMode(false);
         setJobs((prev) => prev.filter((j) => !j.serverTaskId));
-        setQueueNotice({
-          ok: true,
-          text: `已清除全部服务端任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
-        });
+        log(
+          "ok",
+          `已清除全部服务端任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+        );
         return;
       }
 
@@ -426,10 +445,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
             return keepIds.has(j.serverTaskId);
           }),
         );
-        setQueueNotice({
-          ok: true,
-          text: `已清除失败/取消任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
-        });
+        log(
+          "ok",
+          `已清除失败/取消任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+        );
         return;
       }
 
@@ -440,10 +459,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
           return keepIds.has(j.serverTaskId);
         }),
       );
-      setQueueNotice({
-        ok: true,
-        text: `已清除已完成任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
-      });
+      log(
+        "ok",
+        `已清除已完成任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+      );
     },
     [stopServerPolling],
   );
@@ -603,7 +622,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     if (currentPrompts.length === 0) return;
 
     // 强制数字，避免 localStorage / 事件值变成字符串
-    const concurrency = clampConcurrency(Number(currentDraft.concurrency));
+    const concurrency = clampConcurrency(
+      Number(currentDraft.concurrency),
+      concurrencyCapRef.current,
+    );
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
     const autoRetry = currentDraft.autoRetry === true;
@@ -730,10 +752,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
           const ids = new Set(incoming.map((t) => t.id));
           return [...incoming, ...prev.filter((p) => !ids.has(p.id))].slice(0, 40);
         });
-        setQueueNotice({
-          ok: true,
-          text: `已入队 ${created.tasks.length} 个任务 · 可在图片墙顶部查看队列`,
-        });
+        log("ok", `已入队 ${created.tasks.length} 个任务`);
         void pollServerTasks();
         return;
       } catch (error) {

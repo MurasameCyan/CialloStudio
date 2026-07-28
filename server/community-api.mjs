@@ -28,10 +28,13 @@ const FALLBACK_MASTER_PASSWORD = "admin123";
 const ENV_PASSWORD_MARKER = "__env_master__";
 
 const DEFAULT_COOLDOWN = { user: 60, vip: 15 };
-/** 普通默认 1 · VIP 默认 3 · 站长不限；普通用户后台默认关 */
+/** 排队：普通1 / VIP3 / 站长不限；并发：普通2 / VIP3 / 站长5；普通后台默认关 */
 const DEFAULT_QUEUE_POLICY = {
   userLimit: 1,
   vipLimit: 3,
+  userConcurrency: 2,
+  vipConcurrency: 3,
+  adminConcurrency: 5,
   userBackgroundEnabled: false,
 };
 
@@ -128,10 +131,25 @@ function clampQueueLimit(value, fallback) {
   return Math.min(100, Math.max(1, Math.round(n)));
 }
 
+function clampConcurrencyCap(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(8, Math.max(1, Math.round(n)));
+}
+
 function normalizeQueuePolicy(raw) {
   return {
     userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
     vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userConcurrency: clampConcurrencyCap(
+      raw?.userConcurrency,
+      DEFAULT_QUEUE_POLICY.userConcurrency,
+    ),
+    vipConcurrency: clampConcurrencyCap(raw?.vipConcurrency, DEFAULT_QUEUE_POLICY.vipConcurrency),
+    adminConcurrency: clampConcurrencyCap(
+      raw?.adminConcurrency,
+      DEFAULT_QUEUE_POLICY.adminConcurrency,
+    ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };
 }
@@ -147,6 +165,13 @@ function queueLimitForRole(role, policy) {
   if (role === "admin") return null;
   if (role === "vip") return cfg.vipLimit;
   return cfg.userLimit;
+}
+
+function concurrencyLimitForRole(role, policy) {
+  const cfg = normalizeQueuePolicy(policy);
+  if (role === "admin") return cfg.adminConcurrency;
+  if (role === "vip") return cfg.vipConcurrency;
+  return cfg.userConcurrency;
 }
 
 function shareCooldownForRole(role, cfg) {
@@ -754,6 +779,7 @@ async function handle(req, res) {
         ...policy,
         canBackground: canUseBackground(role, policy),
         myLimit: queueLimitForRole(role, policy),
+        myConcurrency: concurrencyLimitForRole(role, policy),
       });
       return;
     }

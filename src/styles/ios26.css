@@ -1038,6 +1038,52 @@ a {
   border: 1px solid var(--separator);
 }
 
+/* 右侧：分享提示 + 清除勾选/下载，不挤变形 */
+.selection-bar-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px 10px;
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.selection-share-slot {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  max-width: min(280px, 46vw);
+  min-height: 32px;
+}
+
+.selection-share-slot:empty {
+  display: none;
+}
+
+.selection-share-slot .studio-feedback,
+.studio-feedback-inline {
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.selection-share-slot .studio-feedback-text,
+.studio-feedback-inline .studio-feedback-text {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.selection-bar-actions .btn-row {
+  flex: 0 0 auto;
+}
+
 @media (prefers-color-scheme: dark) {
   .selection-bar {
     background: rgba(255, 255, 255, 0.04);
@@ -2672,7 +2718,7 @@ a {
   box-sizing: border-box;
 }
 
-/* 第一行：数量 | 并发 | 分辨率
+/* 第一行：数量 | 并发 | 分辨率 | 高级
    按内容宽度排布，避免 0.8fr 空列导致「并发→分辨率」视觉间距偏大 */
 .studio-params-row {
   display: flex;
@@ -2683,11 +2729,9 @@ a {
   width: 100%;
 }
 
-/* 高级：自动重试 / 后台任务 胶囊开关 */
-.studio-params-row-advanced > .field {
-  flex: 1 1 100%;
-  width: 100%;
-  max-width: 100%;
+/* 高级：自动重试 / 后台任务 胶囊，贴在分辨率右侧 */
+.studio-advanced-field {
+  min-width: 0;
 }
 
 .studio-advanced-toggles {

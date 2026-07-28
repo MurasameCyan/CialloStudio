@@ -231,32 +231,31 @@ export function StudioPage({
 }: Props) {
   const backgroundEnabled = canBackgroundTasks && draft.backgroundTasks === true;
 
-  const advancedParams = (
-    <div className="studio-params-row studio-params-row-advanced">
-      <div className="field">
-        <label>高级</label>
-        <div className="studio-advanced-toggles" role="group" aria-label="高级">
+  /** 高级：内联在分辨率右侧，不单独占行 */
+  const advancedField = (
+    <div className="field studio-advanced-field">
+      <label>高级</label>
+      <div className="studio-advanced-toggles" role="group" aria-label="高级">
+        <button
+          type="button"
+          className={`chip studio-toggle-chip ${draft.autoRetry ? "active" : ""}`}
+          aria-pressed={draft.autoRetry}
+          title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
+          onClick={() => setDraft({ autoRetry: !draft.autoRetry })}
+        >
+          自动重试
+        </button>
+        {canBackgroundTasks ? (
           <button
             type="button"
-            className={`chip studio-toggle-chip ${draft.autoRetry ? "active" : ""}`}
-            aria-pressed={draft.autoRetry}
-            title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
-            onClick={() => setDraft({ autoRetry: !draft.autoRetry })}
+            className={`chip studio-toggle-chip ${draft.backgroundTasks ? "active" : ""}`}
+            aria-pressed={draft.backgroundTasks}
+            title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
+            onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
           >
-            自动重试
+            后台任务
           </button>
-          {canBackgroundTasks ? (
-            <button
-              type="button"
-              className={`chip studio-toggle-chip ${draft.backgroundTasks ? "active" : ""}`}
-              aria-pressed={draft.backgroundTasks}
-              title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
-              onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
-            >
-              后台任务
-            </button>
-          ) : null}
-        </div>
+        ) : null}
       </div>
     </div>
   );
@@ -973,7 +972,19 @@ export function StudioPage({
     sharedJobIds,
   ]);
 
-  const feedbackBars = (
+  /** 配置提示仍放创作台；分享结果放到图片墙选择栏，避免挤变形 */
+  const setupFeedback = !configured ? (
+    <div className="studio-feedback studio-feedback-muted" role="status">
+      <span className="studio-feedback-dot muted" aria-hidden />
+      <span className="studio-feedback-text">
+        {isLoggedIn
+          ? "尚未配置 API Key · 请到「设置」填写接口与密钥"
+          : "尚未配置 API Key · 请先登录，再到「设置」填写"}
+      </span>
+    </div>
+  ) : null;
+
+  const wallShareFeedback = (
     <>
       <ShareCooldownBanner
         shareStatus={shareStatus}
@@ -984,7 +995,7 @@ export function StudioPage({
         ? shareNotice
           ? (
             <div
-              className={`studio-feedback ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+              className={`studio-feedback studio-feedback-inline ${shareNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
               role="status"
             >
               <span className={`studio-feedback-dot ${shareNotice.ok ? "ok" : "warn"}`} aria-hidden />
@@ -993,16 +1004,6 @@ export function StudioPage({
           )
           : null
         : null}
-      {!configured ? (
-        <div className="studio-feedback studio-feedback-muted" role="status">
-          <span className="studio-feedback-dot muted" aria-hidden />
-          <span className="studio-feedback-text">
-            {isLoggedIn
-              ? "尚未配置 API Key · 请到「设置」填写接口与密钥"
-              : "尚未配置 API Key · 请先登录，再到「设置」填写"}
-          </span>
-        </div>
-      ) : null}
     </>
   );
 
@@ -1210,7 +1211,6 @@ export function StudioPage({
                 </button>
               </div>
             </div>
-            {feedbackBars}
             <div className="progress-track" aria-hidden>
               <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
             </div>
@@ -1227,23 +1227,28 @@ export function StudioPage({
               <div className="selection-meta">
                 已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
               </div>
-              <div className="btn-row">
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm"
-                  disabled={selectedCount === 0 || downloading}
-                  onClick={clearSelection}
-                >
-                  清除勾选
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary btn-sm"
-                  disabled={selectedCount === 0 || downloading}
-                  onClick={handleDownloadSelected}
-                >
-                  {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-                </button>
+              <div className="selection-bar-actions">
+                <div className="selection-share-slot" aria-live="polite">
+                  {wallShareFeedback}
+                </div>
+                <div className="btn-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={selectedCount === 0 || downloading}
+                    onClick={clearSelection}
+                  >
+                    清除勾选
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={selectedCount === 0 || downloading}
+                    onClick={handleDownloadSelected}
+                  >
+                    {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1461,9 +1466,9 @@ export function StudioPage({
                         })}
                       </div>
                     </div>
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+                    {advancedField}
                   </div>
-                  <div className="studio-params-divider" role="separator" />
-                  {advancedParams}
                   <div className="studio-params-divider" role="separator" />
                   <div className="studio-params-row studio-params-row-aspect">
                     <div className="field">
@@ -1502,7 +1507,7 @@ export function StudioPage({
           </div>
         </div>
 
-        {feedbackBars}
+        {setupFeedback}
 
         <div className="field">
           <div className="label-row prompt-label-row prompt-label-row-actions-only">
@@ -1725,9 +1730,9 @@ export function StudioPage({
                     })}
                   </div>
                 </div>
+                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+                {advancedField}
               </div>
-              <div className="studio-params-divider" role="separator" />
-              {advancedParams}
               <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">
                 <div className="field">
@@ -1812,23 +1817,28 @@ export function StudioPage({
           <div className="selection-meta">
             已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
           </div>
-          <div className="btn-row">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              disabled={selectedCount === 0 || downloading}
-              onClick={clearSelection}
-            >
-              清除勾选
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={selectedCount === 0 || downloading}
-              onClick={handleDownloadSelected}
-            >
-              {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-            </button>
+          <div className="selection-bar-actions">
+            <div className="selection-share-slot" aria-live="polite">
+              {wallShareFeedback}
+            </div>
+            <div className="btn-row">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                disabled={selectedCount === 0 || downloading}
+                onClick={clearSelection}
+              >
+                清除勾选
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                disabled={selectedCount === 0 || downloading}
+                onClick={handleDownloadSelected}
+              >
+                {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+              </button>
+            </div>
           </div>
         </div>
 

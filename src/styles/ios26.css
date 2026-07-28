@@ -2624,17 +2624,52 @@ a {
   flex: 0 0 auto;
 }
 
-.results-toolbar-actions .kpi-row-inline {
+.results-toolbar-actions .studio-wall-stat-chips {
   order: 1;
-  /* 与右侧芯片总间距约 30px（含 actions gap 8px） */
-  margin-right: 22px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  /* 与右侧「仅成功」等芯片拉开一点 */
+  margin-right: 14px;
+}
+
+.results-toolbar-actions .studio-stat-chip {
+  order: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+  pointer-events: none;
+  user-select: none;
+  cursor: default;
+}
+
+.results-toolbar-actions .studio-stat-chip-count,
+.studio-stat-chip-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 113, 227, 0.12);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 .results-toolbar-actions .connection-chip {
   order: 2;
 }
 
-.results-toolbar-actions .gallery-filter-chip:not(.studio-queue-chip) {
+.results-toolbar-actions .gallery-filter-chip:not(.studio-queue-chip):not(.studio-stat-chip) {
   order: 2;
   min-height: 34px;
   height: 34px;

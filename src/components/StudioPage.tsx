@@ -1407,15 +1407,15 @@ export function StudioPage({
               </div>
               <div className="results-toolbar-actions">
                 {queueToggleButton}
-                <div className="kpi-row kpi-row-inline" aria-label="生成统计">
-                  <div className="kpi">
-                    <div className="kpi-label">总数</div>
-                    <div className="kpi-value">{stats.total}</div>
-                  </div>
-                  <div className="kpi">
-                    <div className="kpi-label">完成</div>
-                    <div className="kpi-value">{stats.done}</div>
-                  </div>
+                <div className="studio-wall-stat-chips" aria-label="生成统计">
+                  <span className="chip gallery-filter-chip studio-stat-chip" title="结果墙总数">
+                    总数
+                    <strong className="studio-stat-chip-count">{stats.total}</strong>
+                  </span>
+                  <span className="chip gallery-filter-chip studio-stat-chip" title="已完成张数">
+                    完成
+                    <strong className="studio-stat-chip-count">{stats.done}</strong>
+                  </span>
                 </div>
                 <button
                   type="button"
@@ -1985,15 +1985,15 @@ export function StudioPage({
           <div className="results-toolbar-actions">
             {/* 队列在总数左侧；KPI 始终占位 */}
             {queueToggleButton}
-            <div className="kpi-row kpi-row-inline" aria-label="生成统计">
-              <div className="kpi">
-                <div className="kpi-label">总数</div>
-                <div className="kpi-value">{stats.total}</div>
-              </div>
-              <div className="kpi">
-                <div className="kpi-label">完成</div>
-                <div className="kpi-value">{stats.done}</div>
-              </div>
+            <div className="studio-wall-stat-chips" aria-label="生成统计">
+              <span className="chip gallery-filter-chip studio-stat-chip" title="结果墙总数">
+                总数
+                <strong className="studio-stat-chip-count">{stats.total}</strong>
+              </span>
+              <span className="chip gallery-filter-chip studio-stat-chip" title="已完成张数">
+                完成
+                <strong className="studio-stat-chip-count">{stats.done}</strong>
+              </span>
             </div>
             <button
               type="button"

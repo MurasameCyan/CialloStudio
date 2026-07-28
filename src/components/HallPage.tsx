@@ -1,9 +1,27 @@
 import { useCallback, useEffect, useState } from "react";
+import { MessageCircle } from "lucide-react";
 import { HallAuthPanel } from "@/components/HallAuthPanel";
 import { communityApi } from "@/lib/community/client";
 import { fallbackPostImageUrl, resolvePostImageUrl } from "@/lib/community/postImage";
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
+
+function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "mediaId">) {
+  const url = resolvePostImageUrl(post);
+  if (!url) {
+    log("warn", "原图地址不可用");
+    return;
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+function CommentIcon() {
+  return (
+    <span className="hall-chip-icon" aria-hidden>
+      <MessageCircle size={14} strokeWidth={2.2} />
+    </span>
+  );
+}
 
 async function copyText(text: string): Promise<boolean> {
   const value = text.trim();
@@ -99,6 +117,8 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   const [forceAuth, setForceAuth] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
+  /** 详情内大图预览（页内 lightbox，不离开大厅） */
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
 
   const needLogin = useCallback(() => {
     setForceAuth(true);
@@ -148,6 +168,15 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     void load();
   }, [load]);
 
+  useEffect(() => {
+    if (!lightboxSrc) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setLightboxSrc(null);
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [lightboxSrc]);
+
   function submitSearch() {
     setAppliedQ(q.trim());
   }
@@ -155,6 +184,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   async function openPost(post: GalleryPost) {
     setPromptCopied(false);
     setPromptExpanded(false);
+    setLightboxSrc(null);
     setActive(post);
     setCommentBody("");
     try {
@@ -165,6 +195,20 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     } catch (e) {
       log("error", "加载评论失败", e instanceof Error ? e.message : String(e));
     }
+  }
+
+  function closeActive() {
+    setLightboxSrc(null);
+    setActive(null);
+  }
+
+  function openDetailLightbox(post: GalleryPost) {
+    const url = resolvePostImageUrl(post);
+    if (!url) {
+      log("warn", "大图地址不可用");
+      return;
+    }
+    setLightboxSrc(url);
   }
 
   async function handleLike(post: GalleryPost) {
@@ -291,15 +335,35 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                         type="button"
                         className={`hall-chip ${post.likedByMe ? "active" : ""}`}
                         onClick={() => void handleLike(post)}
+                        title={post.likedByMe ? "取消点赞" : "点赞"}
                       >
                         <span className="hall-chip-icon" aria-hidden>
                           {post.likedByMe ? "♥" : "♡"}
                         </span>
                         <span>{post.likeCount}</span>
                       </button>
-                      <button type="button" className="hall-chip" onClick={() => void openPost(post)}>
-                        <span className="hall-chip-label">评</span>
+                      <button
+                        type="button"
+                        className="hall-chip"
+                        title="查看点评"
+                        aria-label={`点评 ${post.commentCount}`}
+                        onClick={() => void openPost(post)}
+                      >
+                        <CommentIcon />
                         <span>{post.commentCount}</span>
+                      </button>
+                      <button
+                        type="button"
+                        className="hall-chip"
+                        title="新标签打开原图"
+                        aria-label="原图"
+                        disabled={!resolvePostImageUrl(post)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openOriginalImage(post);
+                        }}
+                      >
+                        <span className="hall-chip-label">原图</span>
                       </button>
                       {user && (user.id === post.authorId || user.role === "admin") ? (
                         <button
@@ -332,7 +396,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
       </section>
 
       {active ? (
-        <div className="hall-drawer-backdrop" role="presentation" onClick={() => setActive(null)}>
+        <div className="hall-drawer-backdrop" role="presentation" onClick={closeActive}>
           <aside
             className="panel hall-drawer"
             role="dialog"
@@ -343,13 +407,20 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
               <h3 className="panel-title" style={{ fontSize: 18, margin: 0 }}>
                 {active.authorName}
               </h3>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActive(null)}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={closeActive}>
                 关闭
               </button>
             </div>
-            <div className="hall-drawer-media">
+            <button
+              type="button"
+              className="hall-drawer-media"
+              title="点击展开大图"
+              aria-label="展开大图"
+              disabled={!resolvePostImageUrl(active)}
+              onClick={() => openDetailLightbox(active)}
+            >
               <HallPostImage key={active.id} post={active} alt={active.prompt} />
-            </div>
+            </button>
             <div className="hall-prompt-block">
               <div className="hall-prompt-head">
                 <span className="hall-prompt-label">提示词</span>
@@ -404,16 +475,27 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                     type="button"
                     className={`hall-chip ${active.likedByMe ? "active" : ""}`}
                     onClick={() => void handleLike(active)}
+                    title={active.likedByMe ? "取消点赞" : "点赞"}
                   >
                     <span className="hall-chip-icon" aria-hidden>
                       {active.likedByMe ? "♥" : "♡"}
                     </span>
                     <span>{active.likeCount}</span>
                   </button>
-                  <span className="hall-chip hall-chip-static" title="评论数">
-                    <span className="hall-chip-label">评</span>
+                  <span className="hall-chip hall-chip-static" title="评论数" aria-label={`点评 ${active.commentCount ?? comments.length}`}>
+                    <CommentIcon />
                     <span>{active.commentCount ?? comments.length}</span>
                   </span>
+                  <button
+                    type="button"
+                    className="hall-chip"
+                    title="新标签打开原图"
+                    aria-label="原图"
+                    disabled={!resolvePostImageUrl(active)}
+                    onClick={() => openOriginalImage(active)}
+                  >
+                    <span className="hall-chip-label">原图</span>
+                  </button>
                 </div>
               </div>
 
@@ -485,6 +567,45 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
               </div>
             </div>
           </aside>
+        </div>
+      ) : null}
+
+      {active && lightboxSrc ? (
+        <div
+          className="studio-lightbox-backdrop hall-lightbox-backdrop"
+          role="presentation"
+          onClick={() => setLightboxSrc(null)}
+        >
+          <div
+            className="studio-lightbox hall-lightbox"
+            role="dialog"
+            aria-modal="true"
+            aria-label="大图预览"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="studio-lightbox-media">
+              <img src={lightboxSrc} alt={active.prompt || "大图预览"} decoding="async" />
+            </div>
+            <div className="studio-lightbox-bottom">
+              <div className="studio-lightbox-meta" title={active.prompt}>
+                <strong>{active.authorName}</strong>
+                <span>{active.prompt}</span>
+              </div>
+              <div className="studio-lightbox-actions">
+                <a
+                  className="btn btn-secondary btn-sm"
+                  href={lightboxSrc}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  打开原图
+                </a>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxSrc(null)}>
+                  关闭
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       ) : null}
     </div>

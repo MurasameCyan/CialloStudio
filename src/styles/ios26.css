@@ -3030,6 +3030,17 @@ a {
   opacity: 0.92;
 }
 
+.hall-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hall-chip-icon svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
 .hall-chip-label {
   font-weight: 800;
 }
@@ -3211,10 +3222,29 @@ a {
 }
 
 .hall-drawer-media {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-sm);
   overflow: hidden;
   aspect-ratio: 1;
   background: #0b0b0f;
+  cursor: zoom-in;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.hall-drawer-media:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+/* 详情大图叠在 drawer 之上 */
+.hall-lightbox-backdrop {
+  z-index: 120;
 }
 
 .hall-comment-list {

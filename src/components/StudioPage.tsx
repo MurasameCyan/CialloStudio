@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -326,20 +327,6 @@ export function StudioPage({
     setPreviewJob(null);
   }, []);
 
-  useEffect(() => {
-    if (!previewJob) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setPreviewJob(null);
-    }
-    document.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [previewJob]);
-
   const safeJobs = Array.isArray(jobs) ? jobs : [];
   const wallJobs = useMemo(
     () => (successOnly ? safeJobs.filter((job) => job && job.status === "done") : safeJobs),
@@ -352,6 +339,63 @@ export function StudioPage({
       ),
     [safeJobs],
   );
+
+  /** 大图可切换列表：当前墙里有可展示图的任务 */
+  const previewableJobs = useMemo(
+    () =>
+      wallJobs.filter((job) => {
+        if (!job || job.status !== "done") return false;
+        return Boolean(
+          (typeof job.imageUrl === "string" && job.imageUrl) ||
+            displayUrl(job) ||
+            job.openUrl,
+        );
+      }),
+    [wallJobs],
+  );
+
+  const previewIndex = useMemo(() => {
+    if (!previewJob) return -1;
+    return previewableJobs.findIndex((j) => j.id === previewJob.id);
+  }, [previewJob, previewableJobs]);
+
+  const canPreviewPrev = previewIndex > 0;
+  const canPreviewNext = previewIndex >= 0 && previewIndex < previewableJobs.length - 1;
+
+  const stepPreview = useCallback(
+    (delta: number) => {
+      if (previewIndex < 0) return;
+      const next = previewableJobs[previewIndex + delta];
+      if (next) setPreviewJob(next);
+    },
+    [previewIndex, previewableJobs],
+  );
+
+  useEffect(() => {
+    if (!previewJob) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setPreviewJob(null);
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepPreview(-1);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepPreview(1);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [previewJob, stepPreview]);
 
   function toggleSuccessOnly() {
     setSuccessOnly((prev) => {
@@ -996,6 +1040,34 @@ export function StudioPage({
       role="presentation"
       onClick={closePreview}
     >
+      {canPreviewPrev ? (
+        <button
+          type="button"
+          className="studio-lightbox-nav studio-lightbox-nav-prev"
+          aria-label="上一张"
+          title="上一张（←）"
+          onClick={(e) => {
+            e.stopPropagation();
+            stepPreview(-1);
+          }}
+        >
+          <ChevronLeft size={28} strokeWidth={2.2} aria-hidden />
+        </button>
+      ) : null}
+      {canPreviewNext ? (
+        <button
+          type="button"
+          className="studio-lightbox-nav studio-lightbox-nav-next"
+          aria-label="下一张"
+          title="下一张（→）"
+          onClick={(e) => {
+            e.stopPropagation();
+            stepPreview(1);
+          }}
+        >
+          <ChevronRight size={28} strokeWidth={2.2} aria-hidden />
+        </button>
+      ) : null}
       <div
         className="studio-lightbox"
         role="dialog"
@@ -1012,7 +1084,10 @@ export function StudioPage({
         </div>
         <div className="studio-lightbox-bottom">
           <div className="studio-lightbox-meta" title={previewJob.prompt}>
-            <strong>#{previewJob.variant}</strong>
+            <strong>
+              #{previewJob.variant}
+              {previewIndex >= 0 ? ` · ${previewIndex + 1}/${previewableJobs.length}` : ""}
+            </strong>
             <span>{previewJob.prompt}</span>
           </div>
           <div className="studio-lightbox-actions">

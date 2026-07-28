@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { MessageCircle } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { HallAuthPanel } from "@/components/HallAuthPanel";
 import { communityApi } from "@/lib/community/client";
 import {
@@ -118,11 +118,25 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   const [promptCopied, setPromptCopied] = useState(false);
   const [promptExpanded, setPromptExpanded] = useState(false);
   /** 详情内大图预览（页内 lightbox，不离开大厅） */
-  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const needLogin = useCallback(() => {
     setForceAuth(true);
   }, []);
+
+  const lightboxPosts = useMemo(
+    () => posts.filter((p) => Boolean(resolvePostImageUrl(p))),
+    [posts],
+  );
+
+  const lightboxIndex = useMemo(() => {
+    if (!active || !lightboxOpen) return -1;
+    return lightboxPosts.findIndex((p) => p.id === active.id);
+  }, [active, lightboxOpen, lightboxPosts]);
+
+  const lightboxSrc = active && lightboxOpen ? resolvePostImageUrl(active) : "";
+  const canLightboxPrev = lightboxIndex > 0;
+  const canLightboxNext = lightboxIndex >= 0 && lightboxIndex < lightboxPosts.length - 1;
 
   const load = useCallback(async () => {
     setListLoading(true);
@@ -168,15 +182,6 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
     void load();
   }, [load]);
 
-  useEffect(() => {
-    if (!lightboxSrc) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setLightboxSrc(null);
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [lightboxSrc]);
-
   function submitSearch() {
     setAppliedQ(q.trim());
   }
@@ -184,7 +189,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   async function openPost(post: GalleryPost) {
     setPromptCopied(false);
     setPromptExpanded(false);
-    setLightboxSrc(null);
+    setLightboxOpen(false);
     setActive(post);
     setCommentBody("");
     try {
@@ -198,7 +203,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
   }
 
   function closeActive() {
-    setLightboxSrc(null);
+    setLightboxOpen(false);
     setActive(null);
   }
 
@@ -208,8 +213,57 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
       log("warn", "大图地址不可用");
       return;
     }
-    setLightboxSrc(url);
+    setActive(post);
+    setLightboxOpen(true);
   }
+
+  const stepLightbox = useCallback(
+    (delta: number) => {
+      if (lightboxIndex < 0) return;
+      const next = lightboxPosts[lightboxIndex + delta];
+      if (!next) return;
+      setActive(next);
+      setLightboxOpen(true);
+      // 切图时静默刷新评论，不阻塞浏览
+      void (async () => {
+        try {
+          const list = await communityApi.listComments(next.id);
+          setComments(list);
+          const fresh = await communityApi.getPost(next.id);
+          if (fresh) setActive(fresh);
+        } catch {
+          /* ignore */
+        }
+      })();
+    },
+    [lightboxIndex, lightboxPosts],
+  );
+
+  useEffect(() => {
+    if (!lightboxOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setLightboxOpen(false);
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepLightbox(-1);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepLightbox(1);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [lightboxOpen, stepLightbox]);
 
   async function handleLike(post: GalleryPost) {
     if (!user) {
@@ -570,12 +624,40 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
         </div>
       ) : null}
 
-      {active && lightboxSrc ? (
+      {active && lightboxOpen && lightboxSrc ? (
         <div
           className="studio-lightbox-backdrop hall-lightbox-backdrop"
           role="presentation"
-          onClick={() => setLightboxSrc(null)}
+          onClick={() => setLightboxOpen(false)}
         >
+          {canLightboxPrev ? (
+            <button
+              type="button"
+              className="studio-lightbox-nav studio-lightbox-nav-prev"
+              aria-label="上一张"
+              title="上一张（←）"
+              onClick={(e) => {
+                e.stopPropagation();
+                stepLightbox(-1);
+              }}
+            >
+              <ChevronLeft size={28} strokeWidth={2.2} aria-hidden />
+            </button>
+          ) : null}
+          {canLightboxNext ? (
+            <button
+              type="button"
+              className="studio-lightbox-nav studio-lightbox-nav-next"
+              aria-label="下一张"
+              title="下一张（→）"
+              onClick={(e) => {
+                e.stopPropagation();
+                stepLightbox(1);
+              }}
+            >
+              <ChevronRight size={28} strokeWidth={2.2} aria-hidden />
+            </button>
+          ) : null}
           <div
             className="studio-lightbox hall-lightbox"
             role="dialog"
@@ -588,7 +670,10 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             </div>
             <div className="studio-lightbox-bottom">
               <div className="studio-lightbox-meta" title={active.prompt}>
-                <strong>{active.authorName}</strong>
+                <strong>
+                  {active.authorName}
+                  {lightboxIndex >= 0 ? ` · ${lightboxIndex + 1}/${lightboxPosts.length}` : ""}
+                </strong>
                 <span>{active.prompt}</span>
               </div>
               <div className="studio-lightbox-actions">
@@ -605,7 +690,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                 >
                   打开原图
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxSrc(null)}>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxOpen(false)}>
                   关闭
                 </button>
               </div>

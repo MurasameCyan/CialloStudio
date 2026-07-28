@@ -3550,6 +3550,50 @@ a {
   -webkit-backdrop-filter: blur(8px);
 }
 
+/* 左右遮罩区导航：上一张 / 下一张 */
+.studio-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.55);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.studio-lightbox-nav:hover {
+  background: rgba(40, 40, 48, 0.78);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.studio-lightbox-nav:active {
+  transform: translateY(-50%) scale(0.96);
+}
+
+.studio-lightbox-nav-prev {
+  left: max(10px, env(safe-area-inset-left, 0px));
+}
+
+.studio-lightbox-nav-next {
+  right: max(10px, env(safe-area-inset-right, 0px));
+}
+
+.studio-lightbox-nav svg {
+  display: block;
+}
+
 .studio-lightbox {
   position: relative;
   width: min(1100px, 100%);
@@ -3564,6 +3608,7 @@ a {
   box-shadow: var(--shadow-lg);
   box-sizing: border-box;
   overflow: hidden;
+  z-index: 1;
 }
 
 .studio-lightbox-close {
@@ -3662,6 +3707,19 @@ a {
     max-height: 88dvh;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+  }
+
+  .studio-lightbox-nav {
+    width: 40px;
+    height: 40px;
+  }
+
+  .studio-lightbox-nav-prev {
+    left: 6px;
+  }
+
+  .studio-lightbox-nav-next {
+    right: 6px;
   }
 
   .studio-lightbox {

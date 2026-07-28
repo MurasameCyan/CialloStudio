@@ -1,7 +1,7 @@
 /**
  * 社区 API（Docker 持久化）
  * - 数据目录：CIALLO_DATA_DIR（默认 /data）
- * - 文件：community.json + share-cooldown.json
+ * - 文件：community.json + share-cooldown.json + queue-policy.json
  * - 监听：CIALLO_COMMUNITY_PORT（默认 8090）
  * - 路径前缀：/api/community/*
  */
@@ -15,6 +15,7 @@ const PORT = Number(process.env.CIALLO_COMMUNITY_PORT || 8090);
 const DATA_DIR = process.env.CIALLO_DATA_DIR || "/data";
 const STORE_PATH = path.join(DATA_DIR, "community.json");
 const COOLDOWN_PATH = path.join(DATA_DIR, "share-cooldown.json");
+const QUEUE_POLICY_PATH = path.join(DATA_DIR, "queue-policy.json");
 
 const MASTER_USER = String(process.env.CIALLO_MASTER_USERNAME || "admin")
   .trim()
@@ -27,6 +28,12 @@ const FALLBACK_MASTER_PASSWORD = "admin123";
 const ENV_PASSWORD_MARKER = "__env_master__";
 
 const DEFAULT_COOLDOWN = { user: 60, vip: 15 };
+/** 普通默认 1 · VIP 默认 3 · 站长不限；普通用户后台默认关 */
+const DEFAULT_QUEUE_POLICY = {
+  userLimit: 1,
+  vipLimit: 3,
+  userBackgroundEnabled: false,
+};
 
 function uid(prefix) {
   return `${prefix}${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -113,6 +120,33 @@ function normalizeCooldown(raw) {
     user: clampCooldownSec(raw?.user, DEFAULT_COOLDOWN.user),
     vip: clampCooldownSec(raw?.vip, DEFAULT_COOLDOWN.vip),
   };
+}
+
+function clampQueueLimit(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(1, Math.round(n)));
+}
+
+function normalizeQueuePolicy(raw) {
+  return {
+    userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
+    vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userBackgroundEnabled: raw?.userBackgroundEnabled === true,
+  };
+}
+
+function canUseBackground(role, policy) {
+  if (role === "admin" || role === "vip") return true;
+  if (role === "user") return policy?.userBackgroundEnabled === true;
+  return false;
+}
+
+function queueLimitForRole(role, policy) {
+  const cfg = normalizeQueuePolicy(policy);
+  if (role === "admin") return null;
+  if (role === "vip") return cfg.vipLimit;
+  return cfg.userLimit;
 }
 
 function shareCooldownForRole(role, cfg) {
@@ -235,6 +269,29 @@ function saveCooldown(cfg) {
   const tmp = `${COOLDOWN_PATH}.${process.pid}.tmp`;
   fs.writeFileSync(tmp, JSON.stringify(next, null, 2), "utf8");
   fs.renameSync(tmp, COOLDOWN_PATH);
+  return next;
+}
+
+function loadQueuePolicy() {
+  ensureDataDir();
+  try {
+    if (!fs.existsSync(QUEUE_POLICY_PATH)) {
+      const cfg = { ...DEFAULT_QUEUE_POLICY };
+      saveQueuePolicy(cfg);
+      return cfg;
+    }
+    return normalizeQueuePolicy(JSON.parse(fs.readFileSync(QUEUE_POLICY_PATH, "utf8")));
+  } catch {
+    return { ...DEFAULT_QUEUE_POLICY };
+  }
+}
+
+function saveQueuePolicy(cfg) {
+  ensureDataDir();
+  const next = normalizeQueuePolicy(cfg);
+  const tmp = `${QUEUE_POLICY_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(next, null, 2), "utf8");
+  fs.renameSync(tmp, QUEUE_POLICY_PATH);
   return next;
 }
 
@@ -674,6 +731,33 @@ async function handle(req, res) {
       return;
     }
 
+    if (req.method === "GET" && pathname === "/admin/queue-policy") {
+      requireAdmin(store, token);
+      sendJson(res, 200, loadQueuePolicy());
+      return;
+    }
+
+    if (req.method === "PUT" && pathname === "/admin/queue-policy") {
+      requireAdmin(store, token);
+      const body = (await readBody(req)) || {};
+      const next = saveQueuePolicy({ ...loadQueuePolicy(), ...body });
+      sendJson(res, 200, next);
+      return;
+    }
+
+    // 登录用户可读：自己的后台权限与队列上限
+    if (req.method === "GET" && pathname === "/me/queue-policy") {
+      const me = requireUser(store, token);
+      const role = normalizeRole(me.role);
+      const policy = loadQueuePolicy();
+      sendJson(res, 200, {
+        ...policy,
+        canBackground: canUseBackground(role, policy),
+        myLimit: queueLimitForRole(role, policy),
+      });
+      return;
+    }
+
     sendError(res, 404, `未找到 ${req.method} ${pathname}`, "not_found");
   } catch (err) {
     const status = err?.status || 400;
@@ -688,6 +772,7 @@ ensureDataDir();
 // touch store on boot
 loadStore();
 loadCooldown();
+loadQueuePolicy();
 
 const server = http.createServer((req, res) => {
   void handle(req, res);

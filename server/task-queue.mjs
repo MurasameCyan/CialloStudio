@@ -2,7 +2,9 @@
  * Ciallo 服务端生图任务队列（VIP / 站长）
  *
  * 路径前缀：/api/tasks/*
- * 鉴权：Bearer token → community-api /auth/me（仅 admin|vip）
+ * 鉴权：Bearer token → community-api /auth/me
+ * 权限：站长/VIP 始终可；普通用户看 /me/queue-policy.userBackgroundEnabled
+ * 排队上限：按角色策略（普通默认1 / VIP默认3 / 站长不限）
  * 上游：用户提交的 baseUrl + apiKey，经 SSRF 校验后服务端代发 /images/*
  *
  * 监听：CIALLO_TASK_QUEUE_PORT（默认 8092）
@@ -32,10 +34,16 @@ const MAX_CONCURRENCY = Math.max(
   1,
   Math.min(8, Number(process.env.CIALLO_TASK_CONCURRENCY || 2) || 2),
 );
-const MAX_PENDING_PER_USER = Math.max(
+/** 环境兜底（策略服务不可用时）；站长策略优先 */
+const FALLBACK_MAX_PENDING = Math.max(
   1,
-  Math.min(40, Number(process.env.CIALLO_TASK_MAX_PENDING_PER_USER || 12) || 12),
+  Math.min(100, Number(process.env.CIALLO_TASK_MAX_PENDING_PER_USER || 12) || 12),
 );
+const DEFAULT_QUEUE_POLICY = {
+  userLimit: 1,
+  vipLimit: 3,
+  userBackgroundEnabled: false,
+};
 const TASK_TTL_MS = Math.max(
   60 * 60 * 1000,
   Number(process.env.CIALLO_TASK_TTL_MS || 12 * 60 * 60 * 1000) || 12 * 60 * 60 * 1000,
@@ -149,11 +157,56 @@ function bearer(req) {
   return m ? m[1].trim() : null;
 }
 
-function canBackground(role) {
-  return role === "admin" || role === "vip";
+function normalizeRole(role) {
+  if (role === "admin" || role === "vip" || role === "user") return role;
+  return "user";
 }
 
-async function requireVipOrAdmin(req) {
+function clampQueueLimit(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(1, Math.round(n)));
+}
+
+function normalizeQueuePolicy(raw) {
+  return {
+    userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
+    vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userBackgroundEnabled: raw?.userBackgroundEnabled === true,
+  };
+}
+
+function canBackground(role, policy) {
+  const r = normalizeRole(role);
+  if (r === "admin" || r === "vip") return true;
+  if (r === "user") return policy?.userBackgroundEnabled === true;
+  return false;
+}
+
+/** null = 不限制（站长） */
+function queueLimitForRole(role, policy) {
+  const r = normalizeRole(role);
+  const cfg = normalizeQueuePolicy(policy);
+  if (r === "admin") return null;
+  if (r === "vip") return cfg.vipLimit;
+  return cfg.userLimit;
+}
+
+async function fetchQueuePolicy(token) {
+  try {
+    const url = `${COMMUNITY_BASE}/me/queue-policy`;
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
+    });
+    if (!res.ok) return { ...DEFAULT_QUEUE_POLICY };
+    const body = await res.json();
+    return normalizeQueuePolicy(body);
+  } catch {
+    return { ...DEFAULT_QUEUE_POLICY };
+  }
+}
+
+async function requireBackgroundUser(req) {
   const token = bearer(req);
   if (!token) {
     throw Object.assign(new Error("请先登录"), { status: 401, code: "unauthorized" });
@@ -169,13 +222,18 @@ async function requireVipOrAdmin(req) {
   if (!user || !user.id) {
     throw Object.assign(new Error("请先登录"), { status: 401, code: "unauthorized" });
   }
-  if (!canBackground(user.role)) {
-    throw Object.assign(new Error("后台任务仅对站长与 VIP 开放"), {
-      status: 403,
-      code: "forbidden",
-    });
+  const policy = await fetchQueuePolicy(token);
+  if (!canBackground(user.role, policy)) {
+    throw Object.assign(
+      new Error(
+        user.role === "user"
+          ? "普通用户后台队列未开启，请联系站长"
+          : "后台任务仅对站长与 VIP 开放",
+      ),
+      { status: 403, code: "forbidden" },
+    );
   }
-  return user;
+  return { user, policy, token };
 }
 
 function publicTask(task) {
@@ -562,7 +620,7 @@ function clampInt(value, min, max, fallback) {
   return Math.min(max, Math.max(min, Math.round(n)));
 }
 
-async function createTasks(body, user) {
+async function createTasks(body, user, policy) {
   if (shuttingDown) {
     throw Object.assign(new Error("服务关闭中，暂不接受新任务"), {
       status: 503,
@@ -620,9 +678,19 @@ async function createTasks(body, user) {
   }
 
   const pending = pendingCountForUser(user.id);
-  if (pending + items.length > MAX_PENDING_PER_USER) {
+  const limit = queueLimitForRole(user.role, policy);
+  const effectiveLimit =
+    typeof limit === "number" && limit > 0 ? limit : FALLBACK_MAX_PENDING;
+  // 站长：limit === null → 不限制（仍用较大兜底防止误爆）
+  if (limit !== null && pending + items.length > effectiveLimit) {
     throw Object.assign(
-      new Error(`排队中任务过多（上限 ${MAX_PENDING_PER_USER}），请稍后再试`),
+      new Error(`排队中任务过多（上限 ${effectiveLimit}），请稍后再试`),
+      { status: 429, code: "too_many_pending" },
+    );
+  }
+  if (limit === null && pending + items.length > Math.max(FALLBACK_MAX_PENDING, 100)) {
+    throw Object.assign(
+      new Error(`排队中任务过多（上限 100），请稍后再试`),
       { status: 429, code: "too_many_pending" },
     );
   }
@@ -762,12 +830,14 @@ async function handle(req, res) {
   }
 
   try {
-    const user = await requireVipOrAdmin(req);
+    const { user, policy } = await requireBackgroundUser(req);
 
     if (req.method === "GET" && pathname === "/stats") {
       sendJson(res, 200, {
         ...queueStats(),
         minePending: pendingCountForUser(user.id),
+        myLimit: queueLimitForRole(user.role, policy),
+        policy,
       });
       return;
     }
@@ -784,7 +854,7 @@ async function handle(req, res) {
 
     if (req.method === "POST" && pathname === "/tasks") {
       const body = (await readBody(req)) || {};
-      const result = await createTasks(body, user);
+      const result = await createTasks(body, user, policy);
       sendJson(res, 202, result);
       return;
     }

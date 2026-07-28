@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { communityApi } from "@/lib/community/client";
-import type { CommunityUser, ShareCooldownConfig, UserRole } from "@/lib/community/types";
-import { DEFAULT_SHARE_COOLDOWN, roleLabel } from "@/lib/community/types";
+import type {
+  CommunityUser,
+  QueuePolicyConfig,
+  ShareCooldownConfig,
+  UserRole,
+} from "@/lib/community/types";
+import {
+  DEFAULT_QUEUE_POLICY,
+  DEFAULT_SHARE_COOLDOWN,
+  roleLabel,
+} from "@/lib/community/types";
 import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 
@@ -39,6 +48,11 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
   const [cooldown, setCooldown] = useState<ShareCooldownConfig>({ ...DEFAULT_SHARE_COOLDOWN });
   const [cooldownDraft, setCooldownDraft] = useState<ShareCooldownConfig>({ ...DEFAULT_SHARE_COOLDOWN });
   const [cooldownBusy, setCooldownBusy] = useState(false);
+  const [queuePolicy, setQueuePolicy] = useState<QueuePolicyConfig>({ ...DEFAULT_QUEUE_POLICY });
+  const [queuePolicyDraft, setQueuePolicyDraft] = useState<QueuePolicyConfig>({
+    ...DEFAULT_QUEUE_POLICY,
+  });
+  const [queuePolicyBusy, setQueuePolicyBusy] = useState(false);
 
   const isAdmin = communityUser?.role === "admin";
 
@@ -51,13 +65,16 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
     setUsersLoading(true);
     setUsersError("");
     try {
-      const [list, cd] = await Promise.all([
+      const [list, cd, qp] = await Promise.all([
         communityApi.listUsers(),
         communityApi.getShareCooldown(),
+        communityApi.getQueuePolicy(),
       ]);
       setUsers(list);
       setCooldown(cd);
       setCooldownDraft(cd);
+      setQueuePolicy(qp);
+      setQueuePolicyDraft(qp);
     } catch (e) {
       const text = e instanceof Error ? e.message : String(e);
       setUsersError(text);
@@ -109,6 +126,27 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       setMessage(e instanceof Error ? e.message : "保存失败");
     } finally {
       setCooldownBusy(false);
+    }
+  }
+
+  async function saveQueuePolicy() {
+    setQueuePolicyBusy(true);
+    setMessage("");
+    setOk(null);
+    try {
+      const next = await communityApi.setQueuePolicy(queuePolicyDraft);
+      setQueuePolicy(next);
+      setQueuePolicyDraft(next);
+      setOk(true);
+      setMessage(
+        `已保存队列策略：普通上限 ${next.userLimit} · VIP 上限 ${next.vipLimit} · 普通后台 ${next.userBackgroundEnabled ? "开" : "关"}（站长不限）`,
+      );
+      log("ok", "队列策略已保存", next);
+    } catch (e) {
+      setOk(false);
+      setMessage(e instanceof Error ? e.message : "保存失败");
+    } finally {
+      setQueuePolicyBusy(false);
     }
   }
 
@@ -334,6 +372,80 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
               }
             />
           </div>
+        </div>
+      </div>
+
+      <div className="user-cooldown-card">
+        <div className="user-cooldown-head">
+          <div>
+            <div className="admin-block-label">服务端队列策略</div>
+            <p className="footer-note" style={{ marginTop: 4 }}>
+              排队中任务上限：普通默认 1 · VIP 默认 3 · 站长不限。当前生效：普通{" "}
+              {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 普通后台{" "}
+              {queuePolicy.userBackgroundEnabled ? "开" : "关"}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={queuePolicyBusy}
+            onClick={() => void saveQueuePolicy()}
+          >
+            {queuePolicyBusy ? "保存中…" : "保存队列"}
+          </button>
+        </div>
+        <div className="admin-fields-2" style={{ marginTop: 10 }}>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="ql-user">普通用户上限</label>
+            </div>
+            <input
+              id="ql-user"
+              className="control"
+              type="number"
+              min={1}
+              max={100}
+              value={queuePolicyDraft.userLimit}
+              onChange={(e) =>
+                setQueuePolicyDraft((p) => ({ ...p, userLimit: Number(e.target.value) }))
+              }
+            />
+          </div>
+          <div className="field">
+            <div className="label-row">
+              <label htmlFor="ql-vip">VIP 上限</label>
+            </div>
+            <input
+              id="ql-vip"
+              className="control"
+              type="number"
+              min={1}
+              max={100}
+              value={queuePolicyDraft.vipLimit}
+              onChange={(e) =>
+                setQueuePolicyDraft((p) => ({ ...p, vipLimit: Number(e.target.value) }))
+              }
+            />
+          </div>
+        </div>
+        <div className="field" style={{ marginTop: 12 }}>
+          <label className="select-all" htmlFor="ql-user-bg">
+            <input
+              id="ql-user-bg"
+              type="checkbox"
+              checked={queuePolicyDraft.userBackgroundEnabled}
+              onChange={(e) =>
+                setQueuePolicyDraft((p) => ({
+                  ...p,
+                  userBackgroundEnabled: e.target.checked,
+                }))
+              }
+            />
+            <span>允许普通用户开启后台队列（默认关闭）</span>
+          </label>
+          <p className="footer-note" style={{ marginTop: 6 }}>
+            开启后，普通用户可在灵感创作台使用「后台任务」并提交服务端队列；关闭则仅站长 / VIP 可用。
+          </p>
         </div>
       </div>
 

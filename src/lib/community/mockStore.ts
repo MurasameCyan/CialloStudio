@@ -14,20 +14,27 @@ import type {
   ListPostsQuery,
   ListPostsResult,
   LoginInput,
+  MyQueuePolicy,
+  QueuePolicyConfig,
   RegisterInput,
   ShareCooldownConfig,
   ShareStatus,
   UserRole,
 } from "./types";
 import {
+  DEFAULT_QUEUE_POLICY,
   DEFAULT_SHARE_COOLDOWN,
+  canUseBackgroundTasks,
   computeShareRemainSec,
+  normalizeQueuePolicy,
   normalizeShareCooldown,
+  queueLimitForRole,
   shareCooldownForRole,
 } from "./types";
 
 const STORAGE_KEY = "ciallo-studio.community.mock.v1";
 const COOLDOWN_KEY = "ciallo-studio.community.shareCooldown.v1";
+const QUEUE_POLICY_KEY = "ciallo-studio.community.queuePolicy.v1";
 /** 密码由 .env 哈希校验，不存明文 */
 const ENV_PASSWORD_MARKER = "__env_master__";
 /** 本地未配置 .env 时的 Mock 站长密码 */
@@ -214,6 +221,24 @@ function loadShareCooldown(): ShareCooldownConfig {
 function saveShareCooldown(cfg: ShareCooldownConfig): void {
   try {
     localStorage.setItem(COOLDOWN_KEY, JSON.stringify(normalizeShareCooldown(cfg)));
+  } catch {
+    // ignore
+  }
+}
+
+function loadQueuePolicy(): QueuePolicyConfig {
+  try {
+    const raw = localStorage.getItem(QUEUE_POLICY_KEY);
+    if (!raw) return { ...DEFAULT_QUEUE_POLICY };
+    return normalizeQueuePolicy(JSON.parse(raw) as Partial<QueuePolicyConfig>);
+  } catch {
+    return { ...DEFAULT_QUEUE_POLICY };
+  }
+}
+
+function saveQueuePolicy(cfg: QueuePolicyConfig): void {
+  try {
+    localStorage.setItem(QUEUE_POLICY_KEY, JSON.stringify(normalizeQueuePolicy(cfg)));
   } catch {
     // ignore
   }
@@ -522,6 +547,40 @@ export const mockCommunity = {
     });
     saveShareCooldown(next);
     return next;
+  },
+
+  async getQueuePolicy(token: string | null): Promise<QueuePolicyConfig> {
+    requireAdmin(token);
+    return loadQueuePolicy();
+  },
+
+  async setQueuePolicy(
+    cfg: Partial<QueuePolicyConfig>,
+    token: string | null,
+  ): Promise<QueuePolicyConfig> {
+    requireAdmin(token);
+    const next = normalizeQueuePolicy({
+      ...loadQueuePolicy(),
+      ...cfg,
+    });
+    saveQueuePolicy(next);
+    return next;
+  },
+
+  async getMyQueuePolicy(token: string | null): Promise<MyQueuePolicy> {
+    if (!token) throw new Error("请先登录");
+    const store = load();
+    const userId = store.sessions[token];
+    if (!userId) throw new Error("请先登录");
+    const user = store.users.find((u) => u.id === userId);
+    if (!user || user.banned) throw new Error("请先登录");
+    const role = normalizeRole(user.role);
+    const policy = loadQueuePolicy();
+    return {
+      ...policy,
+      canBackground: canUseBackgroundTasks(role, policy),
+      myLimit: queueLimitForRole(role, policy),
+    };
   },
 
   /** 当前用户分享冷却状态（登录即可；供工作台展示倒计时） */

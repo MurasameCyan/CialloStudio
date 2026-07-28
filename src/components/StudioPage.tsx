@@ -32,6 +32,7 @@ import {
   type StudioDraft,
   type StudioJob,
 } from "@/lib/studioQueue";
+import type { ServerQueueItem } from "@/hooks/useStudioQueue";
 import type { StudioMode } from "@/lib/studioMode";
 
 const StudioJobCard = memo(function StudioJobCard({
@@ -195,12 +196,21 @@ type Props = {
   onNeedLogin?: () => void;
   /** 是否已登录社区账号（未配置 Key 时决定去登录还是去设置） */
   isLoggedIn?: boolean;
-  /** 后台任务开关：仅站长 / VIP 为 true */
+  /** 后台任务开关：站长/VIP 或站长开启的普通用户 */
   canBackgroundTasks?: boolean;
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
+  /** 浏览器本地生成中；服务端后台入队不置 true */
   running: boolean;
+  /** 正在提交服务端队列（短暂） */
+  enqueueBusy?: boolean;
+  queueNotice?: { ok: boolean; text: string } | null;
+  onClearQueueNotice?: () => void;
+  serverMode?: boolean;
+  serverQueue?: ServerQueueItem[];
+  onRefreshServerQueue?: () => void;
+  onCancelServerQueueItem?: (serverTaskId: string) => Promise<void>;
   prompts: string[];
   plannedJobs: number;
   stats: Stats;
@@ -221,6 +231,13 @@ export function StudioPage({
   setDraft,
   jobs,
   running,
+  enqueueBusy = false,
+  queueNotice = null,
+  onClearQueueNotice,
+  serverMode = false,
+  serverQueue = [],
+  onRefreshServerQueue,
+  onCancelServerQueueItem,
   prompts,
   plannedJobs,
   stats,
@@ -229,6 +246,11 @@ export function StudioPage({
   onStop,
   onClear,
 }: Props) {
+  const [serverQueueOpen, setServerQueueOpen] = useState(false);
+  const [cancelingServerId, setCancelingServerId] = useState<string | null>(null);
+  /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
+  const generateLocked = running || enqueueBusy;
+  const stopEnabled = running || serverMode;
   /** 高级：内联在分辨率右侧，不单独占行 */
   const advancedField = (
     <div className="field studio-advanced-field">
@@ -248,7 +270,7 @@ export function StudioPage({
             type="button"
             className={`chip studio-toggle-chip ${draft.backgroundTasks ? "active" : ""}`}
             aria-pressed={draft.backgroundTasks}
-            title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
+            title="提交到服务端队列，关浏览器也可续跑；点生成直接入队且不锁按钮"
             onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
           >
             后台任务
@@ -257,6 +279,117 @@ export function StudioPage({
       </div>
     </div>
   );
+
+  const serverQueueActiveCount = serverQueue.filter(
+    (t) => t.status === "queued" || t.status === "running",
+  ).length;
+
+  /** 挂在图片墙顶部：队列按钮 + 可展开列表 */
+  const serverQueuePanel =
+    canBackgroundTasks ? (
+      <div className="studio-server-queue studio-server-queue-wall">
+        <div className="studio-server-queue-head">
+          <button
+            type="button"
+            className={`chip gallery-filter-chip studio-queue-chip ${serverQueueOpen || serverQueueActiveCount > 0 ? "active" : ""}`}
+            aria-expanded={serverQueueOpen}
+            title="服务端后台队列：开启后台任务后点生成会直接入队"
+            onClick={() => {
+              const next = !serverQueueOpen;
+              setServerQueueOpen(next);
+              if (next) onRefreshServerQueue?.();
+            }}
+          >
+            队列
+            {serverQueueActiveCount > 0 ? (
+              <strong className="studio-server-queue-count">{serverQueueActiveCount}</strong>
+            ) : null}
+          </button>
+          {serverQueueOpen ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => onRefreshServerQueue?.()}
+            >
+              刷新
+            </button>
+          ) : null}
+          {serverMode ? <span className="studio-server-queue-hint">同步中</span> : null}
+        </div>
+        {serverQueueOpen ? (
+          serverQueue.length === 0 ? (
+            <p className="studio-server-queue-empty">
+              暂无服务端任务 · 开启「后台任务」并点生成后会出现在这里
+            </p>
+          ) : (
+            <ul className="studio-server-queue-list">
+              {serverQueue.map((item) => {
+                const statusLabel =
+                  item.status === "queued"
+                    ? "排队"
+                    : item.status === "running"
+                      ? "生成中"
+                      : item.status === "done"
+                        ? "完成"
+                        : item.status === "cancelled"
+                          ? "已取消"
+                          : "失败";
+                const canCancel = item.status === "queued" || item.status === "running";
+                return (
+                  <li key={item.id} className={`studio-server-queue-item is-${item.status}`}>
+                    <div className="studio-server-queue-main">
+                      <span className={`studio-server-queue-badge is-${item.status}`}>{statusLabel}</span>
+                      <span className="studio-server-queue-prompt" title={item.prompt}>
+                        #{item.variant}/{item.variants} · {item.prompt}
+                      </span>
+                    </div>
+                    <div className="studio-server-queue-meta">
+                      {item.attempt > 1 ? <span>重试 {item.attempt}</span> : null}
+                      {item.error ? (
+                        <span className="studio-server-queue-error" title={item.error}>
+                          {item.error}
+                        </span>
+                      ) : null}
+                      {canCancel && onCancelServerQueueItem ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          disabled={cancelingServerId === item.id}
+                          onClick={() => {
+                            setCancelingServerId(item.id);
+                            void onCancelServerQueueItem(item.id)
+                              .catch(() => undefined)
+                              .finally(() => setCancelingServerId(null));
+                          }}
+                        >
+                          {cancelingServerId === item.id ? "取消中…" : "取消"}
+                        </button>
+                      ) : null}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )
+        ) : null}
+      </div>
+    ) : null;
+
+  const queueNoticeBanner =
+    queueNotice ? (
+      <div
+        className={`studio-feedback ${queueNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"} studio-queue-notice`}
+        role="status"
+      >
+        <span className={`studio-feedback-dot ${queueNotice.ok ? "ok" : "warn"}`} aria-hidden />
+        <span className="studio-feedback-text">{queueNotice.text}</span>
+        {onClearQueueNotice ? (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClearQueueNotice}>
+            关闭
+          </button>
+        ) : null}
+      </div>
+    ) : null;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const showReferencePicker = useMemo(
@@ -506,13 +639,27 @@ export function StudioPage({
       openConfigOrLogin();
       return;
     }
+    if (generateLocked) return;
     if (draft.promptText.trim()) rememberPrompt(draft.promptText);
     try {
       await onStart();
+      // 后台入队成功后自动展开图片墙队列，方便看到状态
+      if (draft.backgroundTasks && canBackgroundTasks) {
+        setServerQueueOpen(true);
+      }
     } catch (error) {
       const message = error instanceof ApiError ? error.message : error instanceof Error ? error.message : "启动失败";
       log("error", "启动生成失败", message);
     }
+  }
+
+  function generateButtonLabel(prefix: "开始生成" | "发送"): string {
+    if (enqueueBusy) return "入队中…";
+    if (running) return "生成中…";
+    if (draft.backgroundTasks && canBackgroundTasks) {
+      return `${prefix === "发送" ? "入队" : "入队生成"} · ${plannedJobs}`;
+    }
+    return `${prefix} · ${plannedJobs}`;
   }
 
   function updateHistoryPanelPosition() {
@@ -1202,13 +1349,15 @@ export function StudioPage({
                 <button
                   type="button"
                   className="btn btn-danger btn-sm"
-                  disabled={running || safeJobs.length === 0}
+                  disabled={generateLocked || safeJobs.length === 0}
                   onClick={handleClear}
                 >
                   清空
                 </button>
               </div>
             </div>
+            {serverQueuePanel}
+            {queueNoticeBanner}
             <div className="progress-track" aria-hidden>
               <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
             </div>
@@ -1377,16 +1526,16 @@ export function StudioPage({
                 模型 {settings.model || "未选择"} →
               </button>
               <div className="btn-row" style={{ marginLeft: "auto" }}>
-                <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
+                <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
                   停止
                 </button>
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={running || prompts.length === 0}
+                  disabled={generateLocked || prompts.length === 0}
                   onClick={handleGenerate}
                 >
-                  {running ? "生成中…" : `发送 · ${plannedJobs}`}
+                  {generateButtonLabel("发送")}
                 </button>
               </div>
             </div>
@@ -1630,12 +1779,12 @@ export function StudioPage({
                 <button
                   type="button"
                   className="btn btn-primary"
-                  disabled={running || prompts.length === 0}
+                  disabled={generateLocked || prompts.length === 0}
                   onClick={handleGenerate}
                 >
-                  {running ? "生成中…" : `开始生成 · ${plannedJobs}`}
+                  {generateButtonLabel("开始生成")}
                 </button>
-                <button type="button" className="btn btn-secondary" disabled={!running} onClick={onStop}>
+                <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
                   停止
                 </button>
               </div>
@@ -1643,6 +1792,8 @@ export function StudioPage({
                 模型 {settings.model || "未选择"} →
               </button>
             </div>
+
+            {queueNoticeBanner}
 
             <div className="studio-params-divider" role="separator" />
 
@@ -1769,13 +1920,16 @@ export function StudioPage({
             <button
               type="button"
               className="btn btn-danger btn-sm"
-              disabled={running || safeJobs.length === 0}
+              disabled={generateLocked || safeJobs.length === 0}
               onClick={handleClear}
             >
               清空
             </button>
           </div>
         </div>
+
+        {serverQueuePanel}
+        {queueNoticeBanner}
 
         {/* 进度条 / 选择栏始终占位，开始生成时只换 gallery 内容，避免整体位移 */}
         <div className="progress-track" aria-hidden>

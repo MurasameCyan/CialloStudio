@@ -176,16 +176,28 @@ function serializeJobs(jobs: StudioJob[]): StudioJob[] {
       // 超大 data URL 不进 localStorage，避免配额爆掉
       imageUrl = openUrl;
     }
+    const hasServerTask =
+      typeof job.serverTaskId === "string" && job.serverTaskId.trim().length > 0;
+    const inflight = job.status === "running" || job.status === "queued";
+    // 浏览器队列：刷新无法续跑 → 标失败
+    // 服务端队列：保留 queued/running + serverTaskId，重开页后可恢复轮询
+    if (inflight && !hasServerTask) {
+      return {
+        ...job,
+        imageUrl,
+        openUrl,
+        serverTaskId: undefined,
+        status: "failed" as const,
+        error: job.error || "页面刷新后未完成的任务已中断，可重新生成",
+      };
+    }
     return {
       ...job,
       imageUrl,
       openUrl,
-      // 刷新后进行中的任务无法续跑，标记为失败提示
-      status: job.status === "running" || job.status === "queued" ? "failed" : job.status,
-      error:
-        job.status === "running" || job.status === "queued"
-          ? job.error || "页面刷新后未完成的任务已中断，可重新生成"
-          : job.error,
+      // 保留 serverTaskId，便于关页后续跑
+      status: job.status,
+      error: job.error,
     };
   });
 }

@@ -7,7 +7,12 @@ import { StudioPage } from "@/components/StudioPage";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useCommunityAuth } from "@/hooks/useCommunityAuth";
 import { useStudioQueue } from "@/hooks/useStudioQueue";
-import { canUseBackgroundTasks } from "@/lib/community/types";
+import { communityApi } from "@/lib/community/client";
+import {
+  canUseBackgroundTasks,
+  DEFAULT_QUEUE_POLICY,
+  type MyQueuePolicy,
+} from "@/lib/community/types";
 import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
@@ -33,20 +38,57 @@ export default function App() {
     return initial;
   });
   const community = useCommunityAuth();
+  const [queuePolicy, setQueuePolicy] = useState<MyQueuePolicy | null>(null);
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  // 登录后拉取本人队列策略（含普通用户后台开关）
+  useEffect(() => {
+    if (!community.user) {
+      setQueuePolicy(null);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const p = await communityApi.getMyQueuePolicy();
+        if (!cancelled) setQueuePolicy(p);
+      } catch {
+        if (!cancelled) {
+          // 兜底：仅按角色（普通用户默认关）
+          setQueuePolicy({
+            ...DEFAULT_QUEUE_POLICY,
+            canBackground: canUseBackgroundTasks(community.user?.role, DEFAULT_QUEUE_POLICY),
+            myLimit:
+              community.user?.role === "admin"
+                ? null
+                : community.user?.role === "vip"
+                  ? DEFAULT_QUEUE_POLICY.vipLimit
+                  : DEFAULT_QUEUE_POLICY.userLimit,
+          });
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [community.user]);
 
   // 队列挂在 App 层：切页也不会丢任务/结果
   const queue = useStudioQueue(settings);
   const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const isLoggedIn = Boolean(community.user);
   const isStationMaster = community.user?.role === "admin";
-  const allowBackgroundTasks = canUseBackgroundTasks(community.user?.role);
-  const backgroundTasksActive =
-    allowBackgroundTasks && queue.draft.backgroundTasks === true && queue.running;
-  const serverBackground = backgroundTasksActive && queue.serverMode;
+  const allowBackgroundTasks =
+    queuePolicy?.canBackground === true ||
+    canUseBackgroundTasks(community.user?.role, queuePolicy);
+  // 服务端后台：serverMode 即表示有服务端任务；浏览器后台仍看 running
+  const serverBackground = allowBackgroundTasks && queue.serverMode;
+  const localBackground =
+    allowBackgroundTasks && queue.draft.backgroundTasks === true && queue.running && !queue.serverMode;
+  const backgroundTasksActive = serverBackground || localBackground;
 
   // 无权限时强制关闭后台任务开关（普通用户 / 登出）
   useEffect(() => {
@@ -57,14 +99,14 @@ export default function App() {
 
   // 浏览器队列后台：关页会中断。服务端队列可关页续跑，不再强拦。
   useEffect(() => {
-    if (!backgroundTasksActive || serverBackground) return;
+    if (!localBackground) return;
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
       e.returnValue = "后台任务仍在浏览器生成，关闭后请求会中断。";
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [backgroundTasksActive, serverBackground]);
+  }, [localBackground]);
 
   function openHallAuth() {
     setTab("hall");
@@ -181,9 +223,11 @@ export default function App() {
         {backgroundTasksActive && tab !== "studio" ? (
           <div className="bg-task-banner" role="status" aria-live="polite">
             <div className="bg-task-banner-text">
-              <strong>{serverBackground ? "服务端后台" : "后台任务"}</strong>
+              <strong>{serverBackground ? "服务端队列" : "后台任务"}</strong>
               <span>
-                生成中 {queue.stats.done + queue.stats.failed}/{queue.stats.total}
+                {serverBackground
+                  ? `排队/生成中 ${queue.serverQueue.filter((t) => t.status === "queued" || t.status === "running").length}`
+                  : `生成中 ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`}
                 {queue.stats.failed > 0 ? ` · 失败 ${queue.stats.failed}` : ""}
                 {queue.draft.autoRetry ? " · 自动重试开" : ""}
                 {serverBackground ? " · 关页可续跑" : " · 关页会中断"}
@@ -212,6 +256,13 @@ export default function App() {
               setDraft={queue.setDraft}
               jobs={queue.jobs}
               running={queue.running}
+              enqueueBusy={queue.enqueueBusy}
+              queueNotice={queue.queueNotice}
+              onClearQueueNotice={queue.clearQueueNotice}
+              serverMode={queue.serverMode}
+              serverQueue={queue.serverQueue}
+              onRefreshServerQueue={() => void queue.refreshServerQueue()}
+              onCancelServerQueueItem={(id) => queue.cancelServerQueueItem(id)}
               prompts={queue.prompts}
               plannedJobs={queue.plannedJobs}
               stats={queue.stats}

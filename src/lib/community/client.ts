@@ -20,6 +20,8 @@ import type {
   ListPostsQuery,
   ListPostsResult,
   LoginInput,
+  MyQueuePolicy,
+  QueuePolicyConfig,
   RegisterInput,
   ShareCooldownConfig,
   ShareStatus,
@@ -259,6 +261,31 @@ export const communityApi = {
       });
     }
     return mockCommunity.setShareCooldown(cfg, getToken());
+  },
+
+  async getQueuePolicy(): Promise<QueuePolicyConfig> {
+    if (getCommunityMode() === "http") {
+      return http<QueuePolicyConfig>("/admin/queue-policy");
+    }
+    return mockCommunity.getQueuePolicy(getToken());
+  },
+
+  async setQueuePolicy(cfg: Partial<QueuePolicyConfig>): Promise<QueuePolicyConfig> {
+    if (getCommunityMode() === "http") {
+      return http<QueuePolicyConfig>("/admin/queue-policy", {
+        method: "PUT",
+        body: JSON.stringify(cfg),
+      });
+    }
+    return mockCommunity.setQueuePolicy(cfg, getToken());
+  },
+
+  /** 当前登录用户的队列策略（登录即可；含 canBackground / myLimit） */
+  async getMyQueuePolicy(): Promise<MyQueuePolicy> {
+    if (getCommunityMode() === "http") {
+      return http<MyQueuePolicy>("/me/queue-policy");
+    }
+    return mockCommunity.getMyQueuePolicy(getToken());
   },
 
   /** 当前登录用户的分享冷却（任意登录用户） */

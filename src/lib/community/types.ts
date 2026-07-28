@@ -20,6 +20,25 @@ export type ShareCooldownConfig = {
   vip: number;
 };
 
+/**
+ * 服务端任务队列策略（站长在用户池配置）。
+ * - userLimit / vipLimit：该角色同时排队中（queued+running）上限
+ * - 站长不限制
+ * - userBackgroundEnabled：普通用户是否可用后台队列（默认关）
+ */
+export type QueuePolicyConfig = {
+  userLimit: number;
+  vipLimit: number;
+  userBackgroundEnabled: boolean;
+};
+
+/** 当前登录用户可见的队列策略（含本人权限） */
+export type MyQueuePolicy = QueuePolicyConfig & {
+  canBackground: boolean;
+  /** null = 不限制（站长） */
+  myLimit: number | null;
+};
+
 /** 当前登录用户的分享冷却状态（任意登录用户可读） */
 export type ShareStatus = {
   role: UserRole;
@@ -42,6 +61,12 @@ export function computeShareRemainSec(
 export const DEFAULT_SHARE_COOLDOWN: ShareCooldownConfig = {
   user: 60,
   vip: 15,
+};
+
+export const DEFAULT_QUEUE_POLICY: QueuePolicyConfig = {
+  userLimit: 1,
+  vipLimit: 3,
+  userBackgroundEnabled: false,
 };
 
 export type AuthSession = {
@@ -129,9 +154,43 @@ export function roleLabel(role: UserRole): string {
   return "用户";
 }
 
-/** 后台任务（跨页续跑 / 关页提示）：仅站长与 VIP */
-export function canUseBackgroundTasks(role: UserRole | null | undefined): boolean {
-  return role === "admin" || role === "vip";
+/**
+ * 后台任务（跨页续跑 / 关页提示）：
+ * - 站长 / VIP 始终可用
+ * - 普通用户取决于站长「普通用户后台队列」开关
+ */
+export function canUseBackgroundTasks(
+  role: UserRole | null | undefined,
+  policy?: Pick<QueuePolicyConfig, "userBackgroundEnabled"> | null,
+): boolean {
+  if (role === "admin" || role === "vip") return true;
+  if (role === "user") return policy?.userBackgroundEnabled === true;
+  return false;
+}
+
+/** 按角色取排队上限；站长 null=不限 */
+export function queueLimitForRole(
+  role: UserRole | null | undefined,
+  policy?: QueuePolicyConfig | null,
+): number | null {
+  const cfg = normalizeQueuePolicy(policy);
+  if (role === "admin") return null;
+  if (role === "vip") return cfg.vipLimit;
+  return cfg.userLimit;
+}
+
+export function clampQueueLimit(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(1, Math.round(n)));
+}
+
+export function normalizeQueuePolicy(raw?: Partial<QueuePolicyConfig> | null): QueuePolicyConfig {
+  return {
+    userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
+    vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userBackgroundEnabled: raw?.userBackgroundEnabled === true,
+  };
 }
 
 export function clampShareCooldownSec(value: unknown, fallback: number): number {

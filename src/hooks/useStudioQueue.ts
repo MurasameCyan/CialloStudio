@@ -20,22 +20,49 @@ import {
 } from "@/lib/studioQueue";
 import {
   cancelServerBatch,
+  cancelServerTask,
   createServerTasks,
   getServerTask,
   isServerTaskTerminal,
+  listServerTasks,
   type ServerTask,
   TaskQueueError,
 } from "@/lib/taskQueue";
+
+export type ServerQueueItem = {
+  id: string;
+  clientJobId?: string;
+  status: ServerTask["status"];
+  prompt: string;
+  error?: string;
+  attempt: number;
+  variant: number;
+  variants: number;
+  batchId: string;
+  createdAt: number;
+  updatedAt: number;
+  imageUrl?: string;
+};
 
 type QueueApi = {
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
+  /** 仅浏览器本地并发生图时为 true；服务端后台入队后不锁 UI */
   running: boolean;
   /** 当前真正在飞的请求数 */
   inFlight: number;
-  /** 当前批次是否走服务端队列 */
+  /** 服务端队列轮询中（关页可续跑）；不锁生成按钮 */
   serverMode: boolean;
+  /** 正在提交到服务端队列（短暂，防连点） */
+  enqueueBusy: boolean;
+  /** 最近一次入队/队列提示 */
+  queueNotice: { ok: boolean; text: string } | null;
+  clearQueueNotice: () => void;
+  /** 服务端队列快照 */
+  serverQueue: ServerQueueItem[];
+  refreshServerQueue: () => Promise<void>;
+  cancelServerQueueItem: (serverTaskId: string) => Promise<void>;
   prompts: string[];
   plannedJobs: number;
   stats: {
@@ -51,6 +78,23 @@ type QueueApi = {
   stop: () => void;
   clear: () => void;
 };
+
+function toServerQueueItem(task: ServerTask): ServerQueueItem {
+  return {
+    id: task.id,
+    clientJobId: task.clientJobId,
+    status: task.status,
+    prompt: task.prompt,
+    error: task.error,
+    attempt: task.attempt || 0,
+    variant: task.variant,
+    variants: task.variants,
+    batchId: task.batchId,
+    createdAt: task.createdAt,
+    updatedAt: task.updatedAt,
+    imageUrl: task.imageUrl,
+  };
+}
 
 const DEFAULT_PROMPT = "a cute orange cat sitting on a windowsill, soft daylight, minimal";
 
@@ -107,9 +151,13 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const [running, setRunning] = useState(false);
   const [inFlight, setInFlight] = useState(0);
   const [serverMode, setServerMode] = useState(false);
+  const [enqueueBusy, setEnqueueBusy] = useState(false);
+  const [queueNotice, setQueueNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [serverQueue, setServerQueue] = useState<ServerQueueItem[]>([]);
 
   const abortRef = useRef<AbortController | null>(null);
   const runningRef = useRef(false);
+  const enqueueBusyRef = useRef(false);
   const draftRef = useRef(draft);
   const settingsRef = useRef(settings);
   /** 替换模式下，只允许本批 job id 被更新，避免旧 map 回写 */
@@ -118,6 +166,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const serverPollTimerRef = useRef<number | null>(null);
   /** clientJobId → serverTaskId */
   const serverTaskMapRef = useRef<Map<string, string>>(new Map());
+  const resumeAttemptedRef = useRef(false);
 
   draftRef.current = draft;
   settingsRef.current = settings;
@@ -126,6 +175,20 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     if (serverPollTimerRef.current != null) {
       window.clearTimeout(serverPollTimerRef.current);
       serverPollTimerRef.current = null;
+    }
+  }, []);
+
+  const refreshServerQueue = useCallback(async () => {
+    try {
+      const res = await listServerTasks({ limit: 40 });
+      setServerQueue(res.items.map(toServerQueueItem));
+    } catch (e) {
+      // 未登录 / 非 VIP / 服务未起：静默
+      if (e instanceof TaskQueueError && (e.status === 401 || e.status === 403)) {
+        setServerQueue([]);
+        return;
+      }
+      log("warn", "刷新服务端队列失败", e instanceof Error ? e.message : String(e));
     }
   }, []);
 
@@ -162,6 +225,8 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     saveJobs(jobs);
   }, [jobs]);
 
+  const clearQueueNotice = useCallback(() => setQueueNotice(null), []);
+
   const setDraft = useCallback((patch: Partial<StudioDraft>) => {
     setDraftState((prev) => {
       const next: StudioDraft = {
@@ -192,18 +257,27 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const stop = useCallback(() => {
     abortRef.current?.abort();
     const batchId = serverBatchIdRef.current;
+    // 取消当前跟踪的服务端任务（可能跨多个 batch）
+    const tracked = [...serverTaskMapRef.current.values()];
     if (batchId) {
       void cancelServerBatch(batchId).catch((e) => {
         log("warn", "取消服务端批次失败", e instanceof Error ? e.message : String(e));
       });
     }
+    for (const sid of tracked) {
+      void cancelServerTask(sid).catch(() => undefined);
+    }
+    serverTaskMapRef.current = new Map();
+    serverBatchIdRef.current = null;
     stopServerPolling();
     runningRef.current = false;
     setRunning(false);
     setInFlight(0);
     setServerMode(false);
+    setQueueNotice({ ok: true, text: "已停止本地/服务端进行中任务" });
     log("warn", "用户停止：已 abort / 取消进行中的子任务");
-  }, [stopServerPolling]);
+    void refreshServerQueue();
+  }, [refreshServerQueue, stopServerPolling]);
 
   const clear = useCallback(() => {
     if (runningRef.current) return;
@@ -245,23 +319,64 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         }
         return {
           ...item,
-          status: "running",
+          status: task.status === "queued" ? "queued" : "running",
           error: task.error,
           serverTaskId: task.id,
         };
       }),
     );
+    setServerQueue((prev) => {
+      const nextItem = toServerQueueItem(task);
+      const idx = prev.findIndex((p) => p.id === task.id);
+      if (idx < 0) return [nextItem, ...prev].slice(0, 40);
+      const copy = prev.slice();
+      copy[idx] = nextItem;
+      return copy;
+    });
   }, []);
+
+  const cancelServerQueueItem = useCallback(
+    async (serverTaskId: string) => {
+      const task = await cancelServerTask(serverTaskId);
+      setServerQueue((prev) =>
+        prev.map((item) => (item.id === task.id ? toServerQueueItem(task) : item)),
+      );
+      if (task.clientJobId) {
+        applyServerTaskToJobs(task.clientJobId, task);
+        serverTaskMapRef.current.delete(task.clientJobId);
+      } else {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.serverTaskId === task.id
+              ? {
+                  ...j,
+                  status: "failed",
+                  error: task.error || "已取消",
+                  finishedAt: Date.now(),
+                }
+              : j,
+          ),
+        );
+      }
+      if (serverTaskMapRef.current.size === 0) {
+        setInFlight(0);
+        setServerMode(false);
+        serverBatchIdRef.current = null;
+        stopServerPolling();
+      }
+    },
+    [applyServerTaskToJobs, stopServerPolling],
+  );
 
   const pollServerTasks = useCallback(async () => {
     const map = serverTaskMapRef.current;
     if (map.size === 0) {
-      runningRef.current = false;
-      setRunning(false);
+      // 服务端路径不占用 running；仅清 serverMode
       setInFlight(0);
       setServerMode(false);
       serverBatchIdRef.current = null;
       stopServerPolling();
+      void refreshServerQueue();
       return;
     }
 
@@ -291,41 +406,108 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     );
 
     setInFlight(runningCount);
+    setServerMode(true);
     if (pending === 0) {
-      runningRef.current = false;
-      setRunning(false);
+      setInFlight(0);
       setServerMode(false);
       serverBatchIdRef.current = null;
       stopServerPolling();
       log("ok", "服务端批次已全部结束");
+      void refreshServerQueue();
       return;
     }
 
     serverPollTimerRef.current = window.setTimeout(() => {
       void pollServerTasks();
     }, 1500);
-  }, [applyServerTaskToJobs, stopServerPolling]);
+  }, [applyServerTaskToJobs, refreshServerQueue, stopServerPolling]);
 
-  // 启动时：若本地有未完成的 serverTaskId，恢复轮询（关页后服务端可能已跑完）
+  // 启动：1) 本地带 serverTaskId 的 inflight  2) 服务端仍有 queued/running 的任务
   useEffect(() => {
-    const pending = jobs.filter(
-      (j) =>
-        j.serverTaskId &&
-        (j.status === "queued" || j.status === "running"),
-    );
-    if (pending.length === 0 || runningRef.current) return;
-    const map = new Map<string, string>();
-    for (const j of pending) {
-      if (j.serverTaskId) map.set(j.id, j.serverTaskId);
-    }
-    serverTaskMapRef.current = map;
-    serverBatchIdRef.current = pending[0]?.batchId || null;
-    runningRef.current = true;
-    setRunning(true);
-    setServerMode(true);
-    log("info", `恢复服务端任务轮询 ${map.size} 个`);
-    void pollServerTasks();
-    // 仅挂载时检查一次
+    if (resumeAttemptedRef.current) return;
+    resumeAttemptedRef.current = true;
+
+    void (async () => {
+      const localPending = jobs.filter(
+        (j) =>
+          j.serverTaskId &&
+          (j.status === "queued" || j.status === "running"),
+      );
+      const map = new Map<string, string>();
+      for (const j of localPending) {
+        if (j.serverTaskId) map.set(j.id, j.serverTaskId);
+      }
+
+      try {
+        const res = await listServerTasks({ limit: 40 });
+        setServerQueue(res.items.map(toServerQueueItem));
+        const active = res.items.filter(
+          (t) => t.status === "queued" || t.status === "running",
+        );
+        if (active.length > 0) {
+          // 用服务端任务补全/重建本地 job（关页后 local 可能被清空或曾被误标 failed）
+          setJobs((prev) => {
+            const byServerId = new Map(
+              prev.filter((j) => j.serverTaskId).map((j) => [j.serverTaskId!, j]),
+            );
+            const byClientId = new Map(prev.map((j) => [j.id, j]));
+            const next = prev.slice();
+            for (const t of active) {
+              map.set(t.clientJobId || t.id, t.id);
+              const existing =
+                (t.clientJobId ? byClientId.get(t.clientJobId) : undefined) ||
+                byServerId.get(t.id);
+              if (existing) {
+                const idx = next.findIndex((j) => j.id === existing.id);
+                if (idx >= 0) {
+                  next[idx] = {
+                    ...next[idx],
+                    status: t.status === "queued" ? "queued" : "running",
+                    serverTaskId: t.id,
+                    error: t.error,
+                    batchId: t.batchId || next[idx].batchId,
+                  };
+                }
+              } else {
+                next.unshift({
+                  id: t.clientJobId || t.id,
+                  batchId: t.batchId,
+                  variant: t.variant,
+                  variants: t.variants,
+                  prompt: t.prompt,
+                  status: t.status === "queued" ? "queued" : "running",
+                  createdAt: t.createdAt,
+                  resolution: undefined,
+                  aspectRatio: undefined,
+                  serverTaskId: t.id,
+                  error: t.error,
+                });
+              }
+            }
+            return next.slice(0, 120);
+          });
+          for (const t of active) {
+            if (t.clientJobId) map.set(t.clientJobId, t.id);
+            else map.set(t.id, t.id);
+          }
+          serverBatchIdRef.current = active[0]?.batchId || null;
+        }
+      } catch (e) {
+        log(
+          "info",
+          "启动时未能拉取服务端队列（可能未登录/服务未起）",
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+
+      if (map.size === 0) return;
+      serverTaskMapRef.current = map;
+      // 服务端恢复不锁 running / 不挡生成按钮
+      setServerMode(true);
+      log("info", `恢复服务端任务轮询 ${map.size} 个`);
+      void pollServerTasks();
+    })();
+    // 仅挂载一次
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -339,10 +521,6 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       throw new ApiError(401, "请先在管理页填写 API Key", "missing_api_key");
     }
     if (currentPrompts.length === 0) return;
-    if (runningRef.current) {
-      log("warn", "已有生成任务在运行，忽略重复开始");
-      return;
-    }
 
     // 强制数字，避免 localStorage / 事件值变成字符串
     const concurrency = clampConcurrency(Number(currentDraft.concurrency));
@@ -360,56 +538,59 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       setDraft({ resolution });
     }
 
-    const controller = new AbortController();
-    abortRef.current = controller;
-    runningRef.current = true;
-    setRunning(true);
-    setInFlight(0);
-    setServerMode(false);
-    stopServerPolling();
-    serverBatchIdRef.current = null;
-    serverTaskMapRef.current = new Map();
-
-    // 总张数 = 生图数量 × 并发数（× prompt 条数）
-    const batch = expandJobs(currentPrompts, variants, concurrency, {
-      resolution,
-      aspectRatio,
-    });
-    const batchIds = new Set(batch.map((j) => j.id));
-    activeBatchIdsRef.current = batchIds;
-
-    // 默认替换结果墙：整表换成 batch，绝不再 prepend 历史
-    if (appendResults) {
-      setJobs((prev) => [...batch, ...prev].slice(0, 120));
-    } else {
-      setJobs(batch);
-      saveJobs(batch);
-    }
-
-    // 并发既决定总张数，也是 worker 上限；总张数已含 concurrency，通常 effectiveWorkers === concurrency
-    const effectiveWorkers = Math.max(1, Math.min(concurrency, batch.length));
-    const perPrompt = variants * concurrency;
-    log(
-      "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=${useServerQueue ? "服务端" : "浏览器"}`,
-      {
-        concurrency,
-        effectiveWorkers,
-        variants,
-        perPrompt,
-        promptCount: currentPrompts.length,
-        batchLength: batch.length,
-        appendResults,
-        autoRetry,
-        useServerQueue,
-        aspectRatio,
-        resolution,
-        model: currentSettings.model,
-      },
-    );
-
-    // —— 服务端队列路径（VIP/站长 + 后台任务开）——
+    // 服务端后台：不锁 running，允许多次入队；仅短暂 enqueueBusy 防连点
     if (useServerQueue) {
+      if (runningRef.current) {
+        log("warn", "浏览器本地生成进行中，请先停止再入队");
+        setQueueNotice({ ok: false, text: "本地生成进行中，请先停止再入队" });
+        return;
+      }
+      if (enqueueBusyRef.current) {
+        log("warn", "正在提交服务端队列，忽略重复点击");
+        return;
+      }
+
+      const batch = expandJobs(currentPrompts, variants, concurrency, {
+        resolution,
+        aspectRatio,
+      });
+      const batchIds = new Set(batch.map((j) => j.id));
+
+      enqueueBusyRef.current = true;
+      setEnqueueBusy(true);
+      setQueueNotice(null);
+
+      if (appendResults) {
+        setJobs((prev) => [...batch, ...prev].slice(0, 120));
+      } else {
+        // 替换：保留仍在服务端排队/运行的旧任务，避免把续跑任务冲掉
+        setJobs((prev) => {
+          const keep = prev.filter(
+            (j) =>
+              j.serverTaskId &&
+              (j.status === "queued" || j.status === "running") &&
+              !batchIds.has(j.id),
+          );
+          return [...batch, ...keep].slice(0, 120);
+        });
+      }
+
+      log(
+        "info",
+        `服务端入队：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · 自动重试=${autoRetry ? "开" : "关"}`,
+        {
+          concurrency,
+          variants,
+          promptCount: currentPrompts.length,
+          batchLength: batch.length,
+          appendResults,
+          autoRetry,
+          aspectRatio,
+          resolution,
+          model: currentSettings.model,
+        },
+      );
+
       try {
         const modelId =
           typeof currentSettings.model === "string" ? currentSettings.model.trim() : "";
@@ -442,7 +623,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
           })),
         });
 
-        const map = new Map<string, string>();
+        const map = new Map(serverTaskMapRef.current);
         for (const t of created.tasks) {
           const clientId = t.clientJobId;
           if (!clientId) continue;
@@ -451,6 +632,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         serverTaskMapRef.current = map;
         serverBatchIdRef.current = created.batchId;
         setServerMode(true);
+        // 服务端路径：不 setRunning(true)，创作台生成按钮保持可点
         setJobs((prev) =>
           prev.map((item) => {
             const sid = map.get(item.id);
@@ -462,6 +644,15 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         log("ok", `已提交服务端队列 ${created.tasks.length} 个任务`, {
           batchId: created.batchId,
           stats: created.stats,
+        });
+        setServerQueue((prev) => {
+          const incoming = created.tasks.map(toServerQueueItem);
+          const ids = new Set(incoming.map((t) => t.id));
+          return [...incoming, ...prev.filter((p) => !ids.has(p.id))].slice(0, 40);
+        });
+        setQueueNotice({
+          ok: true,
+          text: `已入队 ${created.tasks.length} 个任务 · 可在图片墙顶部查看队列`,
         });
         void pollServerTasks();
         return;
@@ -485,13 +676,69 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
               : item,
           ),
         );
-        runningRef.current = false;
-        setRunning(false);
-        setInFlight(0);
-        setServerMode(false);
+        setQueueNotice({ ok: false, text: message });
         return;
+      } finally {
+        enqueueBusyRef.current = false;
+        setEnqueueBusy(false);
       }
     }
+
+    // —— 浏览器本地并发生图 ——
+    if (runningRef.current) {
+      log("warn", "已有生成任务在运行，忽略重复开始");
+      return;
+    }
+    if (enqueueBusyRef.current) {
+      log("warn", "服务端入队进行中，请稍候");
+      return;
+    }
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+    runningRef.current = true;
+    setRunning(true);
+    setInFlight(0);
+    // 本地跑不打断已有服务端轮询；仅本批走浏览器
+    setQueueNotice(null);
+
+    // 总张数 = 生图数量 × 并发数（× prompt 条数）
+    const batch = expandJobs(currentPrompts, variants, concurrency, {
+      resolution,
+      aspectRatio,
+    });
+    const batchIds = new Set(batch.map((j) => j.id));
+    activeBatchIdsRef.current = batchIds;
+
+    // 默认替换结果墙：整表换成 batch，绝不再 prepend 历史
+    if (appendResults) {
+      setJobs((prev) => [...batch, ...prev].slice(0, 120));
+    } else {
+      setJobs(batch);
+      saveJobs(batch);
+    }
+
+    // 并发既决定总张数，也是 worker 上限；总张数已含 concurrency，通常 effectiveWorkers === concurrency
+    const effectiveWorkers = Math.max(1, Math.min(concurrency, batch.length));
+    const perPrompt = variants * concurrency;
+    log(
+      "info",
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=浏览器`,
+      {
+        concurrency,
+        effectiveWorkers,
+        variants,
+        perPrompt,
+        promptCount: currentPrompts.length,
+        batchLength: batch.length,
+        appendResults,
+        autoRetry,
+        useServerQueue: false,
+        aspectRatio,
+        resolution,
+        model: currentSettings.model,
+      },
+    );
 
     const expected = currentPrompts.length * variants * concurrency;
     if (batch.length !== expected) {
@@ -668,15 +915,15 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         `并发生图结束：本批 ${batch.length} 张 · 结果墙模式=${appendResults ? "追加" : "替换"}`,
       );
     } finally {
-      // 服务端模式由 poll 收尾；浏览器模式在此收尾
-      if (!serverBatchIdRef.current) {
-        runningRef.current = false;
-        setRunning(false);
+      // 浏览器本地路径收尾；服务端轮询独立，勿清掉服务端 inFlight
+      runningRef.current = false;
+      setRunning(false);
+      if (serverTaskMapRef.current.size === 0) {
         setInFlight(0);
       }
       abortRef.current = null;
     }
-  }, [pollServerTasks, setDraft, stopServerPolling]);
+  }, [pollServerTasks, setDraft]);
 
   return {
     draft,
@@ -685,6 +932,12 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     running,
     inFlight,
     serverMode,
+    enqueueBusy,
+    queueNotice,
+    clearQueueNotice,
+    serverQueue,
+    refreshServerQueue,
+    cancelServerQueueItem,
     prompts,
     plannedJobs,
     stats,

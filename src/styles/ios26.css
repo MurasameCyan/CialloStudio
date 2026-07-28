@@ -2645,11 +2645,15 @@ a {
   color: var(--text-tertiary);
 }
 
-/* 生图：操作条 + 参数区合并为一张卡片 */
+/* 生图：操作条 + 参数区合并为一张卡片
+   与外层 .panel padding(22px) 对齐观感：内卡片左右/上下统一 16px */
 .option-block-studio {
   display: grid;
   gap: 14px;
-  padding: 14px;
+  margin: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 .studio-toolbar {
@@ -2749,6 +2753,194 @@ a {
 
 .studio-params-row .chip.studio-toggle-chip:not(.active) {
   opacity: 0.78;
+}
+
+/* 服务端队列列表（图片墙顶部） */
+.studio-server-queue {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-server-queue-wall {
+  margin: 4px 0 10px;
+  padding: 0;
+}
+
+.studio-queue-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.studio-queue-notice {
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-queue-notice .studio-feedback-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.studio-server-queue-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.studio-server-queue-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.studio-server-queue-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 780;
+  color: var(--text);
+}
+
+.studio-server-queue-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4em;
+  height: 1.4em;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: rgba(0, 113, 227, 0.16);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.studio-server-queue-hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-weight: 600;
+}
+
+.studio-server-queue-empty {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--bg-soft);
+  color: var(--text-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.studio-server-queue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.studio-server-queue-item {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--separator);
+  background: rgba(255, 255, 255, 0.35);
+  min-width: 0;
+}
+
+.studio-server-queue-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-server-queue-badge {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-soft);
+  color: var(--text-secondary);
+}
+
+.studio-server-queue-badge.is-running {
+  background: rgba(0, 113, 227, 0.14);
+  color: var(--accent);
+}
+
+.studio-server-queue-badge.is-queued {
+  background: rgba(255, 159, 10, 0.14);
+  color: #c77700;
+}
+
+.studio-server-queue-badge.is-done {
+  background: rgba(48, 209, 88, 0.14);
+  color: #1a9f4a;
+}
+
+.studio-server-queue-badge.is-failed,
+.studio-server-queue-badge.is-cancelled {
+  background: rgba(255, 69, 58, 0.12);
+  color: var(--danger);
+}
+
+.studio-server-queue-prompt {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 12px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.studio-server-queue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  min-width: 0;
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.studio-server-queue-error {
+  min-width: 0;
+  flex: 1 1 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--danger);
+}
+
+@media (prefers-color-scheme: dark) {
+  .studio-server-queue-item {
+    background: rgba(255, 255, 255, 0.04);
+  }
 }
 
 /* 第二行：宽高比独占整行 */

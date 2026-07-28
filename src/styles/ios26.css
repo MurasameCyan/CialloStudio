@@ -3838,11 +3838,60 @@ a {
   background: var(--bg-soft);
 }
 
-.user-cooldown-head {
+.user-cooldown-head,
+.user-settings-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.user-settings-toggle {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-settings-toggle-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.user-settings-chevron {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.user-settings-body {
+  display: grid;
+  gap: 14px;
+  margin-top: 12px;
+  min-width: 0;
+}
+
+.user-settings-section {
+  min-width: 0;
+}
+
+.user-settings-divider {
+  height: 1px;
+  background: var(--separator);
+  opacity: 0.9;
 }
 
 .admin-fields-3 {

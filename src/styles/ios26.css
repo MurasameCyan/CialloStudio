@@ -2614,18 +2614,28 @@ a {
   gap: 8px;
 }
 
-.results-toolbar-actions .kpi-row-inline {
+.results-toolbar-actions .studio-queue-chip {
   order: 0;
-  /* 与右侧「空闲」芯片总间距约 30px（含 actions gap 8px） */
+  min-height: 34px;
+  height: 34px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 700;
+  flex: 0 0 auto;
+}
+
+.results-toolbar-actions .kpi-row-inline {
+  order: 1;
+  /* 与右侧芯片总间距约 30px（含 actions gap 8px） */
   margin-right: 22px;
 }
 
 .results-toolbar-actions .connection-chip {
-  order: 1;
+  order: 2;
 }
 
-.results-toolbar-actions .gallery-filter-chip {
-  order: 1;
+.results-toolbar-actions .gallery-filter-chip:not(.studio-queue-chip) {
+  order: 2;
   min-height: 34px;
   height: 34px;
   padding: 0 12px;
@@ -2635,7 +2645,7 @@ a {
 }
 
 .results-toolbar-actions .btn {
-  order: 2;
+  order: 3;
 }
 
 .studio-wall-filter-hint {
@@ -2755,16 +2765,19 @@ a {
   opacity: 0.78;
 }
 
-/* 服务端队列列表（图片墙顶部） */
+/* 服务端队列列表（图片墙区域） */
 .studio-server-queue {
   display: grid;
   gap: 8px;
   min-width: 0;
 }
 
-.studio-server-queue-wall {
-  margin: 4px 0 10px;
+.studio-server-queue-wall,
+.studio-server-queue-detail {
+  margin: 0;
   padding: 0;
+  min-width: 0;
+  width: 100%;
 }
 
 .studio-queue-chip {
@@ -2784,6 +2797,67 @@ a {
 .studio-queue-notice .studio-feedback-text {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.studio-server-queue-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+  margin-bottom: 4px;
+}
+
+.studio-server-queue-toolbar-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.studio-server-queue-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.studio-server-queue-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "main actions"
+    "meta actions";
+  gap: 4px 10px;
+  align-items: center;
+  min-width: 0;
+}
+
+.studio-server-queue-row .studio-server-queue-main {
+  grid-area: main;
+}
+
+.studio-server-queue-row .studio-server-queue-meta {
+  grid-area: meta;
+}
+
+.studio-server-queue-row .studio-server-queue-actions {
+  grid-area: actions;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+}
+
+.studio-server-queue-action-spacer {
+  display: inline-block;
+  min-width: 2.5em;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .studio-server-queue-head {
@@ -2855,7 +2929,7 @@ a {
   padding: 0;
   display: grid;
   gap: 6px;
-  max-height: 220px;
+  max-height: min(56vh, 520px);
   overflow: auto;
   scrollbar-width: thin;
 }

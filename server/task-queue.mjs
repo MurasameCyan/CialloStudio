@@ -801,6 +801,84 @@ function cancelBatchForUser(user, batchId) {
   return out;
 }
 
+function removeTaskRecord(id) {
+  const task = tasks.get(id);
+  if (!task) return null;
+  const idx = queue.indexOf(id);
+  if (idx >= 0) queue.splice(idx, 1);
+  running.delete(id);
+  tasks.delete(id);
+  secrets.delete(id);
+  references.delete(id);
+  try {
+    const img = path.join(IMAGE_DIR, `${id}.img`);
+    if (fs.existsSync(img)) fs.unlinkSync(img);
+  } catch {
+    /* ignore */
+  }
+  return task;
+}
+
+/**
+ * 清理 / 批量取消用户任务
+ * - cancel_all: 取消全部 queued/running（保留记录）
+ * - clear_failed: 删除 failed / cancelled
+ * - clear_all: 先取消进行中，再删除该用户全部任务
+ * - clear_done: 删除 done
+ */
+function clearTasksForUser(user, mode = "clear_failed") {
+  const mine = [...tasks.values()].filter((t) => t.ownerId === user.id);
+  if (mode === "cancel_all") {
+    const cancelled = [];
+    for (const t of mine) {
+      if (t.status === "queued" || t.status === "running") {
+        cancelled.push(cancelTaskForUser(user, t.id));
+      }
+    }
+    schedulePersist();
+    return {
+      mode,
+      cancelled: cancelled.length,
+      removed: 0,
+      items: listTasksForUser(user, { limit: 40 }),
+      stats: queueStats(),
+    };
+  }
+
+  if (mode === "clear_all") {
+    for (const t of mine) {
+      if (t.status === "queued" || t.status === "running") {
+        cancelTaskForUser(user, t.id);
+      }
+    }
+  }
+
+  const removed = [];
+  const fresh = [...tasks.values()].filter((t) => t.ownerId === user.id);
+  for (const t of fresh) {
+    let drop = false;
+    if (mode === "clear_failed") {
+      drop = t.status === "failed" || t.status === "cancelled";
+    } else if (mode === "clear_done") {
+      drop = t.status === "done";
+    } else if (mode === "clear_all") {
+      drop = true;
+    }
+    if (drop) {
+      removeTaskRecord(t.id);
+      removed.push(t.id);
+    }
+  }
+  schedulePersist();
+  return {
+    mode,
+    cancelled: 0,
+    removed: removed.length,
+    items: listTasksForUser(user, { limit: 40 }),
+    stats: queueStats(),
+  };
+}
+
 async function handle(req, res) {
   if (req.method === "OPTIONS") {
     res.writeHead(204, {
@@ -881,6 +959,21 @@ async function handle(req, res) {
     if (batch && req.method === "POST") {
       const batchId = decodeURIComponent(batch[1]);
       sendJson(res, 200, { items: cancelBatchForUser(user, batchId) });
+      return;
+    }
+
+    // 批量：取消全部 / 清除失败 / 清除全部
+    if (req.method === "POST" && pathname === "/tasks/clear") {
+      const body = (await readBody(req)) || {};
+      const modeRaw = String(body.mode || "clear_failed");
+      const allowed = new Set(["cancel_all", "clear_failed", "clear_all", "clear_done"]);
+      const mode = allowed.has(modeRaw) ? modeRaw : "clear_failed";
+      sendJson(res, 200, clearTasksForUser(user, mode));
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/tasks/cancel-all") {
+      sendJson(res, 200, clearTasksForUser(user, "cancel_all"));
       return;
     }
 

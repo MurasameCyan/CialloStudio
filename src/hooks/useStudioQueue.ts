@@ -21,10 +21,12 @@ import {
 import {
   cancelServerBatch,
   cancelServerTask,
+  clearServerTasks,
   createServerTasks,
   getServerTask,
   isServerTaskTerminal,
   listServerTasks,
+  type ServerQueueClearMode,
   type ServerTask,
   TaskQueueError,
 } from "@/lib/taskQueue";
@@ -63,6 +65,8 @@ type QueueApi = {
   serverQueue: ServerQueueItem[];
   refreshServerQueue: () => Promise<void>;
   cancelServerQueueItem: (serverTaskId: string) => Promise<void>;
+  /** 取消全部进行中 / 清除失败 / 清除全部 */
+  clearServerQueue: (mode: ServerQueueClearMode) => Promise<void>;
   prompts: string[];
   plannedJobs: number;
   stats: {
@@ -366,6 +370,82 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       }
     },
     [applyServerTaskToJobs, stopServerPolling],
+  );
+
+  const clearServerQueue = useCallback(
+    async (mode: ServerQueueClearMode) => {
+      const result = await clearServerTasks(mode);
+      const nextItems = result.items.map(toServerQueueItem);
+      setServerQueue(nextItems);
+      const keepIds = new Set(result.items.map((t) => t.id));
+
+      if (mode === "cancel_all") {
+        setJobs((prev) =>
+          prev.map((j) =>
+            j.serverTaskId && (j.status === "queued" || j.status === "running")
+              ? {
+                  ...j,
+                  status: "failed",
+                  error: "已取消",
+                  finishedAt: Date.now(),
+                }
+              : j,
+          ),
+        );
+        serverTaskMapRef.current = new Map();
+        serverBatchIdRef.current = null;
+        stopServerPolling();
+        setInFlight(0);
+        setServerMode(false);
+        setQueueNotice({
+          ok: true,
+          text: `已取消全部进行中任务${result.cancelled ? ` · ${result.cancelled}` : ""}`,
+        });
+        return;
+      }
+
+      if (mode === "clear_all") {
+        serverTaskMapRef.current = new Map();
+        serverBatchIdRef.current = null;
+        stopServerPolling();
+        setInFlight(0);
+        setServerMode(false);
+        setJobs((prev) => prev.filter((j) => !j.serverTaskId));
+        setQueueNotice({
+          ok: true,
+          text: `已清除全部服务端任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+        });
+        return;
+      }
+
+      if (mode === "clear_failed") {
+        setJobs((prev) =>
+          prev.filter((j) => {
+            if (!j.serverTaskId) return true;
+            if (j.status !== "failed") return true;
+            return keepIds.has(j.serverTaskId);
+          }),
+        );
+        setQueueNotice({
+          ok: true,
+          text: `已清除失败/取消任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+        });
+        return;
+      }
+
+      // clear_done
+      setJobs((prev) =>
+        prev.filter((j) => {
+          if (!j.serverTaskId || j.status !== "done") return true;
+          return keepIds.has(j.serverTaskId);
+        }),
+      );
+      setQueueNotice({
+        ok: true,
+        text: `已清除已完成任务${typeof result.removed === "number" ? ` · ${result.removed}` : ""}`,
+      });
+    },
+    [stopServerPolling],
   );
 
   const pollServerTasks = useCallback(async () => {
@@ -938,6 +1018,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     serverQueue,
     refreshServerQueue,
     cancelServerQueueItem,
+    clearServerQueue,
     prompts,
     plannedJobs,
     stats,

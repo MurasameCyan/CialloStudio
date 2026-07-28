@@ -211,6 +211,7 @@ type Props = {
   serverQueue?: ServerQueueItem[];
   onRefreshServerQueue?: () => void;
   onCancelServerQueueItem?: (serverTaskId: string) => Promise<void>;
+  onClearServerQueue?: (mode: "cancel_all" | "clear_failed" | "clear_all") => Promise<void>;
   prompts: string[];
   plannedJobs: number;
   stats: Stats;
@@ -238,6 +239,7 @@ export function StudioPage({
   serverQueue = [],
   onRefreshServerQueue,
   onCancelServerQueueItem,
+  onClearServerQueue,
   prompts,
   plannedJobs,
   stats,
@@ -248,6 +250,7 @@ export function StudioPage({
 }: Props) {
   const [serverQueueOpen, setServerQueueOpen] = useState(false);
   const [cancelingServerId, setCancelingServerId] = useState<string | null>(null);
+  const [queueBulkBusy, setQueueBulkBusy] = useState<string | null>(null);
   /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
   const generateLocked = running || enqueueBusy;
   const stopEnabled = running || serverMode;
@@ -283,60 +286,124 @@ export function StudioPage({
   const serverQueueActiveCount = serverQueue.filter(
     (t) => t.status === "queued" || t.status === "running",
   ).length;
+  const serverQueueFailedCount = serverQueue.filter(
+    (t) => t.status === "failed" || t.status === "cancelled",
+  ).length;
 
-  /** 挂在图片墙顶部：队列按钮 + 可展开列表 */
-  const serverQueuePanel =
-    canBackgroundTasks ? (
-      <div className="studio-server-queue studio-server-queue-wall">
-        <div className="studio-server-queue-head">
-          <button
-            type="button"
-            className={`chip gallery-filter-chip studio-queue-chip ${serverQueueOpen || serverQueueActiveCount > 0 ? "active" : ""}`}
-            aria-expanded={serverQueueOpen}
-            title="服务端后台队列：开启后台任务后点生成会直接入队"
-            onClick={() => {
-              const next = !serverQueueOpen;
-              setServerQueueOpen(next);
-              if (next) onRefreshServerQueue?.();
-            }}
-          >
-            队列
-            {serverQueueActiveCount > 0 ? (
-              <strong className="studio-server-queue-count">{serverQueueActiveCount}</strong>
-            ) : null}
-          </button>
-          {serverQueueOpen ? (
+  const queueToggleButton = canBackgroundTasks ? (
+    <button
+      type="button"
+      className={`chip gallery-filter-chip studio-queue-chip ${serverQueueOpen || serverQueueActiveCount > 0 ? "active" : ""}`}
+      aria-expanded={serverQueueOpen}
+      title="服务端后台队列：开启后台任务后点生成会直接入队"
+      onClick={() => {
+        const next = !serverQueueOpen;
+        setServerQueueOpen(next);
+        if (next) onRefreshServerQueue?.();
+      }}
+    >
+      队列
+      {serverQueueActiveCount > 0 ? (
+        <strong className="studio-server-queue-count">{serverQueueActiveCount}</strong>
+      ) : null}
+    </button>
+  ) : null;
+
+  async function runQueueBulk(mode: "cancel_all" | "clear_failed" | "clear_all") {
+    if (!onClearServerQueue || queueBulkBusy) return;
+    if (mode === "clear_all") {
+      const ok = window.confirm("确定清除全部服务端任务？进行中的会先取消，记录将删除。");
+      if (!ok) return;
+    }
+    if (mode === "cancel_all" && serverQueueActiveCount === 0) return;
+    if (mode === "clear_failed" && serverQueueFailedCount === 0) return;
+    setQueueBulkBusy(mode);
+    try {
+      await onClearServerQueue(mode);
+    } catch (e) {
+      log("error", "队列批量操作失败", e instanceof Error ? e.message : String(e));
+    } finally {
+      setQueueBulkBusy(null);
+    }
+  }
+
+  /** 展开后在图片墙区域展示队列详情（替换/覆盖 gallery 上方内容） */
+  const serverQueueDetail =
+    canBackgroundTasks && serverQueueOpen ? (
+      <div className="studio-server-queue studio-server-queue-wall studio-server-queue-detail" role="region" aria-label="服务端队列详情">
+        <div className="studio-server-queue-toolbar">
+          <div className="studio-server-queue-toolbar-left">
+            <span className="studio-server-queue-title">
+              队列详情
+              {serverQueueActiveCount > 0 ? (
+                <strong className="studio-server-queue-count">{serverQueueActiveCount}</strong>
+              ) : null}
+            </span>
+            {serverMode ? <span className="studio-server-queue-hint">同步中</span> : null}
+          </div>
+          <div className="studio-server-queue-toolbar-actions">
             <button
               type="button"
               className="btn btn-ghost btn-sm"
+              disabled={Boolean(queueBulkBusy)}
               onClick={() => onRefreshServerQueue?.()}
             >
               刷新
             </button>
-          ) : null}
-          {serverMode ? <span className="studio-server-queue-hint">同步中</span> : null}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={Boolean(queueBulkBusy) || serverQueueActiveCount === 0}
+              onClick={() => void runQueueBulk("cancel_all")}
+            >
+              {queueBulkBusy === "cancel_all" ? "取消中…" : "取消全部"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              disabled={Boolean(queueBulkBusy) || serverQueueFailedCount === 0}
+              onClick={() => void runQueueBulk("clear_failed")}
+            >
+              {queueBulkBusy === "clear_failed" ? "清除中…" : "清除失败"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger btn-sm"
+              disabled={Boolean(queueBulkBusy) || serverQueue.length === 0}
+              onClick={() => void runQueueBulk("clear_all")}
+            >
+              {queueBulkBusy === "clear_all" ? "清除中…" : "清除全部"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              onClick={() => setServerQueueOpen(false)}
+            >
+              收起
+            </button>
+          </div>
         </div>
-        {serverQueueOpen ? (
-          serverQueue.length === 0 ? (
-            <p className="studio-server-queue-empty">
-              暂无服务端任务 · 开启「后台任务」并点生成后会出现在这里
-            </p>
-          ) : (
-            <ul className="studio-server-queue-list">
-              {serverQueue.map((item) => {
-                const statusLabel =
-                  item.status === "queued"
-                    ? "排队"
-                    : item.status === "running"
-                      ? "生成中"
-                      : item.status === "done"
-                        ? "完成"
-                        : item.status === "cancelled"
-                          ? "已取消"
-                          : "失败";
-                const canCancel = item.status === "queued" || item.status === "running";
-                return (
-                  <li key={item.id} className={`studio-server-queue-item is-${item.status}`}>
+        {serverQueue.length === 0 ? (
+          <p className="studio-server-queue-empty">
+            暂无服务端任务 · 开启「后台任务」并点生成后会出现在这里
+          </p>
+        ) : (
+          <ul className="studio-server-queue-list">
+            {serverQueue.map((item) => {
+              const statusLabel =
+                item.status === "queued"
+                  ? "排队"
+                  : item.status === "running"
+                    ? "生成中"
+                    : item.status === "done"
+                      ? "完成"
+                      : item.status === "cancelled"
+                        ? "已取消"
+                        : "失败";
+              const canCancel = item.status === "queued" || item.status === "running";
+              return (
+                <li key={item.id} className={`studio-server-queue-item is-${item.status}`}>
+                  <div className="studio-server-queue-row">
                     <div className="studio-server-queue-main">
                       <span className={`studio-server-queue-badge is-${item.status}`}>{statusLabel}</span>
                       <span className="studio-server-queue-prompt" title={item.prompt}>
@@ -350,11 +417,13 @@ export function StudioPage({
                           {item.error}
                         </span>
                       ) : null}
+                    </div>
+                    <div className="studio-server-queue-actions">
                       {canCancel && onCancelServerQueueItem ? (
                         <button
                           type="button"
                           className="btn btn-ghost btn-sm"
-                          disabled={cancelingServerId === item.id}
+                          disabled={cancelingServerId === item.id || Boolean(queueBulkBusy)}
                           onClick={() => {
                             setCancelingServerId(item.id);
                             void onCancelServerQueueItem(item.id)
@@ -364,14 +433,18 @@ export function StudioPage({
                         >
                           {cancelingServerId === item.id ? "取消中…" : "取消"}
                         </button>
-                      ) : null}
+                      ) : (
+                        <span className="studio-server-queue-action-spacer" aria-hidden>
+                          —
+                        </span>
+                      )}
                     </div>
-                  </li>
-                );
-              })}
-            </ul>
-          )
-        ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </div>
     ) : null;
 
@@ -1328,6 +1401,7 @@ export function StudioPage({
                 </h2>
               </div>
               <div className="results-toolbar-actions">
+                {queueToggleButton}
                 <div className="kpi-row kpi-row-inline" aria-label="生成统计">
                   <div className="kpi">
                     <div className="kpi-label">总数</div>
@@ -1356,52 +1430,57 @@ export function StudioPage({
                 </button>
               </div>
             </div>
-            {serverQueuePanel}
             {queueNoticeBanner}
-            <div className="progress-track" aria-hidden>
-              <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
-            </div>
-            <div className="selection-bar">
-              <label className="select-all">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  disabled={downloadableJobs.length === 0 || downloading}
-                  onChange={toggleSelectAll}
-                />
-                <span>{allSelected ? "取消全选" : "全选已完成"}</span>
-              </label>
-              <div className="selection-meta">
-                已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
-              </div>
-              <div className="selection-bar-actions">
-                <div className="selection-share-slot" aria-live="polite">
-                  {wallShareFeedback}
+            {!serverQueueOpen ? (
+              <>
+                <div className="progress-track" aria-hidden>
+                  <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
                 </div>
-                <div className="btn-row">
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-sm"
-                    disabled={selectedCount === 0 || downloading}
-                    onClick={clearSelection}
-                  >
-                    清除勾选
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-primary btn-sm"
-                    disabled={selectedCount === 0 || downloading}
-                    onClick={handleDownloadSelected}
-                  >
-                    {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-                  </button>
+                <div className="selection-bar">
+                  <label className="select-all">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      disabled={downloadableJobs.length === 0 || downloading}
+                      onChange={toggleSelectAll}
+                    />
+                    <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+                  </label>
+                  <div className="selection-meta">
+                    已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+                  </div>
+                  <div className="selection-bar-actions">
+                    <div className="selection-share-slot" aria-live="polite">
+                      {wallShareFeedback}
+                    </div>
+                    <div className="btn-row">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        disabled={selectedCount === 0 || downloading}
+                        onClick={clearSelection}
+                      >
+                        清除勾选
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        disabled={selectedCount === 0 || downloading}
+                        onClick={handleDownloadSelected}
+                      >
+                        {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
+              </>
+            ) : null}
           </div>
 
           <div className="studio-chat-stream">
-            {safeJobs.length === 0 ? (
+            {serverQueueOpen ? (
+              serverQueueDetail
+            ) : safeJobs.length === 0 ? (
               <div className="empty empty-compact gallery-empty">
                 <div className="empty-icon" aria-hidden />
                 <div>
@@ -1897,7 +1976,8 @@ export function StudioPage({
             </h2>
           </div>
           <div className="results-toolbar-actions">
-            {/* KPI 始终占位，避免点生成后工具栏突然插入导致图片墙下移 */}
+            {/* 队列在总数左侧；KPI 始终占位 */}
+            {queueToggleButton}
             <div className="kpi-row kpi-row-inline" aria-label="生成统计">
               <div className="kpi">
                 <div className="kpi-label">总数</div>
@@ -1928,70 +2008,75 @@ export function StudioPage({
           </div>
         </div>
 
-        {serverQueuePanel}
         {queueNoticeBanner}
 
-        {/* 进度条 / 选择栏始终占位，开始生成时只换 gallery 内容，避免整体位移 */}
-        <div className="progress-track" aria-hidden>
-          <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
-        </div>
-
-        <div className="selection-bar">
-          <label className="select-all">
-            <input
-              type="checkbox"
-              checked={allSelected}
-              disabled={downloadableJobs.length === 0 || downloading}
-              onChange={toggleSelectAll}
-            />
-            <span>{allSelected ? "取消全选" : "全选已完成"}</span>
-          </label>
-          <div className="selection-meta">
-            已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
-          </div>
-          <div className="selection-bar-actions">
-            <div className="selection-share-slot" aria-live="polite">
-              {wallShareFeedback}
-            </div>
-            <div className="btn-row">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                disabled={selectedCount === 0 || downloading}
-                onClick={clearSelection}
-              >
-                清除勾选
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                disabled={selectedCount === 0 || downloading}
-                onClick={handleDownloadSelected}
-              >
-                {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {safeJobs.length === 0 ? (
-          <div className="empty empty-compact gallery-empty">
-            <div className="empty-icon" aria-hidden />
-            <div>
-              <span className="empty-title">还没有画面</span>
-              <p className="empty-text">写好提示词后点「开始生成」。结果与队列会自动保留。</p>
-            </div>
-          </div>
-        ) : wallJobs.length === 0 ? (
-          <div className="empty empty-compact gallery-empty">
-            <div className="empty-icon" aria-hidden />
-            <div>
-              <span className="empty-title">暂无成功图片</span>
-              <p className="empty-text">已开启「仅成功」。关闭开关可查看进行中或失败任务。</p>
-            </div>
-          </div>
+        {serverQueueOpen ? (
+          serverQueueDetail
         ) : (
-          <div className="gallery">{wallJobs.map((job) => renderJobCard(job))}</div>
+          <>
+            {/* 进度条 / 选择栏始终占位，开始生成时只换 gallery 内容，避免整体位移 */}
+            <div className="progress-track" aria-hidden>
+              <div className="progress-fill" style={{ width: `${safeJobs.length ? progress : 0}%` }} />
+            </div>
+
+            <div className="selection-bar">
+              <label className="select-all">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  disabled={downloadableJobs.length === 0 || downloading}
+                  onChange={toggleSelectAll}
+                />
+                <span>{allSelected ? "取消全选" : "全选已完成"}</span>
+              </label>
+              <div className="selection-meta">
+                已选 <strong>{selectedCount}</strong> / 可下载 {downloadableJobs.length}
+              </div>
+              <div className="selection-bar-actions">
+                <div className="selection-share-slot" aria-live="polite">
+                  {wallShareFeedback}
+                </div>
+                <div className="btn-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    disabled={selectedCount === 0 || downloading}
+                    onClick={clearSelection}
+                  >
+                    清除勾选
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-sm"
+                    disabled={selectedCount === 0 || downloading}
+                    onClick={handleDownloadSelected}
+                  >
+                    {downloading ? "下载中…" : `下载已选 (${selectedCount})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {safeJobs.length === 0 ? (
+              <div className="empty empty-compact gallery-empty">
+                <div className="empty-icon" aria-hidden />
+                <div>
+                  <span className="empty-title">还没有画面</span>
+                  <p className="empty-text">写好提示词后点「开始生成」。结果与队列会自动保留。</p>
+                </div>
+              </div>
+            ) : wallJobs.length === 0 ? (
+              <div className="empty empty-compact gallery-empty">
+                <div className="empty-icon" aria-hidden />
+                <div>
+                  <span className="empty-title">暂无成功图片</span>
+                  <p className="empty-text">已开启「仅成功」。关闭开关可查看进行中或失败任务。</p>
+                </div>
+              </div>
+            ) : (
+              <div className="gallery">{wallJobs.map((job) => renderJobCard(job))}</div>
+            )}
+          </>
         )}
       </section>
       {previewLightbox}

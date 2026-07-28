@@ -138,6 +138,29 @@ export async function cancelServerBatch(batchId: string): Promise<{ items: Serve
   return taskHttp(`/batches/${encodeURIComponent(batchId)}/cancel`, { method: "POST" });
 }
 
+export type ServerQueueClearMode = "cancel_all" | "clear_failed" | "clear_all" | "clear_done";
+
+export type ServerQueueClearResult = {
+  mode: ServerQueueClearMode;
+  cancelled?: number;
+  removed?: number;
+  items: ServerTask[];
+  stats: ServerQueueStats;
+};
+
+/** 取消全部进行中 / 清除失败 / 清除全部 */
+export async function clearServerTasks(
+  mode: ServerQueueClearMode,
+): Promise<ServerQueueClearResult> {
+  if (mode === "cancel_all") {
+    return taskHttp("/tasks/cancel-all", { method: "POST", body: "{}" });
+  }
+  return taskHttp("/tasks/clear", {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}
+
 export async function getServerQueueStats(): Promise<ServerQueueStats> {
   return taskHttp("/stats");
 }

@@ -263,6 +263,7 @@ export default function App() {
               serverQueue={queue.serverQueue}
               onRefreshServerQueue={() => void queue.refreshServerQueue()}
               onCancelServerQueueItem={(id) => queue.cancelServerQueueItem(id)}
+              onClearServerQueue={(mode) => queue.clearServerQueue(mode)}
               prompts={queue.prompts}
               plannedJobs={queue.plannedJobs}
               stats={queue.stats}

@@ -46,6 +46,7 @@ export default function App() {
   const allowBackgroundTasks = canUseBackgroundTasks(community.user?.role);
   const backgroundTasksActive =
     allowBackgroundTasks && queue.draft.backgroundTasks === true && queue.running;
+  const serverBackground = backgroundTasksActive && queue.serverMode;
 
   // 无权限时强制关闭后台任务开关（普通用户 / 登出）
   useEffect(() => {
@@ -54,16 +55,16 @@ export default function App() {
     }
   }, [allowBackgroundTasks, queue.draft.backgroundTasks, queue.setDraft]);
 
-  // 后台任务运行中：关标签/刷新提示（Nova 服务端队列的前端近似）
+  // 浏览器队列后台：关页会中断。服务端队列可关页续跑，不再强拦。
   useEffect(() => {
-    if (!backgroundTasksActive) return;
+    if (!backgroundTasksActive || serverBackground) return;
     function onBeforeUnload(e: BeforeUnloadEvent) {
       e.preventDefault();
-      e.returnValue = "后台任务仍在生成，关闭后请求会中断。";
+      e.returnValue = "后台任务仍在浏览器生成，关闭后请求会中断。";
     }
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [backgroundTasksActive]);
+  }, [backgroundTasksActive, serverBackground]);
 
   function openHallAuth() {
     setTab("hall");
@@ -110,7 +111,7 @@ export default function App() {
             className={`connection-chip ${backgroundTasksActive ? "connection-chip-bg" : ""}`}
             title={
               backgroundTasksActive
-                ? `后台任务进行中 · 完成 ${queue.stats.done}/${queue.stats.total} · 失败 ${queue.stats.failed}`
+                ? `${serverBackground ? "服务端" : "浏览器"}后台任务 · 完成 ${queue.stats.done}/${queue.stats.total} · 失败 ${queue.stats.failed}`
                 : ready
                   ? "API Key 已配置"
                   : "尚未配置 API Key"
@@ -118,7 +119,7 @@ export default function App() {
           >
             <span className={`live-dot ${ready || backgroundTasksActive ? "" : "off"}`} />
             {backgroundTasksActive
-              ? `后台 ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`
+              ? `${serverBackground ? "服" : "后"} ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`
               : queue.running
                 ? "生成中"
                 : community.user
@@ -180,11 +181,12 @@ export default function App() {
         {backgroundTasksActive && tab !== "studio" ? (
           <div className="bg-task-banner" role="status" aria-live="polite">
             <div className="bg-task-banner-text">
-              <strong>后台任务</strong>
+              <strong>{serverBackground ? "服务端后台" : "后台任务"}</strong>
               <span>
                 生成中 {queue.stats.done + queue.stats.failed}/{queue.stats.total}
                 {queue.stats.failed > 0 ? ` · 失败 ${queue.stats.failed}` : ""}
                 {queue.draft.autoRetry ? " · 自动重试开" : ""}
+                {serverBackground ? " · 关页可续跑" : " · 关页会中断"}
               </span>
             </div>
             <div className="bg-task-banner-actions">

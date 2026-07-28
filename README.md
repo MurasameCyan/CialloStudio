@@ -14,6 +14,7 @@
 - **提示词优化**：工作台一键优化（`chat/completions`），支持回退；可复用生图 API 或单独上游
 - **分享大厅**：登录后点赞 / 评论 / 分享；站长管用户池与冷却
 - **用户数据**：Docker volume 持久化（`/data/community.json`）
+- **后台任务（VIP/站长）**：服务端任务队列，关页可续跑；普通用户仍为浏览器队列
 - **图片存储（可选）**：Cloudflare Pages → Telegram（[docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
 
 ## 架构（Docker）
@@ -23,8 +24,10 @@
   ├─ 静态 SPA ──────────────► Nginx :8080
   ├─ /v1/* + X-Ciallo-Upstream
   │     └─► Node v1-proxy :8091 ──(SSRF 校验)──► 公网 / 白名单上游
-  └─ /api/community/*
-        └─► Node community-api :8090 ──► /data/*.json (volume)
+  ├─ /api/community/*
+  │     └─► Node community-api :8090 ──► /data/*.json (volume)
+  └─ /api/tasks/*（VIP/站长）
+        └─► Node task-queue :8092 ──► /data/tasks.json + 代发上游生图
 ```
 
 - 上游由管理页填写，经 `X-Ciallo-Upstream`（或 cookie `ciallo_upstream`）传给代理
@@ -69,7 +72,13 @@ $env:CIALLO_MASTER_USERNAME = "admin"
 $env:CIALLO_MASTER_PASSWORD = "admin123"
 npm run dev:community
 
-# 终端 2 — 前端
+# 终端 2 — 任务队列（VIP/站长后台生图，可选）
+$env:CIALLO_DATA_DIR = "$PWD/.data"
+$env:CIALLO_TASK_QUEUE_PORT = "8092"
+$env:CIALLO_TASK_COMMUNITY_URL = "http://127.0.0.1:8090"
+npm run dev:tasks
+
+# 终端 3 — 前端
 npm run dev
 ```
 
@@ -78,6 +87,7 @@ npm run dev
 | 项 | 说明 |
 | --- | --- |
 | 社区 | 默认 **http**；Vite 代理 `/api/community` → `127.0.0.1:8090` |
+| 任务队列 | Vite 代理 `/api/tasks` → `127.0.0.1:8092`；仅 **站长/VIP** + 打开「后台任务」时走服务端 |
 | 纯前端演示 | `public/runtime-config.js` 设 `communityMode: "mock"`，或 Docker `CIALLO_COMMUNITY_MODE=mock` |
 | 未设站长密码 | community-api fallback **`admin` / `admin123`**；seed **`demo` / `demo123`** |
 | 上游 | 管理页填完整 `https://网关/v1`；开发代理同样 SSRF 校验 |

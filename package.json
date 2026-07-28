@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:community": "node server/community-api.mjs",
+    "dev:tasks": "node server/task-queue.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",

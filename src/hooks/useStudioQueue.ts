@@ -18,6 +18,14 @@ import {
   type StudioDraft,
   type StudioJob,
 } from "@/lib/studioQueue";
+import {
+  cancelServerBatch,
+  createServerTasks,
+  getServerTask,
+  isServerTaskTerminal,
+  type ServerTask,
+  TaskQueueError,
+} from "@/lib/taskQueue";
 
 type QueueApi = {
   draft: StudioDraft;
@@ -26,6 +34,8 @@ type QueueApi = {
   running: boolean;
   /** 当前真正在飞的请求数 */
   inFlight: number;
+  /** 当前批次是否走服务端队列 */
+  serverMode: boolean;
   prompts: string[];
   plannedJobs: number;
   stats: {
@@ -96,6 +106,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const [jobs, setJobs] = useState<StudioJob[]>(() => loadJobs());
   const [running, setRunning] = useState(false);
   const [inFlight, setInFlight] = useState(0);
+  const [serverMode, setServerMode] = useState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const runningRef = useRef(false);
@@ -103,9 +114,20 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
   const settingsRef = useRef(settings);
   /** 替换模式下，只允许本批 job id 被更新，避免旧 map 回写 */
   const activeBatchIdsRef = useRef<Set<string>>(new Set());
+  const serverBatchIdRef = useRef<string | null>(null);
+  const serverPollTimerRef = useRef<number | null>(null);
+  /** clientJobId → serverTaskId */
+  const serverTaskMapRef = useRef<Map<string, string>>(new Map());
 
   draftRef.current = draft;
   settingsRef.current = settings;
+
+  const stopServerPolling = useCallback(() => {
+    if (serverPollTimerRef.current != null) {
+      window.clearTimeout(serverPollTimerRef.current);
+      serverPollTimerRef.current = null;
+    }
+  }, []);
 
   const prompts = useMemo(
     () => resolvePrompts(draft.promptText, draft.promptMode),
@@ -169,14 +191,142 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
-    log("warn", "用户停止：已 abort 进行中的子任务");
-  }, []);
+    const batchId = serverBatchIdRef.current;
+    if (batchId) {
+      void cancelServerBatch(batchId).catch((e) => {
+        log("warn", "取消服务端批次失败", e instanceof Error ? e.message : String(e));
+      });
+    }
+    stopServerPolling();
+    runningRef.current = false;
+    setRunning(false);
+    setInFlight(0);
+    setServerMode(false);
+    log("warn", "用户停止：已 abort / 取消进行中的子任务");
+  }, [stopServerPolling]);
 
   const clear = useCallback(() => {
     if (runningRef.current) return;
     activeBatchIdsRef.current = new Set();
+    serverBatchIdRef.current = null;
+    serverTaskMapRef.current = new Map();
     setJobs([]);
     saveJobs([]);
+  }, []);
+
+  const applyServerTaskToJobs = useCallback((clientJobId: string, task: ServerTask) => {
+    setJobs((prev) =>
+      prev.map((item) => {
+        if (item.id !== clientJobId) return item;
+        if (task.status === "done") {
+          return {
+            ...item,
+            status: "done",
+            imageUrl: task.imageUrl,
+            openUrl:
+              task.imageUrl &&
+              !task.imageUrl.startsWith("blob:") &&
+              !task.imageUrl.startsWith("data:")
+                ? task.imageUrl
+                : item.openUrl,
+            error: undefined,
+            finishedAt: task.finishedAt || Date.now(),
+            serverTaskId: task.id,
+          };
+        }
+        if (task.status === "failed" || task.status === "cancelled") {
+          return {
+            ...item,
+            status: "failed",
+            error: task.error || (task.status === "cancelled" ? "已取消" : "生成失败"),
+            finishedAt: task.finishedAt || Date.now(),
+            serverTaskId: task.id,
+          };
+        }
+        return {
+          ...item,
+          status: "running",
+          error: task.error,
+          serverTaskId: task.id,
+        };
+      }),
+    );
+  }, []);
+
+  const pollServerTasks = useCallback(async () => {
+    const map = serverTaskMapRef.current;
+    if (map.size === 0) {
+      runningRef.current = false;
+      setRunning(false);
+      setInFlight(0);
+      setServerMode(false);
+      serverBatchIdRef.current = null;
+      stopServerPolling();
+      return;
+    }
+
+    let pending = 0;
+    let runningCount = 0;
+    const entries = [...map.entries()];
+    await Promise.all(
+      entries.map(async ([clientJobId, serverTaskId]) => {
+        try {
+          const task = await getServerTask(serverTaskId);
+          applyServerTaskToJobs(clientJobId, task);
+          if (isServerTaskTerminal(task.status)) {
+            map.delete(clientJobId);
+          } else {
+            pending += 1;
+            if (task.status === "running") runningCount += 1;
+          }
+        } catch (e) {
+          log(
+            "warn",
+            `轮询服务端任务失败 ${serverTaskId}`,
+            e instanceof Error ? e.message : String(e),
+          );
+          pending += 1;
+        }
+      }),
+    );
+
+    setInFlight(runningCount);
+    if (pending === 0) {
+      runningRef.current = false;
+      setRunning(false);
+      setServerMode(false);
+      serverBatchIdRef.current = null;
+      stopServerPolling();
+      log("ok", "服务端批次已全部结束");
+      return;
+    }
+
+    serverPollTimerRef.current = window.setTimeout(() => {
+      void pollServerTasks();
+    }, 1500);
+  }, [applyServerTaskToJobs, stopServerPolling]);
+
+  // 启动时：若本地有未完成的 serverTaskId，恢复轮询（关页后服务端可能已跑完）
+  useEffect(() => {
+    const pending = jobs.filter(
+      (j) =>
+        j.serverTaskId &&
+        (j.status === "queued" || j.status === "running"),
+    );
+    if (pending.length === 0 || runningRef.current) return;
+    const map = new Map<string, string>();
+    for (const j of pending) {
+      if (j.serverTaskId) map.set(j.id, j.serverTaskId);
+    }
+    serverTaskMapRef.current = map;
+    serverBatchIdRef.current = pending[0]?.batchId || null;
+    runningRef.current = true;
+    setRunning(true);
+    setServerMode(true);
+    log("info", `恢复服务端任务轮询 ${map.size} 个`);
+    void pollServerTasks();
+    // 仅挂载时检查一次
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const start = useCallback(async () => {
@@ -199,6 +349,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
     const autoRetry = currentDraft.autoRetry === true;
+    const useServerQueue = currentDraft.backgroundTasks === true;
     const resolution = normalizeResolutionForModel(currentSettings.model, currentDraft.resolution);
     const aspectRatio = currentDraft.aspectRatio;
 
@@ -214,6 +365,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     runningRef.current = true;
     setRunning(true);
     setInFlight(0);
+    setServerMode(false);
+    stopServerPolling();
+    serverBatchIdRef.current = null;
+    serverTaskMapRef.current = new Map();
 
     // 总张数 = 生图数量 × 并发数（× prompt 条数）
     const batch = expandJobs(currentPrompts, variants, concurrency, {
@@ -236,7 +391,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     const perPrompt = variants * concurrency;
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"}`,
+      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=${useServerQueue ? "服务端" : "浏览器"}`,
       {
         concurrency,
         effectiveWorkers,
@@ -246,11 +401,97 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         batchLength: batch.length,
         appendResults,
         autoRetry,
+        useServerQueue,
         aspectRatio,
         resolution,
         model: currentSettings.model,
       },
     );
+
+    // —— 服务端队列路径（VIP/站长 + 后台任务开）——
+    if (useServerQueue) {
+      try {
+        const modelId =
+          typeof currentSettings.model === "string" ? currentSettings.model.trim() : "";
+        const isEdit =
+          modelId === "grok-imagine-image-edit" ||
+          /imagine.*image.*edit|image.*edit|img.?edit/i.test(modelId);
+        const ref =
+          isEdit && typeof currentDraft.referenceImageUrl === "string"
+            ? currentDraft.referenceImageUrl.trim()
+            : "";
+        if (isEdit && !ref) {
+          throw new ApiError(400, "当前为图生图模型，请先上传参考图", "missing_reference_image");
+        }
+
+        const created = await createServerTasks({
+          baseUrl: currentSettings.baseUrl,
+          apiKey,
+          model: currentSettings.model,
+          aspectRatio,
+          resolution,
+          autoRetry,
+          referenceImageUrl: ref || undefined,
+          batchId: batch[0]?.batchId,
+          jobs: batch.map((j) => ({
+            prompt: j.prompt,
+            clientJobId: j.id,
+            variant: j.variant,
+            variants: j.variants,
+            batchId: j.batchId,
+          })),
+        });
+
+        const map = new Map<string, string>();
+        for (const t of created.tasks) {
+          const clientId = t.clientJobId;
+          if (!clientId) continue;
+          map.set(clientId, t.id);
+        }
+        serverTaskMapRef.current = map;
+        serverBatchIdRef.current = created.batchId;
+        setServerMode(true);
+        setJobs((prev) =>
+          prev.map((item) => {
+            const sid = map.get(item.id);
+            return sid
+              ? { ...item, status: "queued", serverTaskId: sid, error: undefined }
+              : item;
+          }),
+        );
+        log("ok", `已提交服务端队列 ${created.tasks.length} 个任务`, {
+          batchId: created.batchId,
+          stats: created.stats,
+        });
+        void pollServerTasks();
+        return;
+      } catch (error) {
+        const message =
+          error instanceof TaskQueueError || error instanceof ApiError
+            ? error.message
+            : error instanceof Error
+              ? error.message
+              : "提交服务端任务失败";
+        log("error", "服务端队列不可用，本批失败", message);
+        setJobs((prev) =>
+          prev.map((item) =>
+            batchIds.has(item.id)
+              ? {
+                  ...item,
+                  status: "failed",
+                  error: message,
+                  finishedAt: Date.now(),
+                }
+              : item,
+          ),
+        );
+        runningRef.current = false;
+        setRunning(false);
+        setInFlight(0);
+        setServerMode(false);
+        return;
+      }
+    }
 
     const expected = currentPrompts.length * variants * concurrency;
     if (batch.length !== expected) {
@@ -427,12 +668,15 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         `并发生图结束：本批 ${batch.length} 张 · 结果墙模式=${appendResults ? "追加" : "替换"}`,
       );
     } finally {
-      runningRef.current = false;
-      setRunning(false);
-      setInFlight(0);
+      // 服务端模式由 poll 收尾；浏览器模式在此收尾
+      if (!serverBatchIdRef.current) {
+        runningRef.current = false;
+        setRunning(false);
+        setInFlight(0);
+      }
       abortRef.current = null;
     }
-  }, [setDraft]);
+  }, [pollServerTasks, setDraft, stopServerPolling]);
 
   return {
     draft,
@@ -440,6 +684,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
     jobs,
     running,
     inFlight,
+    serverMode,
     prompts,
     plannedJobs,
     stats,

@@ -17,6 +17,8 @@ export type StudioJob = {
   finishedAt?: number;
   resolution?: string;
   aspectRatio?: string;
+  /** 服务端任务队列 id（VIP/站长后台任务） */
+  serverTaskId?: string;
 };
 
 /** lines=每行一条 prompt；block=整段文本作为一条 prompt */

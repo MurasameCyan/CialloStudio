@@ -1457,7 +1457,7 @@ export function StudioPage({
                             className="segmented"
                             role="group"
                             aria-label="后台任务"
-                            title="VIP/站长：生成中可切换页面，关闭标签会提示未完成任务"
+                            title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
                           >
                             <button
                               type="button"
@@ -1773,7 +1773,7 @@ export function StudioPage({
                         className="segmented"
                         role="group"
                         aria-label="后台任务"
-                        title="VIP/站长：生成中可切换页面，关闭标签会提示未完成任务"
+                        title="VIP/站长：提交到服务端队列，关浏览器也可续跑；需 task-queue 服务"
                       >
                         <button
                           type="button"

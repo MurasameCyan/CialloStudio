@@ -7,6 +7,7 @@ import { StudioPage } from "@/components/StudioPage";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useCommunityAuth } from "@/hooks/useCommunityAuth";
 import { useStudioQueue } from "@/hooks/useStudioQueue";
+import { canUseBackgroundTasks } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
 import { loadSettings, type StudioSettings } from "@/lib/settings";
@@ -42,9 +43,34 @@ export default function App() {
   const ready = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const isLoggedIn = Boolean(community.user);
   const isStationMaster = community.user?.role === "admin";
+  const allowBackgroundTasks = canUseBackgroundTasks(community.user?.role);
+  const backgroundTasksActive =
+    allowBackgroundTasks && queue.draft.backgroundTasks === true && queue.running;
+
+  // 无权限时强制关闭后台任务开关（普通用户 / 登出）
+  useEffect(() => {
+    if (!allowBackgroundTasks && queue.draft.backgroundTasks) {
+      queue.setDraft({ backgroundTasks: false });
+    }
+  }, [allowBackgroundTasks, queue.draft.backgroundTasks, queue.setDraft]);
+
+  // 后台任务运行中：关标签/刷新提示（Nova 服务端队列的前端近似）
+  useEffect(() => {
+    if (!backgroundTasksActive) return;
+    function onBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "后台任务仍在生成，关闭后请求会中断。";
+    }
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [backgroundTasksActive]);
 
   function openHallAuth() {
     setTab("hall");
+  }
+
+  function openStudio() {
+    setTab("studio");
   }
 
   function openSettings() {
@@ -80,15 +106,26 @@ export default function App() {
         </div>
 
         <div className="header-right">
-          <div className="connection-chip" title={ready ? "API Key 已配置" : "尚未配置 API Key"}>
-            <span className={`live-dot ${ready ? "" : "off"}`} />
-            {queue.running
-              ? "生成中"
-              : community.user
-                ? community.user.displayName
+          <div
+            className={`connection-chip ${backgroundTasksActive ? "connection-chip-bg" : ""}`}
+            title={
+              backgroundTasksActive
+                ? `后台任务进行中 · 完成 ${queue.stats.done}/${queue.stats.total} · 失败 ${queue.stats.failed}`
                 : ready
-                  ? "Ready"
-                  : "Setup"}
+                  ? "API Key 已配置"
+                  : "尚未配置 API Key"
+            }
+          >
+            <span className={`live-dot ${ready || backgroundTasksActive ? "" : "off"}`} />
+            {backgroundTasksActive
+              ? `后台 ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`
+              : queue.running
+                ? "生成中"
+                : community.user
+                  ? community.user.displayName
+                  : ready
+                    ? "Ready"
+                    : "Setup"}
           </div>
           {tab === "studio" ? (
             <StudioModeSwitch
@@ -140,6 +177,26 @@ export default function App() {
       </header>
 
       <main className="app-main">
+        {backgroundTasksActive && tab !== "studio" ? (
+          <div className="bg-task-banner" role="status" aria-live="polite">
+            <div className="bg-task-banner-text">
+              <strong>后台任务</strong>
+              <span>
+                生成中 {queue.stats.done + queue.stats.failed}/{queue.stats.total}
+                {queue.stats.failed > 0 ? ` · 失败 ${queue.stats.failed}` : ""}
+                {queue.draft.autoRetry ? " · 自动重试开" : ""}
+              </span>
+            </div>
+            <div className="bg-task-banner-actions">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={openStudio}>
+                回生图
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={queue.stop}>
+                停止
+              </button>
+            </div>
+          </div>
+        ) : null}
         {tab === "studio" ? (
           <ErrorBoundary label="生图页">
             <StudioPage
@@ -148,6 +205,7 @@ export default function App() {
               onOpenSettings={openSettings}
               onNeedLogin={openHallAuth}
               isLoggedIn={isLoggedIn}
+              canBackgroundTasks={allowBackgroundTasks}
               draft={queue.draft}
               setDraft={queue.setDraft}
               jobs={queue.jobs}

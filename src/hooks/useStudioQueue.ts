@@ -89,6 +89,7 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
       concurrency: clampConcurrency(settings.concurrency),
       appendResults: false,
       autoRetry: false,
+      backgroundTasks: false,
       promptMode: "lines",
     }),
   );
@@ -152,6 +153,10 @@ export function useStudioQueue(settings: StudioSettings): QueueApi {
         appendResults:
           patch.appendResults !== undefined ? patch.appendResults === true : prev.appendResults === true,
         autoRetry: patch.autoRetry !== undefined ? patch.autoRetry === true : prev.autoRetry === true,
+        backgroundTasks:
+          patch.backgroundTasks !== undefined
+            ? patch.backgroundTasks === true
+            : prev.backgroundTasks === true,
         promptMode:
           patch.promptMode !== undefined
             ? normalizePromptMode(patch.promptMode)

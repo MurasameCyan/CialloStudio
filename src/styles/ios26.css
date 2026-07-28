@@ -1678,9 +1678,69 @@ a {
   backdrop-filter: blur(12px);
 }
 
+.connection-chip-bg {
+  color: var(--text);
+  border-color: rgba(0, 113, 227, 0.28);
+  background: rgba(0, 113, 227, 0.12);
+}
+
+/* VIP/站长：后台任务跨页状态条 */
+.bg-task-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto 12px;
+  padding: 10px 14px;
+  box-sizing: border-box;
+  border-radius: 14px;
+  border: 1px solid rgba(0, 113, 227, 0.22);
+  background:
+    linear-gradient(180deg, rgba(0, 113, 227, 0.12), rgba(0, 113, 227, 0.05)),
+    var(--bg-elevated);
+  box-shadow: var(--shadow);
+}
+
+.bg-task-banner-text {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px 12px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.bg-task-banner-text strong {
+  color: var(--text);
+  font-weight: 800;
+}
+
+.bg-task-banner-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
 @media (prefers-color-scheme: dark) {
   .connection-chip {
     background: rgba(255, 255, 255, 0.05);
+  }
+
+  .connection-chip-bg {
+    background: rgba(10, 132, 255, 0.18);
+    border-color: rgba(10, 132, 255, 0.35);
+  }
+
+  .bg-task-banner {
+    border-color: rgba(10, 132, 255, 0.3);
+    background:
+      linear-gradient(180deg, rgba(10, 132, 255, 0.16), rgba(10, 132, 255, 0.06)),
+      var(--bg-elevated);
   }
 }
 

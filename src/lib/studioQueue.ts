@@ -32,6 +32,11 @@ export type StudioDraft = {
   appendResults: boolean;
   /** 失败后自动重试当前子任务，直到成功或用户停止 */
   autoRetry: boolean;
+  /**
+   * 后台任务：生成中可切页，关闭标签会提示。
+   * 仅站长/VIP 可开启；UI 层按角色门禁。
+   */
+  backgroundTasks: boolean;
   /** 单行拆分 / 多行整段 */
   promptMode: PromptMode;
   /**
@@ -223,6 +228,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         concurrency: clampConcurrency(defaults.concurrency),
         appendResults: false,
         autoRetry: defaults.autoRetry === true,
+        backgroundTasks: defaults.backgroundTasks === true,
         promptMode: normalizePromptMode(defaults.promptMode),
       };
     }
@@ -236,6 +242,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       // 缺省 / 非 boolean 一律 false：替换结果墙
       appendResults: parsed.appendResults === true,
       autoRetry: parsed.autoRetry === true,
+      backgroundTasks: parsed.backgroundTasks === true,
       promptMode: normalizePromptMode(
         parsed.promptMode ?? defaults.promptMode ?? "lines",
       ),
@@ -247,6 +254,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       concurrency: clampConcurrency(defaults.concurrency),
       appendResults: false,
       autoRetry: false,
+      backgroundTasks: false,
       promptMode: normalizePromptMode(defaults.promptMode),
     };
   }
@@ -264,6 +272,7 @@ export function saveDraft(draft: StudioDraft): void {
         concurrency: clampConcurrency(draft.concurrency),
         appendResults: draft.appendResults === true,
         autoRetry: draft.autoRetry === true,
+        backgroundTasks: draft.backgroundTasks === true,
         promptMode: normalizePromptMode(draft.promptMode),
       }),
     );

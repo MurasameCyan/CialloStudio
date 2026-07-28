@@ -187,6 +187,8 @@ type Props = {
   onNeedLogin?: () => void;
   /** 是否已登录社区账号（未配置 Key 时决定去登录还是去设置） */
   isLoggedIn?: boolean;
+  /** 后台任务开关：仅站长 / VIP 为 true */
+  canBackgroundTasks?: boolean;
   draft: StudioDraft;
   setDraft: (patch: Partial<StudioDraft>) => void;
   jobs: StudioJob[];
@@ -206,6 +208,7 @@ export function StudioPage({
   onOpenSettings,
   onNeedLogin,
   isLoggedIn = false,
+  canBackgroundTasks = false,
   draft,
   setDraft,
   jobs,
@@ -218,6 +221,7 @@ export function StudioPage({
   onStop,
   onClear,
 }: Props) {
+  const backgroundEnabled = canBackgroundTasks && draft.backgroundTasks === true;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   const showReferencePicker = useMemo(
@@ -1324,6 +1328,11 @@ export function StudioPage({
                     自动重试
                   </span>
                 ) : null}
+                {running && backgroundEnabled ? (
+                  <span className="stat-pill" title="可切换大厅/设置，关闭标签会提示">
+                    后台任务
+                  </span>
+                ) : null}
               </div>
               <button
                 type="button"
@@ -1439,6 +1448,35 @@ export function StudioPage({
                         </button>
                       </div>
                     </div>
+                    {canBackgroundTasks ? (
+                      <>
+                        <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+                        <div className="field">
+                          <label>后台任务</label>
+                          <div
+                            className="segmented"
+                            role="group"
+                            aria-label="后台任务"
+                            title="VIP/站长：生成中可切换页面，关闭标签会提示未完成任务"
+                          >
+                            <button
+                              type="button"
+                              className={`chip ${!draft.backgroundTasks ? "active" : ""}`}
+                              onClick={() => setDraft({ backgroundTasks: false })}
+                            >
+                              关
+                            </button>
+                            <button
+                              type="button"
+                              className={`chip ${draft.backgroundTasks ? "active" : ""}`}
+                              onClick={() => setDraft({ backgroundTasks: true })}
+                            >
+                              开
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                   <div className="studio-params-divider" role="separator" />
                   <div className="studio-params-row studio-params-row-aspect">
@@ -1607,6 +1645,11 @@ export function StudioPage({
                 自动重试
               </span>
             ) : null}
+            {running && backgroundEnabled ? (
+              <span className="stat-pill" title="可切换大厅/设置，关闭标签会提示">
+                后台任务
+              </span>
+            ) : null}
           </div>
         </div>
 
@@ -1721,6 +1764,35 @@ export function StudioPage({
                     </button>
                   </div>
                 </div>
+                {canBackgroundTasks ? (
+                  <>
+                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+                    <div className="field">
+                      <label>后台任务</label>
+                      <div
+                        className="segmented"
+                        role="group"
+                        aria-label="后台任务"
+                        title="VIP/站长：生成中可切换页面，关闭标签会提示未完成任务"
+                      >
+                        <button
+                          type="button"
+                          className={`chip ${!draft.backgroundTasks ? "active" : ""}`}
+                          onClick={() => setDraft({ backgroundTasks: false })}
+                        >
+                          关
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.backgroundTasks ? "active" : ""}`}
+                          onClick={() => setDraft({ backgroundTasks: true })}
+                        >
+                          开
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : null}
               </div>
               <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">

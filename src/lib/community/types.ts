@@ -129,6 +129,11 @@ export function roleLabel(role: UserRole): string {
   return "用户";
 }
 
+/** 后台任务（跨页续跑 / 关页提示）：仅站长与 VIP */
+export function canUseBackgroundTasks(role: UserRole | null | undefined): boolean {
+  return role === "admin" || role === "vip";
+}
+
 export function clampShareCooldownSec(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;

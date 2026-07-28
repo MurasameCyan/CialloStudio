@@ -82,8 +82,11 @@ export default function App() {
     };
   }, [community.user]);
 
-  const concurrencyCap =
-    typeof queuePolicy?.myConcurrency === "number" && queuePolicy.myConcurrency > 0
+  // 鉴权 / 队列策略未就绪时先不收紧 cap，避免把 localStorage 里已选的并发写坏
+  const queuePolicyReady = !community.loading && (!community.user || queuePolicy != null);
+  const concurrencyCap = !queuePolicyReady
+    ? 8
+    : typeof queuePolicy?.myConcurrency === "number" && queuePolicy.myConcurrency > 0
       ? queuePolicy.myConcurrency
       : community.user?.role === "admin"
         ? DEFAULT_QUEUE_POLICY.adminConcurrency
@@ -106,11 +109,13 @@ export default function App() {
   const backgroundTasksActive = serverBackground || localBackground;
 
   // 无权限时强制关闭后台任务开关（普通用户 / 登出）
+  // 必须等鉴权+策略就绪，否则冷启动会把已持久化的「后台任务」误写成 false
   useEffect(() => {
+    if (!queuePolicyReady) return;
     if (!allowBackgroundTasks && queue.draft.backgroundTasks) {
       queue.setDraft({ backgroundTasks: false });
     }
-  }, [allowBackgroundTasks, queue.draft.backgroundTasks, queue.setDraft]);
+  }, [queuePolicyReady, allowBackgroundTasks, queue.draft.backgroundTasks, queue.setDraft]);
 
   // 浏览器队列后台：关页会中断。服务端队列可关页续跑，不再强拦。
   useEffect(() => {

@@ -47,6 +47,8 @@ export class ErrorBoundary extends Component<Props, State> {
                     localStorage.removeItem("ciallo-studio.settings.v1");
                     localStorage.removeItem("ciallo-studio.jobs.v1");
                     localStorage.removeItem("ciallo-studio.draft.v1");
+                    localStorage.removeItem("ciallo-studio.jobs.v2");
+                    localStorage.removeItem("ciallo-studio.draft.v2");
                   } catch {
                     // ignore
                   }

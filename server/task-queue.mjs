@@ -30,9 +30,13 @@ const COMMUNITY_BASE = (
   `http://127.0.0.1:${process.env.CIALLO_COMMUNITY_PORT || 8090}`
 ).replace(/\/+$/, "");
 
-const MAX_CONCURRENCY = Math.max(
+/**
+ * 全局同时跑的任务顶棚（所有用户合计）。
+ * 用户组并发上限（普通2/VIP3/站长5）在策略里，按用户单独限制。
+ */
+const GLOBAL_MAX_CONCURRENCY = Math.max(
   1,
-  Math.min(8, Number(process.env.CIALLO_TASK_CONCURRENCY || 2) || 2),
+  Math.min(16, Number(process.env.CIALLO_TASK_CONCURRENCY || 8) || 8),
 );
 /** 环境兜底（策略服务不可用时）；站长策略优先 */
 const FALLBACK_MAX_PENDING = Math.max(
@@ -42,6 +46,9 @@ const FALLBACK_MAX_PENDING = Math.max(
 const DEFAULT_QUEUE_POLICY = {
   userLimit: 1,
   vipLimit: 3,
+  userConcurrency: 2,
+  vipConcurrency: 3,
+  adminConcurrency: 5,
   userBackgroundEnabled: false,
 };
 const TASK_TTL_MS = Math.max(
@@ -168,10 +175,25 @@ function clampQueueLimit(value, fallback) {
   return Math.min(100, Math.max(1, Math.round(n)));
 }
 
+function clampConcurrencyCap(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(8, Math.max(1, Math.round(n)));
+}
+
 function normalizeQueuePolicy(raw) {
   return {
     userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
     vipLimit: clampQueueLimit(raw?.vipLimit, DEFAULT_QUEUE_POLICY.vipLimit),
+    userConcurrency: clampConcurrencyCap(
+      raw?.userConcurrency,
+      DEFAULT_QUEUE_POLICY.userConcurrency,
+    ),
+    vipConcurrency: clampConcurrencyCap(raw?.vipConcurrency, DEFAULT_QUEUE_POLICY.vipConcurrency),
+    adminConcurrency: clampConcurrencyCap(
+      raw?.adminConcurrency,
+      DEFAULT_QUEUE_POLICY.adminConcurrency,
+    ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };
 }
@@ -183,13 +205,31 @@ function canBackground(role, policy) {
   return false;
 }
 
-/** null = 不限制（站长） */
+/** null = 不限制（站长排队上限） */
 function queueLimitForRole(role, policy) {
   const r = normalizeRole(role);
   const cfg = normalizeQueuePolicy(policy);
   if (r === "admin") return null;
   if (r === "vip") return cfg.vipLimit;
   return cfg.userLimit;
+}
+
+/** 该角色同时「生成中」上限（创作台并发策略） */
+function concurrencyLimitForRole(role, policy) {
+  const r = normalizeRole(role);
+  const cfg = normalizeQueuePolicy(policy);
+  if (r === "admin") return cfg.adminConcurrency;
+  if (r === "vip") return cfg.vipConcurrency;
+  return cfg.userConcurrency;
+}
+
+function runningCountForUser(ownerId) {
+  let n = 0;
+  for (const id of running) {
+    const t = tasks.get(id);
+    if (t && t.ownerId === ownerId) n += 1;
+  }
+  return n;
 }
 
 async function fetchQueuePolicy(token) {
@@ -365,7 +405,7 @@ function queueStats() {
     runningCount,
     doneCount,
     failedCount,
-    concurrencyLimit: MAX_CONCURRENCY,
+    concurrencyLimit: GLOBAL_MAX_CONCURRENCY,
     acceptingNewTasks: !shuttingDown,
   };
 }
@@ -378,17 +418,38 @@ function scheduleDrain() {
   }, POLL_DRAIN_MS);
 }
 
+/**
+ * 调度：全局顶棚 + 每用户 concurrencyCap（来自用户组策略）。
+ * 队头用户若已满并发，跳过试下一位，避免堵死别人。
+ */
 async function drainQueue() {
-  while (!shuttingDown && running.size < MAX_CONCURRENCY && queue.length > 0) {
-    const id = queue.shift();
-    if (!id) break;
-    const task = tasks.get(id);
-    if (!task || task.status !== "queued") continue;
-    running.add(id);
-    void runOne(id).finally(() => {
-      running.delete(id);
-      scheduleDrain();
-    });
+  while (!shuttingDown && running.size < GLOBAL_MAX_CONCURRENCY && queue.length > 0) {
+    let started = false;
+    for (let i = 0; i < queue.length; i += 1) {
+      const id = queue[i];
+      const task = tasks.get(id);
+      if (!task || task.status !== "queued") {
+        queue.splice(i, 1);
+        i -= 1;
+        continue;
+      }
+      const userCap = Math.max(
+        1,
+        Math.min(8, Number(task.concurrencyCap) || DEFAULT_QUEUE_POLICY.userConcurrency),
+      );
+      if (runningCountForUser(task.ownerId) >= userCap) continue;
+      if (running.size >= GLOBAL_MAX_CONCURRENCY) break;
+
+      queue.splice(i, 1);
+      running.add(id);
+      void runOne(id).finally(() => {
+        running.delete(id);
+        scheduleDrain();
+      });
+      started = true;
+      break;
+    }
+    if (!started) break;
   }
 }
 
@@ -709,12 +770,15 @@ async function createTasks(body, user, policy) {
   const batchId = typeof body?.batchId === "string" && body.batchId ? body.batchId : uid("batch-");
   const created = [];
   const t = now();
+  // 写入任务：该用户同时「生成中」上限（站长默认 5 等）
+  const concurrencyCap = concurrencyLimitForRole(user.role, policy);
   for (const item of items) {
     const id = uid("task-");
     const task = {
       id,
       ownerId: user.id,
       ownerName: user.displayName || user.username || user.id,
+      ownerRole: normalizeRole(user.role),
       status: "queued",
       prompt: item.prompt,
       model,
@@ -730,6 +794,7 @@ async function createTasks(body, user, policy) {
       variants: item.variants || items.length,
       clientJobId: item.clientJobId,
       hasReference: Boolean(ref),
+      concurrencyCap,
     };
     tasks.set(id, task);
     secrets.set(id, { apiKey });
@@ -998,7 +1063,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(
-    `[task-queue] listening ${HOST}:${PORT} data=${DATA_DIR} concurrency=${MAX_CONCURRENCY} community=${COMMUNITY_BASE}`,
+    `[task-queue] listening ${HOST}:${PORT} data=${DATA_DIR} globalConcurrency=${GLOBAL_MAX_CONCURRENCY} community=${COMMUNITY_BASE}`,
   );
 });
 

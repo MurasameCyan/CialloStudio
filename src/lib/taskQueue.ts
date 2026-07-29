@@ -49,6 +49,14 @@ export type CreateServerTasksInput = {
   autoRetry?: boolean;
   referenceImageUrl?: string;
   batchId?: string;
+  /** 后台队列出图储存：site=改写 Site Base；media=上传 TG Worker */
+  storageMode?: "media" | "site";
+  /** 上游图片站公网根域名（只填 origin） */
+  siteBase?: string;
+  /** TG Worker 根域名（只填 origin） */
+  mediaBase?: string;
+  /** Worker 上传 token（可选，仅内存） */
+  mediaUploadToken?: string;
   jobs: Array<{
     prompt: string;
     clientJobId?: string;

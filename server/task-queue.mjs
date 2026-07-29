@@ -57,6 +57,7 @@ const TASK_TTL_MS = Math.max(
 );
 const MAX_BODY = 12 * 1024 * 1024;
 const POLL_DRAIN_MS = 250;
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"]);
 
 /** @typedef {'queued'|'running'|'done'|'failed'|'cancelled'} TaskStatus */
 
@@ -83,6 +84,7 @@ const POLL_DRAIN_MS = 250;
  *   variants: number,
  *   clientJobId?: string,
  *   hasReference: boolean,
+ *   storageMode?: 'media'|'site',
  * }} PublicTask
  */
 
@@ -484,7 +486,192 @@ function normalizeBaseUrl(raw) {
   }
 }
 
-function httpRequestJson(targetUrl, { method = "GET", headers = {}, body, timeoutMs = 180000 } = {}) {
+/** Media / Site 根域名：只保留 origin */
+function normalizeRootBase(raw) {
+  let s = String(raw || "").trim().replace(/\/+$/, "");
+  if (!s) return "";
+  if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
+  try {
+    return new URL(s).origin;
+  } catch {
+    return s;
+  }
+}
+
+function normalizeStorageMode(value) {
+  return value === "media" ? "media" : "site";
+}
+
+/**
+ * 上游常返回 http://127.0.0.1:8000/v1/media/...
+ * 用 Site Base 公网根域名改写路径。
+ */
+function rewriteMediaUrlToSiteBase(rawUrl, siteBase) {
+  const value = String(rawUrl || "").trim();
+  if (!value || value.startsWith("data:") || value.startsWith("blob:")) return value;
+  const base = normalizeRootBase(siteBase);
+  if (!base) return value;
+  try {
+    const parsed = new URL(value, base);
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
+    const isMediaPath =
+      path.includes("/v1/media/") || path.startsWith("/media/") || path.includes("/images/");
+    if (isLoopback || isMediaPath) {
+      return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+    }
+    return value;
+  } catch {
+    const replaced = value
+      .replace(/^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "")
+      .replace(/^\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "");
+    if (replaced.startsWith("/")) return `${base}${replaced}`;
+    return value;
+  }
+}
+
+function guessUploadFilename(contentType, fallback = "image.png") {
+  const t = String(contentType || "").toLowerCase();
+  if (t.includes("jpeg") || t.includes("jpg")) return "image.jpg";
+  if (t.includes("webp")) return "image.webp";
+  if (t.includes("gif")) return "image.gif";
+  if (t.includes("png")) return "image.png";
+  return fallback;
+}
+
+/**
+ * 服务端下载上游图并上传到 Media Worker（Telegram）。
+ * mediaBase 为 Worker 根域名。
+ */
+async function uploadImageToMediaWorker(source, { mediaBase, mediaUploadToken, apiKey } = {}) {
+  const base = normalizeRootBase(mediaBase);
+  if (!base) {
+    throw Object.assign(new Error("未配置 Media Base，无法上传 TG"), {
+      status: 400,
+      code: "missing_media_base",
+    });
+  }
+
+  let body;
+  let contentType = "image/png";
+  let filename = "image.png";
+
+  if (typeof source === "string" && source.startsWith("data:")) {
+    const m = /^data:([^;,]+)?(;base64)?,(.*)$/i.exec(source);
+    if (!m) {
+      throw Object.assign(new Error("无效 data URL"), { status: 400, code: "invalid_data_url" });
+    }
+    contentType = (m[1] || "image/png").trim() || "image/png";
+    const isB64 = Boolean(m[2]);
+    const dataPart = m[3] || "";
+    body = isB64 ? Buffer.from(dataPart, "base64") : Buffer.from(decodeURIComponent(dataPart), "utf8");
+    filename = guessUploadFilename(contentType);
+  } else {
+    const fetchUrl = String(source || "").trim();
+    if (!fetchUrl) {
+      throw Object.assign(new Error("缺少图片源"), { status: 400, code: "missing_image_source" });
+    }
+    const headers = { Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" };
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+    const res = await httpRequestBinary(fetchUrl, { method: "GET", headers, timeoutMs: 120000 });
+    if (res.status < 200 || res.status >= 300 || !res.body?.length) {
+      throw Object.assign(new Error(`拉取上游图片失败 HTTP ${res.status || 0}`), {
+        status: res.status || 502,
+        code: "media_fetch_failed",
+      });
+    }
+    body = res.body;
+    contentType = String(res.headers?.["content-type"] || "image/png").split(";")[0].trim() || "image/png";
+    filename = guessUploadFilename(contentType);
+  }
+
+  const boundary = `ciallo-${crypto.randomBytes(12).toString("hex")}`;
+  const head = Buffer.from(
+    `--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${filename}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+    "utf8",
+  );
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`, "utf8");
+  const payload = Buffer.concat([head, body, tail]);
+
+  const uploadHeaders = {
+    Accept: "application/json",
+    "Content-Type": `multipart/form-data; boundary=${boundary}`,
+    "Content-Length": payload.length,
+  };
+  if (mediaUploadToken) {
+    uploadHeaders.Authorization = `Bearer ${mediaUploadToken}`;
+  }
+
+  const uploadRes = await httpRequestJson(`${base}/v1/upload`, {
+    method: "POST",
+    headers: uploadHeaders,
+    rawBody: payload,
+    timeoutMs: 180000,
+  });
+  if (uploadRes.status < 200 || uploadRes.status >= 300) {
+    const msg =
+      uploadRes.json?.error?.message ||
+      uploadRes.json?.message ||
+      uploadRes.raw?.slice(0, 200) ||
+      `Media 上传 HTTP ${uploadRes.status}`;
+    throw Object.assign(new Error(msg), {
+      status: uploadRes.status || 502,
+      code: "media_upload_failed",
+    });
+  }
+  const mediaId = String(uploadRes.json?.mediaId || uploadRes.json?.fileId || "").trim();
+  if (!mediaId) {
+    throw Object.assign(new Error("Media Worker 未返回 mediaId"), {
+      status: 502,
+      code: "media_upload_invalid",
+    });
+  }
+  const url =
+    (typeof uploadRes.json?.url === "string" && uploadRes.json.url.trim()) ||
+    `${base}/v1/media/${encodeURIComponent(mediaId)}`;
+  return { url, mediaId };
+}
+
+/** 后台任务完成后按 storageMode 固化可访问 imageUrl */
+async function finalizeTaskImageUrl(task, rawImageUrl) {
+  const raw = String(rawImageUrl || "").trim();
+  if (!raw) return raw;
+  const mode = normalizeStorageMode(task.storageMode);
+  if (mode === "media") {
+    const secret = secrets.get(task.id);
+    const uploaded = await uploadImageToMediaWorker(raw, {
+      mediaBase: task.mediaBase,
+      mediaUploadToken: task.mediaUploadToken,
+      apiKey: secret?.apiKey,
+    });
+    return uploaded.url;
+  }
+  const rewritten = rewriteMediaUrlToSiteBase(raw, task.siteBase);
+  if (rewritten !== raw) return rewritten;
+  // Site 未配时再尝试 Media 上传兜底
+  if (task.mediaBase) {
+    try {
+      const secret = secrets.get(task.id);
+      const uploaded = await uploadImageToMediaWorker(raw, {
+        mediaBase: task.mediaBase,
+        mediaUploadToken: task.mediaUploadToken,
+        apiKey: secret?.apiKey,
+      });
+      return uploaded.url;
+    } catch (e) {
+      console.warn(
+        `[task-queue] site rewrite noop and media upload failed:`,
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  }
+  return rewritten;
+}
+
+function httpRequestJson(
+  targetUrl,
+  { method = "GET", headers = {}, body, rawBody, timeoutMs = 180000 } = {},
+) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -494,7 +681,14 @@ function httpRequestJson(targetUrl, { method = "GET", headers = {}, body, timeou
       return;
     }
     const lib = parsed.protocol === "https:" ? https : http;
-    const payload = body == null ? null : Buffer.from(JSON.stringify(body), "utf8");
+    const payload =
+      rawBody != null
+        ? Buffer.isBuffer(rawBody)
+          ? rawBody
+          : Buffer.from(String(rawBody))
+        : body == null
+          ? null
+          : Buffer.from(JSON.stringify(body), "utf8");
     const req = lib.request(
       {
         protocol: parsed.protocol,
@@ -504,9 +698,11 @@ function httpRequestJson(targetUrl, { method = "GET", headers = {}, body, timeou
         method,
         headers: {
           Accept: "application/json",
-          ...(payload
+          ...(payload && rawBody == null
             ? { "Content-Type": "application/json", "Content-Length": payload.length }
-            : {}),
+            : payload
+              ? { "Content-Length": payload.length }
+              : {}),
           ...headers,
         },
         timeout: timeoutMs,
@@ -535,6 +731,45 @@ function httpRequestJson(targetUrl, { method = "GET", headers = {}, body, timeou
     req.on("timeout", () => req.destroy(Object.assign(new Error("上游超时"), { status: 504 })));
     req.on("error", reject);
     if (payload) req.write(payload);
+    req.end();
+  });
+}
+
+function httpRequestBinary(targetUrl, { method = "GET", headers = {}, timeoutMs = 120000 } = {}) {
+  return new Promise((resolve, reject) => {
+    let parsed;
+    try {
+      parsed = new URL(targetUrl);
+    } catch (e) {
+      reject(e);
+      return;
+    }
+    const lib = parsed.protocol === "https:" ? https : http;
+    const req = lib.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || (parsed.protocol === "https:" ? 443 : 80),
+        path: parsed.pathname + parsed.search,
+        method,
+        headers: { ...headers },
+        timeout: timeoutMs,
+        servername: parsed.hostname,
+      },
+      (res) => {
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => {
+          resolve({
+            status: res.statusCode || 0,
+            headers: res.headers,
+            body: Buffer.concat(chunks),
+          });
+        });
+      },
+    );
+    req.on("timeout", () => req.destroy(Object.assign(new Error("上游超时"), { status: 504 })));
+    req.on("error", reject);
     req.end();
   });
 }
@@ -638,16 +873,21 @@ async function runOne(taskId) {
     task.attempt = attempt;
     task.updatedAt = now();
     try {
-      const imageUrl = await callUpstreamGenerate(task);
+      const rawImageUrl = await callUpstreamGenerate(task);
+      const imageUrl = await finalizeTaskImageUrl(task, rawImageUrl);
       task.status = "done";
       task.imageUrl = imageUrl;
       task.error = undefined;
       task.finishedAt = now();
       task.updatedAt = task.finishedAt;
+      // 落盘后清密钥/参考图；media token 仅内存
       secrets.delete(taskId);
       references.delete(taskId);
+      task.mediaUploadToken = undefined;
       schedulePersist();
-      console.log(`[task-queue] done ${taskId} attempt=${attempt}`);
+      console.log(
+        `[task-queue] done ${taskId} attempt=${attempt} storage=${normalizeStorageMode(task.storageMode)}`,
+      );
       return;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -759,6 +999,23 @@ async function createTasks(body, user, policy) {
   const aspectRatio = String(body?.aspectRatio || "1:1").trim() || "1:1";
   const resolution = String(body?.resolution || "1k").trim() || "1k";
   const autoRetry = body?.autoRetry === true;
+  const storageMode = normalizeStorageMode(body?.storageMode);
+  const siteBase = normalizeRootBase(body?.siteBase);
+  const mediaBase = normalizeRootBase(body?.mediaBase);
+  const mediaUploadToken =
+    typeof body?.mediaUploadToken === "string" ? body.mediaUploadToken.trim() : "";
+  if (storageMode === "site" && !siteBase && !mediaBase) {
+    throw Object.assign(
+      new Error("后台队列 Site 模式需配置 Site Base（或 Media Base 兜底）"),
+      { status: 400, code: "missing_site_base" },
+    );
+  }
+  if (storageMode === "media" && !mediaBase) {
+    throw Object.assign(new Error("后台队列 Media 模式需配置 Media Base"), {
+      status: 400,
+      code: "missing_media_base",
+    });
+  }
   const ref =
     typeof body?.referenceImageUrl === "string" && body.referenceImageUrl.trim()
       ? body.referenceImageUrl.trim()
@@ -795,6 +1052,11 @@ async function createTasks(body, user, policy) {
       clientJobId: item.clientJobId,
       hasReference: Boolean(ref),
       concurrencyCap,
+      storageMode,
+      siteBase,
+      mediaBase,
+      // token 仅内存，persist 时剥离
+      mediaUploadToken: mediaUploadToken || undefined,
     };
     tasks.set(id, task);
     secrets.set(id, { apiKey });

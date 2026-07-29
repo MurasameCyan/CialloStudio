@@ -19,9 +19,14 @@ import { log } from "@/lib/logger";
 import {
   getMediaBase,
   getMediaUploadToken,
+  getQueueStorageMode,
+  getSiteBase,
   pingMediaWorker,
   setMediaBase,
   setMediaUploadToken,
+  setQueueStorageMode,
+  setSiteBase,
+  type QueueStorageMode,
 } from "@/lib/media/client";
 import { getMasterUsername } from "@/lib/runtimeConfig";
 import {
@@ -77,6 +82,8 @@ export function SettingsPage({
   const [ok, setOk] = useState<boolean | null>(null);
   const [showKey, setShowKey] = useState(false);
   const [mediaBase, setMediaBaseDraft] = useState("");
+  const [siteBase, setSiteBaseDraft] = useState("");
+  const [queueStorageMode, setQueueStorageModeDraft] = useState<QueueStorageMode>("site");
   const [mediaToken, setMediaTokenDraft] = useState("");
   const [mediaBusy, setMediaBusy] = useState(false);
   const [mediaMsg, setMediaMsg] = useState("");
@@ -87,6 +94,8 @@ export function SettingsPage({
 
   useEffect(() => {
     setMediaBaseDraft(getMediaBase());
+    setSiteBaseDraft(getSiteBase());
+    setQueueStorageModeDraft(getQueueStorageMode());
     setMediaTokenDraft(getMediaUploadToken());
   }, []);
 
@@ -274,25 +283,42 @@ export function SettingsPage({
 
   function handleSaveMedia() {
     setMediaBase(mediaBase.trim());
+    setSiteBase(siteBase.trim());
+    setQueueStorageMode(queueStorageMode);
     setMediaUploadToken(mediaToken.trim());
     setMediaOk(true);
-    setMediaMsg(
-      mediaBase.trim()
-        ? `已保存媒体 Worker：${mediaBase.trim().replace(/\/+$/, "")}`
-        : "已清空 Media Base（分享将使用临时图链）",
-    );
-    log("ok", "媒体 Worker 配置已保存", { base: mediaBase.trim() || "(empty)" });
+    const media = getMediaBase();
+    const site = getSiteBase();
+    const mode = getQueueStorageMode();
+    const parts = [
+      media ? `Media ${media}` : "Media 空",
+      site ? `Site ${site}` : "Site 空",
+      `后台队列→${mode === "media" ? "Media(TG)" : "Site 改写"}`,
+    ];
+    setMediaMsg(`已保存 · ${parts.join(" · ")}`);
+    log("ok", "媒体/站点配置已保存", {
+      mediaBase: media || "(empty)",
+      siteBase: site || "(empty)",
+      queueStorageMode: mode,
+    });
   }
 
   async function handleTestMedia() {
-    const normalized = mediaBase.trim().replace(/\/+$/, "");
-    setMediaBaseDraft(normalized);
-    setMediaBase(normalized);
+    setMediaBase(mediaBase.trim());
+    setSiteBase(siteBase.trim());
+    setQueueStorageMode(queueStorageMode);
     setMediaUploadToken(mediaToken.trim());
+    setMediaBaseDraft(getMediaBase());
+    setSiteBaseDraft(getSiteBase());
     setMediaBusy(true);
     setMediaMsg("");
     setMediaOk(null);
     try {
+      if (!getMediaBase()) {
+        setMediaOk(false);
+        setMediaMsg("请先填写 Media Base（TG Worker 根域名）");
+        return;
+      }
       const res = await pingMediaWorker();
       setMediaOk(res.ok);
       setMediaMsg(res.ok ? `媒体正常 · ${res.detail}` : `媒体异常 · ${res.detail}`);
@@ -780,15 +806,14 @@ export function SettingsPage({
                 <div className="admin-section-head">
                   <div>
                     <div className="section-card-title">Media</div>
-                    <h3 className="admin-section-title">图片存储（CF Worker → Telegram）</h3>
+                    <h3 className="admin-section-title">图片存储与后台队列</h3>
                   </div>
                 </div>
                 <div className="admin-stack">
                   <p className="footer-note">
-                    推荐用 Cloudflare <strong>Pages</strong> 上传{" "}
-                    <code>releases/ciallo-telegram-media-pages.zip</code>
-                    。Base 填 <code>https://项目名.pages.dev</code>（须能打开 /healthz）。Bot Token 只放在
-                    CF 环境变量，不要填本页。
+                    两个 Base 都<strong>只填根域名</strong>（不要带 <code>/v1</code> 路径）。
+                    Media = CF Worker → Telegram 公网图链；Site = 上游图片站公网域名，用来改写{" "}
+                    <code>127.0.0.1</code> 内网媒体地址。
                   </p>
                   <div className="admin-fields-2">
                     <div className="field">
@@ -799,11 +824,14 @@ export function SettingsPage({
                         id="mediaBase"
                         className="control mono"
                         value={mediaBase}
-                        placeholder="https://ciallo-telegram-media.xxx.workers.dev"
+                        placeholder="https://img.example.com"
                         onChange={(e) => setMediaBaseDraft(e.target.value)}
                         autoComplete="off"
                         spellCheck={false}
                       />
+                      <p className="footer-note">
+                        TG Worker / Pages 根域名。大厅分享、以及后台队列选「Media」时上传到此。
+                      </p>
                     </div>
                     <div className="field">
                       <div className="label-row">
@@ -818,6 +846,56 @@ export function SettingsPage({
                         autoComplete="off"
                         spellCheck={false}
                       />
+                      <p className="footer-note">仅上传需要；浏览公开图链可不填。</p>
+                    </div>
+                  </div>
+                  <div className="admin-fields-2">
+                    <div className="field">
+                      <div className="label-row">
+                        <label htmlFor="siteBase">Site Base URL</label>
+                      </div>
+                      <input
+                        id="siteBase"
+                        className="control mono"
+                        value={siteBase}
+                        placeholder="https://img.yuzu.gv.uy"
+                        onChange={(e) => setSiteBaseDraft(e.target.value)}
+                        autoComplete="off"
+                        spellCheck={false}
+                      />
+                      <p className="footer-note">
+                        上游图片站公网根域名。后台队列选「Site」时，把{" "}
+                        <code>http://127.0.0.1:8000/v1/media/...</code> 改写成{" "}
+                        <code>https://你的域名/v1/media/...</code>，不经过 TG。
+                      </p>
+                    </div>
+                    <div className="field">
+                      <div className="label-row">
+                        <label>后台队列储存位置</label>
+                      </div>
+                      <div className="segmented" role="group" aria-label="后台队列储存位置">
+                        <button
+                          type="button"
+                          className={`chip ${queueStorageMode === "site" ? "active" : ""}`}
+                          onClick={() => setQueueStorageModeDraft("site")}
+                          title="改写上游媒体 URL 到 Site Base，不上传 TG"
+                        >
+                          Site Base
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${queueStorageMode === "media" ? "active" : ""}`}
+                          onClick={() => setQueueStorageModeDraft("media")}
+                          title="下载上游图后上传 Media Worker（Telegram）"
+                        >
+                          Media Base
+                        </button>
+                      </div>
+                      <p className="footer-note">
+                        {queueStorageMode === "media"
+                          ? "Media：出图后上传 TG，图墙用 Worker 公网链（需配置 Media Base）。"
+                          : "Site：只改写链接到 Site Base，速度快；上游图站需公网可访问。"}
+                      </p>
                     </div>
                   </div>
                   <div className="admin-actions admin-actions-inline">

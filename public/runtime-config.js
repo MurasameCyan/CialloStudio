@@ -7,6 +7,8 @@ window.__CIALLO_RUNTIME__ = {
   masterPasswordSha256: "",
   mediaBase: "",
   mediaUploadToken: "",
+  siteBase: "",
+  queueStorageMode: "",
   communityMode: "http",
   communityApiBase: "/api/community",
   buildId: "",

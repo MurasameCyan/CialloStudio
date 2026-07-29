@@ -3,10 +3,14 @@ export type CialloRuntime = {
   masterUsername: string;
   /** 站长密码 SHA-256 hex；空 = 未从 .env 注入 */
   masterPasswordSha256: string;
-  /** CF Worker / Pages 媒体基址 */
+  /** CF Worker / Pages 媒体根域名 */
   mediaBase: string;
   /** 可选：媒体上传 Bearer token（非 Bot Token） */
   mediaUploadToken: string;
+  /** 上游图片站公网根域名（Site Base） */
+  siteBase: string;
+  /** 后台队列储存：media=TG / site=改写 */
+  queueStorageMode: string;
   /** 社区 API：mock（浏览器 localStorage）| http（Docker /data 持久化） */
   communityMode: "mock" | "http";
   /** 社区 API base，默认 /api/community */
@@ -39,6 +43,9 @@ function readRuntime(): CialloRuntime {
   const mediaBase = typeof raw?.mediaBase === "string" ? raw.mediaBase.trim() : "";
   const mediaUploadToken =
     typeof raw?.mediaUploadToken === "string" ? raw.mediaUploadToken.trim() : "";
+  const siteBase = typeof raw?.siteBase === "string" ? raw.siteBase.trim() : "";
+  const queueStorageMode =
+    typeof raw?.queueStorageMode === "string" ? raw.queueStorageMode.trim() : "";
   const modeRaw =
     typeof raw?.communityMode === "string" ? raw.communityMode.trim().toLowerCase() : "";
   // 默认 http；仅显式 mock 走浏览器 localStorage
@@ -59,6 +66,8 @@ function readRuntime(): CialloRuntime {
     masterPasswordSha256: hash,
     mediaBase,
     mediaUploadToken,
+    siteBase,
+    queueStorageMode,
     communityMode,
     communityApiBase,
     buildId,

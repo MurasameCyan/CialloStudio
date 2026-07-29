@@ -1,11 +1,19 @@
 /**
- * CF Worker 媒体客户端：上传到 Telegram（经 Worker），得到可公开访问的 /v1/media/:id URL。
- * 配置：window.__CIALLO_RUNTIME__.mediaBase / mediaUploadToken
- * 或 localStorage：ciallo-studio.media.base / ciallo-studio.media.uploadToken
+ * 媒体 / 站点基址客户端。
+ * - Media Base：CF Worker → Telegram，分享/持久化用公网 /v1/media/:id
+ * - Site Base：上游图片站点根域名（如 https://img.yuzu.gv.uy），用于改写 127.0.0.1 媒体链
+ * 两个 Base 都只填根域名（无路径）。
+ *
+ * 配置：window.__CIALLO_RUNTIME__ 或 localStorage
  */
 
 const LS_BASE = "ciallo-studio.media.base";
 const LS_TOKEN = "ciallo-studio.media.uploadToken";
+const LS_SITE = "ciallo-studio.media.siteBase";
+const LS_QUEUE_STORAGE = "ciallo-studio.media.queueStorage";
+
+/** 后台队列出图储存位置 */
+export type QueueStorageMode = "media" | "site";
 
 export type MediaUploadResult = {
   mediaId: string;
@@ -16,49 +24,106 @@ export type MediaUploadResult = {
   filename?: string;
 };
 
-function runtimeMedia(): { base?: string; uploadToken?: string } {
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"]);
+
+function runtimeMedia(): {
+  base?: string;
+  uploadToken?: string;
+  siteBase?: string;
+  queueStorageMode?: string;
+} {
   if (typeof window === "undefined") return {};
   const raw = window.__CIALLO_RUNTIME__ as
-    | { mediaBase?: string; mediaUploadToken?: string }
+    | {
+        mediaBase?: string;
+        mediaUploadToken?: string;
+        siteBase?: string;
+        queueStorageMode?: string;
+      }
     | undefined;
   return {
     base: typeof raw?.mediaBase === "string" ? raw.mediaBase.trim() : "",
     uploadToken: typeof raw?.mediaUploadToken === "string" ? raw.mediaUploadToken.trim() : "",
+    siteBase: typeof raw?.siteBase === "string" ? raw.siteBase.trim() : "",
+    queueStorageMode:
+      typeof raw?.queueStorageMode === "string" ? raw.queueStorageMode.trim() : "",
   };
 }
 
-/** 规范化媒体基址：补 https、去尾斜杠、去路径后缀 /healthz /v1 */
-export function normalizeMediaBase(raw: string): string {
+/**
+ * 规范化根域名基址：补 https、只保留 origin（去掉路径）。
+ * Media Base / Site Base 都只填到根域名。
+ */
+export function normalizeRootBase(raw: string): string {
   let s = raw.trim().replace(/\/+$/, "");
   if (!s) return "";
   if (!/^https?:\/\//i.test(s)) s = `https://${s}`;
   try {
     const u = new URL(s);
-    // 用户若误填 .../healthz 或 .../v1，剥掉
-    u.pathname = u.pathname
-      .replace(/\/+$/, "")
-      .replace(/\/healthz$/i, "")
-      .replace(/\/v1$/i, "");
-    if (u.pathname === "/") u.pathname = "";
-    return `${u.origin}${u.pathname}`.replace(/\/+$/, "");
+    return u.origin;
   } catch {
     return s.replace(/\/+$/, "");
   }
 }
 
+/** @deprecated 使用 normalizeRootBase；保留别名兼容旧调用 */
+export function normalizeMediaBase(raw: string): string {
+  return normalizeRootBase(raw);
+}
+
 export function getMediaBase(): string {
   try {
     const fromLs = localStorage.getItem(LS_BASE)?.trim() || "";
-    if (fromLs) return normalizeMediaBase(fromLs);
+    if (fromLs) return normalizeRootBase(fromLs);
   } catch {
     // ignore
   }
   const fromRuntime = runtimeMedia().base || "";
-  return normalizeMediaBase(fromRuntime);
+  return normalizeRootBase(fromRuntime);
 }
 
 export function setMediaBase(base: string): void {
-  localStorage.setItem(LS_BASE, normalizeMediaBase(base));
+  const next = normalizeRootBase(base);
+  if (!next) localStorage.removeItem(LS_BASE);
+  else localStorage.setItem(LS_BASE, next);
+}
+
+export function getSiteBase(): string {
+  try {
+    const fromLs = localStorage.getItem(LS_SITE)?.trim() || "";
+    if (fromLs) return normalizeRootBase(fromLs);
+  } catch {
+    // ignore
+  }
+  return normalizeRootBase(runtimeMedia().siteBase || "");
+}
+
+export function setSiteBase(base: string): void {
+  const next = normalizeRootBase(base);
+  if (!next) localStorage.removeItem(LS_SITE);
+  else localStorage.setItem(LS_SITE, next);
+}
+
+export function normalizeQueueStorageMode(value: unknown): QueueStorageMode {
+  return value === "media" ? "media" : "site";
+}
+
+export function getQueueStorageMode(): QueueStorageMode {
+  try {
+    const fromLs = localStorage.getItem(LS_QUEUE_STORAGE);
+    if (fromLs === "media" || fromLs === "site") return fromLs;
+  } catch {
+    // ignore
+  }
+  const fromRuntime = runtimeMedia().queueStorageMode;
+  if (fromRuntime === "media" || fromRuntime === "site") return fromRuntime;
+  // 有 Media 无 Site 时默认走 TG；否则默认 Site 改写
+  if (getMediaBase() && !getSiteBase()) return "media";
+  return "site";
+}
+
+export function setQueueStorageMode(mode: QueueStorageMode): void {
+  localStorage.setItem(LS_QUEUE_STORAGE, normalizeQueueStorageMode(mode));
 }
 
 export function getMediaUploadToken(): string {
@@ -78,6 +143,53 @@ export function setMediaUploadToken(token: string): void {
 
 export function isMediaConfigured(): boolean {
   return Boolean(getMediaBase());
+}
+
+/**
+ * 把上游内网媒体 URL 改写成 Site Base 公网地址。
+ * 例：http://127.0.0.1:8000/v1/media/images/img_xxx
+ *   → https://img.yuzu.gv.uy/v1/media/images/img_xxx
+ */
+export function rewriteMediaUrlToSiteBase(rawUrl: string, siteBase?: string): string {
+  const value = String(rawUrl || "").trim();
+  if (!value || value.startsWith("data:") || value.startsWith("blob:")) return value;
+  const base = normalizeRootBase(siteBase || getSiteBase());
+  if (!base) return value;
+
+  try {
+    const parsed = new URL(value, base);
+    const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
+    const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
+    const isMediaPath =
+      path.includes("/v1/media/") ||
+      path.startsWith("/media/") ||
+      path.includes("/images/");
+    if (isLoopback || isMediaPath) {
+      return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+    }
+    return value;
+  } catch {
+    const replaced = value
+      .replace(/^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "")
+      .replace(/^\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?/i, "");
+    if (replaced.startsWith("/")) return `${base}${replaced}`;
+    return value;
+  }
+}
+
+/** 后台队列任务创建时附带的储存配置 */
+export function getQueueStorageConfig(): {
+  storageMode: QueueStorageMode;
+  siteBase: string;
+  mediaBase: string;
+  mediaUploadToken: string;
+} {
+  return {
+    storageMode: getQueueStorageMode(),
+    siteBase: getSiteBase(),
+    mediaBase: getMediaBase(),
+    mediaUploadToken: getMediaUploadToken(),
+  };
 }
 
 async function blobFromSource(source: string | Blob): Promise<Blob> {

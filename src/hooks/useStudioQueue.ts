@@ -2,6 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, generateImage, rewriteMediaUrl } from "@/lib/api";
 import { normalizeResolutionForModel } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
+import {
+  getQueueStorageConfig,
+  rewriteMediaUrlToSiteBase,
+} from "@/lib/media/client";
 import { runPool } from "@/lib/runPool";
 import { clampConcurrency, type StudioSettings } from "@/lib/settings";
 import {
@@ -83,6 +87,15 @@ type QueueApi = {
   clear: () => void;
 };
 
+function resolveServerTaskImageUrl(raw?: string): string | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  const value = raw.trim();
+  if (value.startsWith("data:") || value.startsWith("blob:")) return value;
+  // 服务端已按 storageMode 固化；若仍是 loopback，前端用 Site Base 再兜一次
+  const rewritten = rewriteMediaUrlToSiteBase(value);
+  return rewritten || value;
+}
+
 function toServerQueueItem(task: ServerTask): ServerQueueItem {
   return {
     id: task.id,
@@ -96,7 +109,7 @@ function toServerQueueItem(task: ServerTask): ServerQueueItem {
     batchId: task.batchId,
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
-    imageUrl: task.imageUrl,
+    imageUrl: resolveServerTaskImageUrl(task.imageUrl),
   };
 }
 
@@ -158,7 +171,15 @@ export function useStudioQueue(
       promptMode: "lines",
     }),
   );
-  const [jobs, setJobs] = useState<StudioJob[]>(() => loadJobs());
+  const [jobs, setJobs] = useState<StudioJob[]>(() =>
+    loadJobs().map((job) => {
+      const imageUrl = resolveServerTaskImageUrl(job.imageUrl) || job.imageUrl;
+      const openUrl = resolveServerTaskImageUrl(job.openUrl) || job.openUrl;
+      return imageUrl === job.imageUrl && openUrl === job.openUrl
+        ? job
+        : { ...job, imageUrl, openUrl };
+    }),
+  );
   const [running, setRunning] = useState(false);
   const [inFlight, setInFlight] = useState(0);
   const [serverMode, setServerMode] = useState(false);
@@ -315,16 +336,16 @@ export function useStudioQueue(
       prev.map((item) => {
         if (item.id !== clientJobId) return item;
         if (task.status === "done") {
+          const imageUrl = resolveServerTaskImageUrl(task.imageUrl);
+          const openUrl =
+            imageUrl && !imageUrl.startsWith("blob:") && !imageUrl.startsWith("data:")
+              ? imageUrl
+              : item.openUrl;
           return {
             ...item,
             status: "done",
-            imageUrl: task.imageUrl,
-            openUrl:
-              task.imageUrl &&
-              !task.imageUrl.startsWith("blob:") &&
-              !task.imageUrl.startsWith("data:")
-                ? task.imageUrl
-                : item.openUrl,
+            imageUrl,
+            openUrl,
             error: undefined,
             finishedAt: task.finishedAt || Date.now(),
             serverTaskId: task.id,
@@ -707,6 +728,21 @@ export function useStudioQueue(
           throw new ApiError(400, "当前为图生图模型，请先上传参考图", "missing_reference_image");
         }
 
+        const storage = getQueueStorageConfig();
+        if (storage.storageMode === "media" && !storage.mediaBase) {
+          throw new ApiError(
+            400,
+            "后台队列选了 Media Base，请先在管理页填写 Media Base（TG Worker 根域名）",
+            "missing_media_base",
+          );
+        }
+        if (storage.storageMode === "site" && !storage.siteBase && !storage.mediaBase) {
+          throw new ApiError(
+            400,
+            "后台队列选了 Site Base，请先在管理页填写 Site Base（上游图站根域名）",
+            "missing_site_base",
+          );
+        }
         const created = await createServerTasks({
           baseUrl: currentSettings.baseUrl,
           apiKey,
@@ -716,6 +752,10 @@ export function useStudioQueue(
           autoRetry,
           referenceImageUrl: ref || undefined,
           batchId: batch[0]?.batchId,
+          storageMode: storage.storageMode,
+          siteBase: storage.siteBase || undefined,
+          mediaBase: storage.mediaBase || undefined,
+          mediaUploadToken: storage.mediaUploadToken || undefined,
           jobs: batch.map((j) => ({
             prompt: j.prompt,
             clientJobId: j.id,

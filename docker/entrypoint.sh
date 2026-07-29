@@ -44,10 +44,20 @@ MASTER_USER_JS="$(printf '%s' "$MASTER_USER" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 # 可选：CF Worker 媒体基址 / 上传 token（非 Telegram Bot Token）
 MEDIA_BASE="$(printf '%s' "${CIALLO_MEDIA_BASE:-}" | tr -d '\r')"
 MEDIA_UPLOAD_TOKEN="$(printf '%s' "${CIALLO_MEDIA_UPLOAD_TOKEN:-}" | tr -d '\r')"
+SITE_BASE="$(printf '%s' "${CIALLO_SITE_BASE:-}" | tr -d '\r')"
+QUEUE_STORAGE_MODE="$(printf '%s' "${CIALLO_QUEUE_STORAGE_MODE:-}" | tr -d '\r' | tr '[:upper:]' '[:lower:]')"
 MEDIA_BASE_JS="$(printf '%s' "$MEDIA_BASE" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 MEDIA_TOKEN_JS="$(printf '%s' "$MEDIA_UPLOAD_TOKEN" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+SITE_BASE_JS="$(printf '%s' "$SITE_BASE" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+QUEUE_STORAGE_MODE_JS="$(printf '%s' "$QUEUE_STORAGE_MODE" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 if [ -n "$MEDIA_BASE" ]; then
   echo "[ciallo] media worker base: ${MEDIA_BASE}"
+fi
+if [ -n "$SITE_BASE" ]; then
+  echo "[ciallo] site base: ${SITE_BASE}"
+fi
+if [ -n "$QUEUE_STORAGE_MODE" ]; then
+  echo "[ciallo] queue storage mode: ${QUEUE_STORAGE_MODE}"
 fi
 
 # 社区持久化：Docker 默认 http 模式（数据在 /data volume）
@@ -89,6 +99,8 @@ window.__CIALLO_RUNTIME__ = {
   masterPasswordSha256: "${MASTER_HASH}",
   mediaBase: "${MEDIA_BASE_JS}",
   mediaUploadToken: "${MEDIA_TOKEN_JS}",
+  siteBase: "${SITE_BASE_JS}",
+  queueStorageMode: "${QUEUE_STORAGE_MODE_JS}",
   communityMode: "${COMMUNITY_MODE}",
   communityApiBase: "${COMMUNITY_API_BASE_JS}",
   buildId: "${BUILD_ID_JS}",

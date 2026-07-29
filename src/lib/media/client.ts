@@ -1,7 +1,7 @@
 /**
  * 媒体 / 站点基址客户端。
  * - Media Base：CF Worker → Telegram，分享/持久化用公网 /v1/media/:id
- * - Site Base：上游图片站点根域名（如 https://img.yuzu.gv.uy），用于改写 127.0.0.1 媒体链
+ * - Site Base：上游图片站点根域名（如 https://img.example.com），用于改写 127.0.0.1 媒体链
  * 两个 Base 都只填根域名（无路径）。
  *
  * 配置：window.__CIALLO_RUNTIME__ 或 localStorage
@@ -148,7 +148,7 @@ export function isMediaConfigured(): boolean {
 /**
  * 把上游内网媒体 URL 改写成 Site Base 公网地址。
  * 例：http://127.0.0.1:8000/v1/media/images/img_xxx
- *   → https://img.yuzu.gv.uy/v1/media/images/img_xxx
+ *   → https://img.example.com/v1/media/images/img_xxx
  */
 export function rewriteMediaUrlToSiteBase(rawUrl: string, siteBase?: string): string {
   const value = String(rawUrl || "").trim();

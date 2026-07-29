@@ -858,7 +858,7 @@ export function SettingsPage({
                         id="siteBase"
                         className="control mono"
                         value={siteBase}
-                        placeholder="https://img.yuzu.gv.uy"
+                        placeholder="https://img.example.com"
                         onChange={(e) => setSiteBaseDraft(e.target.value)}
                         autoComplete="off"
                         spellCheck={false}

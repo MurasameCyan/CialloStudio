@@ -44,15 +44,15 @@ function assert(cond, msg) {
   }
 }
 
-assert(normalizeRootBase("https://img.yuzu.gv.uy/v1") === "https://img.yuzu.gv.uy", "strip /v1");
-assert(normalizeRootBase("img.yuzu.gv.uy") === "https://img.yuzu.gv.uy", "add https");
-assert(normalizeRootBase("https://img.yuzu.gv.uy/") === "https://img.yuzu.gv.uy", "trim slash");
+assert(normalizeRootBase("https://img.example.com/v1") === "https://img.example.com", "strip /v1");
+assert(normalizeRootBase("img.example.com") === "https://img.example.com", "add https");
+assert(normalizeRootBase("https://img.example.com/") === "https://img.example.com", "trim slash");
 
 const raw = "http://127.0.0.1:8000/v1/media/images/img_kQj6Y6e6JjWWIjAg0YUMSqSp-nhUycLm";
-const site = "https://img.yuzu.gv.uy";
+const site = "https://img.example.com";
 assert(
   rewriteMediaUrlToSiteBase(raw, site) ===
-    "https://img.yuzu.gv.uy/v1/media/images/img_kQj6Y6e6JjWWIjAg0YUMSqSp-nhUycLm",
+    "https://img.example.com/v1/media/images/img_kQj6Y6e6JjWWIjAg0YUMSqSp-nhUycLm",
   "rewrite loopback media",
 );
 assert(rewriteMediaUrlToSiteBase("data:image/png;base64,aaa", site).startsWith("data:"), "keep data");

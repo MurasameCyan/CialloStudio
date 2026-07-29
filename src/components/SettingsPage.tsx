@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { AdminTaskQueuePanel } from "@/components/AdminTaskQueuePanel";
 import { LogPanel } from "@/components/LogPanel";
 import { UserPoolPanel } from "@/components/UserPoolPanel";
 import {
@@ -39,7 +40,7 @@ import {
   saveSettings,
 } from "@/lib/settings";
 
-type AdminSection = "api" | "users";
+type AdminSection = "api" | "users" | "tasks";
 
 type Props = {
   settings: StudioSettings;
@@ -381,7 +382,7 @@ export function SettingsPage({
             <h2 className="panel-title">{isStationMaster ? "控制台" : "设置"}</h2>
             <p className="panel-desc" style={{ marginTop: 6 }}>
               {isStationMaster ? (
-                <>站长 @{communityUser?.username ?? getMasterUsername()} · 接口 / 用户池 / 媒体</>
+                <>站长 @{communityUser?.username ?? getMasterUsername()} · 接口 / 用户池 / 后台任务 / 媒体</>
               ) : (
                 <>@{communityUser?.username ?? "用户"} · 接口与生成</>
               )}
@@ -454,6 +455,15 @@ export function SettingsPage({
             >
               用户池
             </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={section === "tasks"}
+              className={`admin-section-switch-btn ${section === "tasks" ? "active" : ""}`}
+              onClick={() => setSection("tasks")}
+            >
+              后台任务
+            </button>
           </div>
         ) : null}
 
@@ -462,6 +472,10 @@ export function SettingsPage({
             管理社区账号池。站长账号由部署 <code>.env</code> 配置（
             <code>CIALLO_MASTER_USERNAME</code> / <code>CIALLO_MASTER_PASSWORD</code>）。
           </p>
+        ) : isStationMaster && section === "tasks" ? (
+          <p className="panel-desc admin-users-hint">
+            管理全站服务端后台队列：查看进度、取消进行中、清理历史记录。
+          </p>
         ) : (
           connectionStatusRow
         )}
@@ -469,6 +483,12 @@ export function SettingsPage({
 
       {isStationMaster && section === "users" ? (
         <UserPoolPanel
+          communityUser={communityUser}
+          communityLoading={communityLoading}
+          onNeedLogin={onNeedLogin}
+        />
+      ) : isStationMaster && section === "tasks" ? (
+        <AdminTaskQueuePanel
           communityUser={communityUser}
           communityLoading={communityLoading}
           onNeedLogin={onNeedLogin}

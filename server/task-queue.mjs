@@ -1083,6 +1083,114 @@ function listTasksForUser(user, { status, limit = 50 } = {}) {
   return all;
 }
 
+function requireAdmin(user) {
+  if (user?.role !== "admin") {
+    throw Object.assign(new Error("仅站长可管理全站后台任务"), {
+      status: 403,
+      code: "forbidden",
+    });
+  }
+}
+
+/**
+ * 站长：全站任务列表（分页）
+ * q 匹配 ownerName / prompt / id / model
+ */
+function listAllTasksAdmin(user, { status, q = "", limit = 20, offset = 0 } = {}) {
+  requireAdmin(user);
+  const lim = clampInt(limit, 1, 100, 20);
+  const off = Math.max(0, Math.floor(Number(offset)) || 0);
+  const query = String(q || "").trim().toLowerCase();
+  const filtered = [...tasks.values()]
+    .filter((t) => (status ? t.status === status : true))
+    .filter((t) => {
+      if (!query) return true;
+      const hay = [
+        t.id,
+        t.ownerId,
+        t.ownerName,
+        t.prompt,
+        t.model,
+        t.batchId,
+        t.clientJobId,
+        t.error,
+      ]
+        .map((x) => String(x || "").toLowerCase())
+        .join("\n");
+      return hay.includes(query);
+    })
+    .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  const total = filtered.length;
+  const items = filtered.slice(off, off + lim).map(publicTask);
+  const byStatus = { queued: 0, running: 0, done: 0, failed: 0, cancelled: 0 };
+  for (const t of tasks.values()) {
+    if (byStatus[t.status] != null) byStatus[t.status] += 1;
+  }
+  return {
+    items,
+    total,
+    limit: lim,
+    offset: off,
+    hasMore: off + items.length < total,
+    byStatus,
+    stats: queueStats(),
+  };
+}
+
+/** 站长：全站批量取消 / 清理 */
+function clearAllTasksAdmin(user, mode = "clear_failed") {
+  requireAdmin(user);
+  const all = [...tasks.values()];
+  if (mode === "cancel_all") {
+    let cancelled = 0;
+    for (const t of all) {
+      if (t.status === "queued" || t.status === "running") {
+        cancelTaskForUser(user, t.id);
+        cancelled += 1;
+      }
+    }
+    schedulePersist();
+    return {
+      mode,
+      cancelled,
+      removed: 0,
+      ...listAllTasksAdmin(user, { limit: 20, offset: 0 }),
+    };
+  }
+
+  if (mode === "clear_all") {
+    for (const t of all) {
+      if (t.status === "queued" || t.status === "running") {
+        cancelTaskForUser(user, t.id);
+      }
+    }
+  }
+
+  let removed = 0;
+  const fresh = [...tasks.values()];
+  for (const t of fresh) {
+    let drop = false;
+    if (mode === "clear_failed") {
+      drop = t.status === "failed" || t.status === "cancelled";
+    } else if (mode === "clear_done") {
+      drop = t.status === "done";
+    } else if (mode === "clear_all") {
+      drop = true;
+    }
+    if (drop) {
+      removeTaskRecord(t.id);
+      removed += 1;
+    }
+  }
+  schedulePersist();
+  return {
+    mode,
+    cancelled: 0,
+    removed,
+    ...listAllTasksAdmin(user, { limit: 20, offset: 0 }),
+  };
+}
+
 function getTaskForUser(user, id) {
   const task = tasks.get(id);
   if (!task) return null;
@@ -1254,6 +1362,25 @@ async function handle(req, res) {
         items: listTasksForUser(user, { status, limit }),
         stats: queueStats(),
       });
+      return;
+    }
+
+    // 站长：全站后台任务
+    if (req.method === "GET" && pathname === "/admin/tasks") {
+      const status = url.searchParams.get("status") || undefined;
+      const q = url.searchParams.get("q") || "";
+      const limit = url.searchParams.get("limit");
+      const offset = url.searchParams.get("offset");
+      sendJson(res, 200, listAllTasksAdmin(user, { status, q, limit, offset }));
+      return;
+    }
+
+    if (req.method === "POST" && pathname === "/admin/tasks/clear") {
+      const body = (await readBody(req)) || {};
+      const modeRaw = String(body.mode || "clear_failed");
+      const allowed = new Set(["cancel_all", "clear_failed", "clear_all", "clear_done"]);
+      const mode = allowed.has(modeRaw) ? modeRaw : "clear_failed";
+      sendJson(res, 200, clearAllTasksAdmin(user, mode));
       return;
     }
 

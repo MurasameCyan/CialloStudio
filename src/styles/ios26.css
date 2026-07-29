@@ -3734,6 +3734,93 @@ a {
   flex-wrap: nowrap;
 }
 
+/* 站长：全站后台任务 */
+.admin-task-toolbar {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.admin-task-search {
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  align-items: center;
+}
+
+.admin-task-search .control {
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-task-status-seg {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-task-row {
+  align-items: flex-start;
+}
+
+.admin-task-thumb {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--bg-elevated, rgba(127, 127, 127, 0.12));
+  border: 1px solid var(--separator);
+  display: grid;
+  place-items: center;
+}
+
+.admin-task-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.admin-task-thumb-empty {
+  font-size: 11px;
+  color: var(--label-secondary);
+  text-align: center;
+  padding: 4px;
+  line-height: 1.2;
+}
+
+.admin-task-main {
+  flex: 1;
+}
+
+.admin-task-prompt {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--label-primary);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.admin-task-error {
+  margin: 2px 0 0;
+  color: var(--system-red, #ff453a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 56ch;
+}
+
+.admin-task-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
 .user-table {
   display: flex;
   flex-direction: column;
@@ -4091,6 +4178,19 @@ a {
 
   .user-admin-toolbar .segmented {
     width: 100%;
+  }
+
+  .admin-task-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-task-status-seg {
+    justify-content: flex-start;
+  }
+
+  .admin-task-row {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .user-row {

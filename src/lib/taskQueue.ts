@@ -173,6 +173,54 @@ export async function getServerQueueStats(): Promise<ServerQueueStats> {
   return taskHttp("/stats");
 }
 
+/** 站长：全站后台任务分页列表 */
+export type AdminTaskListResult = {
+  items: ServerTask[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+  byStatus: {
+    queued: number;
+    running: number;
+    done: number;
+    failed: number;
+    cancelled: number;
+  };
+  stats: ServerQueueStats;
+};
+
+export async function listAdminServerTasks(options?: {
+  status?: ServerTaskStatus;
+  q?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<AdminTaskListResult> {
+  const params = new URLSearchParams();
+  if (options?.status) params.set("status", options.status);
+  if (options?.q?.trim()) params.set("q", options.q.trim());
+  if (options?.limit != null) params.set("limit", String(options.limit));
+  if (options?.offset != null) params.set("offset", String(options.offset));
+  const suffix = params.toString() ? `?${params}` : "";
+  return taskHttp(`/admin/tasks${suffix}`);
+}
+
+export type AdminTaskClearResult = AdminTaskListResult & {
+  mode: ServerQueueClearMode;
+  cancelled?: number;
+  removed?: number;
+};
+
+/** 站长：全站批量取消 / 清理 */
+export async function clearAdminServerTasks(
+  mode: ServerQueueClearMode,
+): Promise<AdminTaskClearResult> {
+  return taskHttp("/admin/tasks/clear", {
+    method: "POST",
+    body: JSON.stringify({ mode }),
+  });
+}
+
 export function isServerTaskTerminal(status: ServerTaskStatus): boolean {
   return status === "done" || status === "failed" || status === "cancelled";
 }

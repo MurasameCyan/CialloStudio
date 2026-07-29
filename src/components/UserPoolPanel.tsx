@@ -119,9 +119,13 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
     setMessage("");
     setOk(null);
     try {
+      // 全局并发改在「后台任务」页配置，保存用户设置时保留现网值
       const [cd, qp] = await Promise.all([
         communityApi.setShareCooldown(cooldownDraft),
-        communityApi.setQueuePolicy(queuePolicyDraft),
+        communityApi.setQueuePolicy({
+          ...queuePolicyDraft,
+          globalConcurrency: queuePolicy.globalConcurrency,
+        }),
       ]);
       setCooldown(cd);
       setCooldownDraft(cd);
@@ -129,7 +133,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       setQueuePolicyDraft(qp);
       setOk(true);
       setMessage(
-        `已保存用户设置：冷却 普通${cd.user}s/VIP${cd.vip}s · 排队 普通${qp.userLimit}/VIP${qp.vipLimit} · 并发 普通${qp.userConcurrency}/VIP${qp.vipConcurrency}/站长${qp.adminConcurrency} · 全局并发 ${qp.globalConcurrency} · 超时 普通${qp.userTaskTimeoutMin}/VIP${qp.vipTaskTimeoutMin}/站长${qp.adminTaskTimeoutMin}min · 普通后台 ${qp.userBackgroundEnabled ? "开" : "关"}`,
+        `已保存用户设置：冷却 普通${cd.user}s/VIP${cd.vip}s · 排队 普通${qp.userLimit}/VIP${qp.vipLimit} · 并发 普通${qp.userConcurrency}/VIP${qp.vipConcurrency}/站长${qp.adminConcurrency} · 超时 普通${qp.userTaskTimeoutMin}/VIP${qp.vipTaskTimeoutMin}/站长${qp.adminTaskTimeoutMin}min · 普通后台 ${qp.userBackgroundEnabled ? "开" : "关"}`,
       );
       log("ok", "用户设置已保存", { cooldown: cd, queuePolicy: qp });
     } catch (e) {
@@ -324,9 +328,9 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
             <div className="user-settings-toggle-main">
               <div className="admin-block-label">用户设置</div>
               <p className="footer-note" style={{ marginTop: 4 }}>
-                分享冷却 · 队列策略 · 全局并发 · 任务超时 · 普通后台
+                分享冷却 · 队列策略 · 任务超时 · 普通后台
                 {!userSettingsOpen
-                  ? ` · 冷却 ${cooldown.user}/${cooldown.vip}s · 排队 ${queuePolicy.userLimit}/${queuePolicy.vipLimit} · 并发 ${queuePolicy.userConcurrency}/${queuePolicy.vipConcurrency}/${queuePolicy.adminConcurrency} · 全局 ${queuePolicy.globalConcurrency} · 超时 ${queuePolicy.userTaskTimeoutMin}/${queuePolicy.vipTaskTimeoutMin}/${queuePolicy.adminTaskTimeoutMin}min · 后台 ${queuePolicy.userBackgroundEnabled ? "开" : "关"}`
+                  ? ` · 冷却 ${cooldown.user}/${cooldown.vip}s · 排队 ${queuePolicy.userLimit}/${queuePolicy.vipLimit} · 并发 ${queuePolicy.userConcurrency}/${queuePolicy.vipConcurrency}/${queuePolicy.adminConcurrency} · 超时 ${queuePolicy.userTaskTimeoutMin}/${queuePolicy.vipTaskTimeoutMin}/${queuePolicy.adminTaskTimeoutMin}min · 后台 ${queuePolicy.userBackgroundEnabled ? "开" : "关"}`
                   : null}
               </p>
             </div>
@@ -397,10 +401,10 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
               <p className="footer-note" style={{ marginTop: 4 }}>
                 排队上限：普通 {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 站长不限。创作台并发：普通{" "}
                 {queuePolicy.userConcurrency} · VIP {queuePolicy.vipConcurrency} · 站长{" "}
-                {queuePolicy.adminConcurrency}。全局并发 {queuePolicy.globalConcurrency}。超时：普通{" "}
-                {queuePolicy.userTaskTimeoutMin}min · VIP {queuePolicy.vipTaskTimeoutMin}min · 站长{" "}
+                {queuePolicy.adminConcurrency}。超时：普通 {queuePolicy.userTaskTimeoutMin}min · VIP{" "}
+                {queuePolicy.vipTaskTimeoutMin}min · 站长{" "}
                 {queuePolicy.adminTaskTimeoutMin === 0 ? "无限" : `${queuePolicy.adminTaskTimeoutMin}min`}
-                。普通后台 {queuePolicy.userBackgroundEnabled ? "开" : "关"}。
+                。普通后台 {queuePolicy.userBackgroundEnabled ? "开" : "关"}。全站全局并发请到「后台任务」页配置。
               </p>
 
               <div className="admin-block-label" style={{ marginTop: 12 }}>
@@ -505,32 +509,6 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                     }
                   />
                 </div>
-              </div>
-
-              <div className="admin-block-label" style={{ marginTop: 14 }}>
-                全局并发（全站后台任务）
-              </div>
-              <p className="footer-note" style={{ marginTop: 4 }}>
-                全站同时 running 的后台任务顶棚。后台任务页「全局并发」显示 当前/此值。默认 8，范围 1–32。
-              </p>
-              <div className="field" style={{ marginTop: 8, maxWidth: 220 }}>
-                <div className="label-row">
-                  <label htmlFor="qc-global">全局并发</label>
-                </div>
-                <input
-                  id="qc-global"
-                  className="control"
-                  type="number"
-                  min={1}
-                  max={32}
-                  value={queuePolicyDraft.globalConcurrency}
-                  onChange={(e) =>
-                    setQueuePolicyDraft((p) => ({
-                      ...p,
-                      globalConcurrency: Number(e.target.value),
-                    }))
-                  }
-                />
               </div>
 
               <div className="admin-block-label" style={{ marginTop: 14 }}>

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { communityApi } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
+import { DEFAULT_QUEUE_POLICY } from "@/lib/community/types";
 import { rewriteMediaUrlToSiteBase } from "@/lib/media/client";
 import { log } from "@/lib/logger";
 import {
@@ -88,6 +90,62 @@ export function AdminTaskQueuePanel({
   const [page, setPage] = useState(0);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [bulkBusy, setBulkBusy] = useState<string | null>(null);
+  const [globalConcurrency, setGlobalConcurrency] = useState(
+    DEFAULT_QUEUE_POLICY.globalConcurrency,
+  );
+  const [globalConcurrencyDraft, setGlobalConcurrencyDraft] = useState(
+    DEFAULT_QUEUE_POLICY.globalConcurrency,
+  );
+  const [globalBusy, setGlobalBusy] = useState(false);
+
+  const loadGlobalConcurrency = useCallback(async () => {
+    if (!isAdmin) return;
+    try {
+      const policy = await communityApi.getQueuePolicy();
+      setGlobalConcurrency(policy.globalConcurrency);
+      setGlobalConcurrencyDraft(policy.globalConcurrency);
+    } catch (e) {
+      log("warn", "拉取全局并发失败", e instanceof Error ? e.message : String(e));
+    }
+  }, [isAdmin]);
+
+  const saveGlobalConcurrency = useCallback(async () => {
+    if (!isAdmin || globalBusy) return;
+    setGlobalBusy(true);
+    setMessage("");
+    setOk(null);
+    try {
+      const next = await communityApi.setQueuePolicy({
+        globalConcurrency: globalConcurrencyDraft,
+      });
+      setGlobalConcurrency(next.globalConcurrency);
+      setGlobalConcurrencyDraft(next.globalConcurrency);
+      setOk(true);
+      setMessage(`已保存全局并发：${next.globalConcurrency}`);
+      log("ok", "全局并发已保存", next.globalConcurrency);
+      // 刷新列表以同步 KPI 顶棚
+      const res = await listAdminServerTasks({
+        status: statusFilter === "all" ? undefined : statusFilter,
+        q: query,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      });
+      setItems(res.items);
+      setMeta({
+        total: res.total,
+        limit: res.limit,
+        offset: res.offset,
+        hasMore: res.hasMore,
+        byStatus: res.byStatus,
+        stats: res.stats,
+      });
+    } catch (e) {
+      setOk(false);
+      setMessage(e instanceof Error ? e.message : "保存全局并发失败");
+    } finally {
+      setGlobalBusy(false);
+    }
+  }, [globalBusy, globalConcurrencyDraft, isAdmin, page, query, statusFilter]);
 
   const load = useCallback(async () => {
     if (!isAdmin) {
@@ -114,6 +172,7 @@ export function AdminTaskQueuePanel({
         byStatus: res.byStatus,
         stats: res.stats,
       });
+      void loadGlobalConcurrency();
     } catch (e) {
       const msg =
         e instanceof TaskQueueError
@@ -128,7 +187,7 @@ export function AdminTaskQueuePanel({
     } finally {
       setLoading(false);
     }
-  }, [isAdmin, statusFilter, query, page]);
+  }, [isAdmin, statusFilter, query, page, loadGlobalConcurrency]);
 
   useEffect(() => {
     void load();
@@ -317,10 +376,45 @@ export function AdminTaskQueuePanel({
           <span className="admin-status-label">全局并发</span>
           <strong
             className="admin-status-value"
-            title="当前 running / 站长在用户池配置的全站顶棚"
+            title="当前 running / 全站顶棚（本页可改）"
           >
-            {meta?.stats?.runningCount ?? 0}/{meta?.stats?.concurrencyLimit ?? "—"}
+            {meta?.stats?.runningCount ?? 0}/
+            {meta?.stats?.concurrencyLimit ?? globalConcurrency ?? "—"}
           </strong>
+        </div>
+      </div>
+
+      <div className="user-cooldown-card admin-task-global-card">
+        <div className="user-cooldown-head">
+          <div>
+            <div className="admin-block-label">全局并发（全站后台任务）</div>
+            <p className="footer-note" style={{ marginTop: 4 }}>
+              全站同时 running 的后台任务顶棚。上方 KPI 显示 当前/此值。默认 8，范围 1–32。当前生效：
+              {globalConcurrency}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={globalBusy || loading}
+            onClick={() => void saveGlobalConcurrency()}
+          >
+            {globalBusy ? "保存中…" : "保存"}
+          </button>
+        </div>
+        <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
+          <div className="label-row">
+            <label htmlFor="admin-qc-global">全局并发</label>
+          </div>
+          <input
+            id="admin-qc-global"
+            className="control"
+            type="number"
+            min={1}
+            max={32}
+            value={globalConcurrencyDraft}
+            onChange={(e) => setGlobalConcurrencyDraft(Number(e.target.value))}
+          />
         </div>
       </div>
 

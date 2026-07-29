@@ -129,7 +129,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       setQueuePolicyDraft(qp);
       setOk(true);
       setMessage(
-        `已保存用户设置：冷却 普通${cd.user}s/VIP${cd.vip}s · 排队 普通${qp.userLimit}/VIP${qp.vipLimit} · 并发 普通${qp.userConcurrency}/VIP${qp.vipConcurrency}/站长${qp.adminConcurrency} · 普通后台 ${qp.userBackgroundEnabled ? "开" : "关"}`,
+        `已保存用户设置：冷却 普通${cd.user}s/VIP${cd.vip}s · 排队 普通${qp.userLimit}/VIP${qp.vipLimit} · 并发 普通${qp.userConcurrency}/VIP${qp.vipConcurrency}/站长${qp.adminConcurrency} · 全局并发 ${qp.globalConcurrency} · 超时 普通${qp.userTaskTimeoutMin}/VIP${qp.vipTaskTimeoutMin}/站长${qp.adminTaskTimeoutMin}min · 普通后台 ${qp.userBackgroundEnabled ? "开" : "关"}`,
       );
       log("ok", "用户设置已保存", { cooldown: cd, queuePolicy: qp });
     } catch (e) {
@@ -324,9 +324,9 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
             <div className="user-settings-toggle-main">
               <div className="admin-block-label">用户设置</div>
               <p className="footer-note" style={{ marginTop: 4 }}>
-                分享冷却 · 队列策略 · 并发上限 · 普通后台
+                分享冷却 · 队列策略 · 全局并发 · 任务超时 · 普通后台
                 {!userSettingsOpen
-                  ? ` · 冷却 ${cooldown.user}/${cooldown.vip}s · 排队 ${queuePolicy.userLimit}/${queuePolicy.vipLimit} · 并发 ${queuePolicy.userConcurrency}/${queuePolicy.vipConcurrency}/${queuePolicy.adminConcurrency} · 后台 ${queuePolicy.userBackgroundEnabled ? "开" : "关"}`
+                  ? ` · 冷却 ${cooldown.user}/${cooldown.vip}s · 排队 ${queuePolicy.userLimit}/${queuePolicy.vipLimit} · 并发 ${queuePolicy.userConcurrency}/${queuePolicy.vipConcurrency}/${queuePolicy.adminConcurrency} · 全局 ${queuePolicy.globalConcurrency} · 超时 ${queuePolicy.userTaskTimeoutMin}/${queuePolicy.vipTaskTimeoutMin}/${queuePolicy.adminTaskTimeoutMin}min · 后台 ${queuePolicy.userBackgroundEnabled ? "开" : "关"}`
                   : null}
               </p>
             </div>
@@ -395,10 +395,12 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
             <div className="user-settings-section">
               <div className="admin-block-label">服务端队列策略</div>
               <p className="footer-note" style={{ marginTop: 4 }}>
-                排队上限：普通 {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 站长不限。并发上限：普通{" "}
+                排队上限：普通 {queuePolicy.userLimit} · VIP {queuePolicy.vipLimit} · 站长不限。创作台并发：普通{" "}
                 {queuePolicy.userConcurrency} · VIP {queuePolicy.vipConcurrency} · 站长{" "}
-                {queuePolicy.adminConcurrency}。普通后台{" "}
-                {queuePolicy.userBackgroundEnabled ? "开" : "关"}。
+                {queuePolicy.adminConcurrency}。全局并发 {queuePolicy.globalConcurrency}。超时：普通{" "}
+                {queuePolicy.userTaskTimeoutMin}min · VIP {queuePolicy.vipTaskTimeoutMin}min · 站长{" "}
+                {queuePolicy.adminTaskTimeoutMin === 0 ? "无限" : `${queuePolicy.adminTaskTimeoutMin}min`}
+                。普通后台 {queuePolicy.userBackgroundEnabled ? "开" : "关"}。
               </p>
 
               <div className="admin-block-label" style={{ marginTop: 12 }}>
@@ -499,6 +501,98 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
                       setQueuePolicyDraft((p) => ({
                         ...p,
                         adminConcurrency: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="admin-block-label" style={{ marginTop: 14 }}>
+                全局并发（全站后台任务）
+              </div>
+              <p className="footer-note" style={{ marginTop: 4 }}>
+                全站同时 running 的后台任务顶棚。后台任务页「全局并发」显示 当前/此值。默认 8，范围 1–32。
+              </p>
+              <div className="field" style={{ marginTop: 8, maxWidth: 220 }}>
+                <div className="label-row">
+                  <label htmlFor="qc-global">全局并发</label>
+                </div>
+                <input
+                  id="qc-global"
+                  className="control"
+                  type="number"
+                  min={1}
+                  max={32}
+                  value={queuePolicyDraft.globalConcurrency}
+                  onChange={(e) =>
+                    setQueuePolicyDraft((p) => ({
+                      ...p,
+                      globalConcurrency: Number(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+
+              <div className="admin-block-label" style={{ marginTop: 14 }}>
+                后台任务超时（分钟）
+              </div>
+              <p className="footer-note" style={{ marginTop: 4 }}>
+                单任务从开始生成起计时，超时自动停止。0 = 不限制。默认：普通 5 · VIP 10 · 站长 0（无限）。
+              </p>
+              <div className="admin-fields-3" style={{ marginTop: 8 }}>
+                <div className="field">
+                  <div className="label-row">
+                    <label htmlFor="qt-user">普通用户</label>
+                  </div>
+                  <input
+                    id="qt-user"
+                    className="control"
+                    type="number"
+                    min={0}
+                    max={1440}
+                    value={queuePolicyDraft.userTaskTimeoutMin}
+                    onChange={(e) =>
+                      setQueuePolicyDraft((p) => ({
+                        ...p,
+                        userTaskTimeoutMin: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <div className="label-row">
+                    <label htmlFor="qt-vip">VIP</label>
+                  </div>
+                  <input
+                    id="qt-vip"
+                    className="control"
+                    type="number"
+                    min={0}
+                    max={1440}
+                    value={queuePolicyDraft.vipTaskTimeoutMin}
+                    onChange={(e) =>
+                      setQueuePolicyDraft((p) => ({
+                        ...p,
+                        vipTaskTimeoutMin: Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+                <div className="field">
+                  <div className="label-row">
+                    <label htmlFor="qt-admin">站长</label>
+                  </div>
+                  <input
+                    id="qt-admin"
+                    className="control"
+                    type="number"
+                    min={0}
+                    max={1440}
+                    value={queuePolicyDraft.adminTaskTimeoutMin}
+                    onChange={(e) =>
+                      setQueuePolicyDraft((p) => ({
+                        ...p,
+                        adminTaskTimeoutMin: Number(e.target.value),
                       }))
                     }
                   />

@@ -24,6 +24,8 @@ export type ShareCooldownConfig = {
  * 服务端任务队列策略（站长在用户池配置）。
  * - userLimit / vipLimit：该角色同时排队中（queued+running）上限；站长排队不限
  * - user/vip/admin Concurrency：灵感创作台可选并发上限（普通默认2 / VIP3 / 站长5）
+ * - globalConcurrency：全站后台任务同时 running 顶棚（默认 8）
+ * - *TaskTimeoutMin：单任务超时分钟；0=不限制（普通默认5 / VIP10 / 站长0）
  * - userBackgroundEnabled：普通用户是否可用后台队列（默认关）
  */
 export type QueuePolicyConfig = {
@@ -32,6 +34,14 @@ export type QueuePolicyConfig = {
   userConcurrency: number;
   vipConcurrency: number;
   adminConcurrency: number;
+  /** 全站后台队列同时 running 上限 */
+  globalConcurrency: number;
+  /** 普通用户单任务超时（分钟），0=无限 */
+  userTaskTimeoutMin: number;
+  /** VIP 单任务超时（分钟），0=无限 */
+  vipTaskTimeoutMin: number;
+  /** 站长单任务超时（分钟），0=无限 */
+  adminTaskTimeoutMin: number;
   userBackgroundEnabled: boolean;
 };
 
@@ -74,6 +84,10 @@ export const DEFAULT_QUEUE_POLICY: QueuePolicyConfig = {
   userConcurrency: 2,
   vipConcurrency: 3,
   adminConcurrency: 5,
+  globalConcurrency: 8,
+  userTaskTimeoutMin: 5,
+  vipTaskTimeoutMin: 10,
+  adminTaskTimeoutMin: 0,
   userBackgroundEnabled: false,
 };
 
@@ -204,11 +218,25 @@ export function clampQueueLimit(value: unknown, fallback: number): number {
   return Math.min(100, Math.max(1, Math.round(n)));
 }
 
-/** 并发上限配置：1–8 */
+/** 创作台并发上限配置：1–8 */
 export function clampConcurrencyCap(value: unknown, fallback: number): number {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(8, Math.max(1, Math.round(n)));
+}
+
+/** 全站后台全局并发：1–32 */
+export function clampGlobalConcurrency(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(32, Math.max(1, Math.round(n)));
+}
+
+/** 后台任务超时（分钟）：0–1440；0=不限制 */
+export function clampTaskTimeoutMin(value: unknown, fallback: number): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1440, Math.max(0, Math.round(n)));
 }
 
 export function normalizeQueuePolicy(raw?: Partial<QueuePolicyConfig> | null): QueuePolicyConfig {
@@ -221,8 +249,37 @@ export function normalizeQueuePolicy(raw?: Partial<QueuePolicyConfig> | null): Q
       raw?.adminConcurrency,
       DEFAULT_QUEUE_POLICY.adminConcurrency,
     ),
+    globalConcurrency: clampGlobalConcurrency(
+      raw?.globalConcurrency,
+      DEFAULT_QUEUE_POLICY.globalConcurrency,
+    ),
+    userTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.userTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.userTaskTimeoutMin,
+    ),
+    vipTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.vipTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.vipTaskTimeoutMin,
+    ),
+    adminTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.adminTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.adminTaskTimeoutMin,
+    ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };
+}
+
+/** 按角色取后台单任务超时毫秒；0=不限制 */
+export function taskTimeoutMsForRole(
+  role: UserRole | null | undefined,
+  policy?: Partial<QueuePolicyConfig> | null,
+): number {
+  const cfg = normalizeQueuePolicy(policy);
+  let min = cfg.userTaskTimeoutMin;
+  if (role === "admin") min = cfg.adminTaskTimeoutMin;
+  else if (role === "vip") min = cfg.vipTaskTimeoutMin;
+  if (min <= 0) return 0;
+  return min * 60 * 1000;
 }
 
 export function clampShareCooldownSec(value: unknown, fallback: number): number {

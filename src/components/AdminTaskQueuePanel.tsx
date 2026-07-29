@@ -315,7 +315,10 @@ export function AdminTaskQueuePanel({
         </div>
         <div className="admin-status-card">
           <span className="admin-status-label">全局并发</span>
-          <strong className="admin-status-value">
+          <strong
+            className="admin-status-value"
+            title="当前 running / 站长在用户池配置的全站顶棚"
+          >
             {meta?.stats?.runningCount ?? 0}/{meta?.stats?.concurrencyLimit ?? "—"}
           </strong>
         </div>

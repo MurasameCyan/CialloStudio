@@ -31,12 +31,12 @@ const COMMUNITY_BASE = (
 ).replace(/\/+$/, "");
 
 /**
- * 全局同时跑的任务顶棚（所有用户合计）。
- * 用户组并发上限（普通2/VIP3/站长5）在策略里，按用户单独限制。
+ * 全局并发 / 超时默认值（可被 queue-policy.json 覆盖；站长在用户池配置）。
+ * 环境变量 CIALLO_TASK_CONCURRENCY 仅作 globalConcurrency 初始兜底。
  */
-const GLOBAL_MAX_CONCURRENCY = Math.max(
+const ENV_GLOBAL_CONCURRENCY = Math.max(
   1,
-  Math.min(16, Number(process.env.CIALLO_TASK_CONCURRENCY || 8) || 8),
+  Math.min(32, Number(process.env.CIALLO_TASK_CONCURRENCY || 8) || 8),
 );
 /** 环境兜底（策略服务不可用时）；站长策略优先 */
 const FALLBACK_MAX_PENDING = Math.max(
@@ -49,8 +49,13 @@ const DEFAULT_QUEUE_POLICY = {
   userConcurrency: 2,
   vipConcurrency: 3,
   adminConcurrency: 5,
+  globalConcurrency: ENV_GLOBAL_CONCURRENCY,
+  userTaskTimeoutMin: 5,
+  vipTaskTimeoutMin: 10,
+  adminTaskTimeoutMin: 0,
   userBackgroundEnabled: false,
 };
+const QUEUE_POLICY_PATH = path.join(DATA_DIR, "queue-policy.json");
 const TASK_TTL_MS = Math.max(
   60 * 60 * 1000,
   Number(process.env.CIALLO_TASK_TTL_MS || 12 * 60 * 60 * 1000) || 12 * 60 * 60 * 1000,
@@ -183,6 +188,18 @@ function clampConcurrencyCap(value, fallback) {
   return Math.min(8, Math.max(1, Math.round(n)));
 }
 
+function clampGlobalConcurrency(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(32, Math.max(1, Math.round(n)));
+}
+
+function clampTaskTimeoutMin(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1440, Math.max(0, Math.round(n)));
+}
+
 function normalizeQueuePolicy(raw) {
   return {
     userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
@@ -196,8 +213,51 @@ function normalizeQueuePolicy(raw) {
       raw?.adminConcurrency,
       DEFAULT_QUEUE_POLICY.adminConcurrency,
     ),
+    globalConcurrency: clampGlobalConcurrency(
+      raw?.globalConcurrency,
+      DEFAULT_QUEUE_POLICY.globalConcurrency,
+    ),
+    userTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.userTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.userTaskTimeoutMin,
+    ),
+    vipTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.vipTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.vipTaskTimeoutMin,
+    ),
+    adminTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.adminTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.adminTaskTimeoutMin,
+    ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };
+}
+
+/** 读 community 同目录 queue-policy.json（站长用户池保存） */
+function loadRuntimePolicy() {
+  try {
+    if (fs.existsSync(QUEUE_POLICY_PATH)) {
+      return normalizeQueuePolicy(JSON.parse(fs.readFileSync(QUEUE_POLICY_PATH, "utf8")));
+    }
+  } catch (e) {
+    console.warn("[task-queue] load queue-policy failed", e instanceof Error ? e.message : e);
+  }
+  return { ...DEFAULT_QUEUE_POLICY };
+}
+
+function getGlobalConcurrency() {
+  return loadRuntimePolicy().globalConcurrency;
+}
+
+/** 按角色超时毫秒；0=不限制 */
+function taskTimeoutMsForRole(role, policy) {
+  const cfg = normalizeQueuePolicy(policy);
+  const r = normalizeRole(role);
+  let min = cfg.userTaskTimeoutMin;
+  if (r === "admin") min = cfg.adminTaskTimeoutMin;
+  else if (r === "vip") min = cfg.vipTaskTimeoutMin;
+  if (min <= 0) return 0;
+  return min * 60 * 1000;
 }
 
 function canBackground(role, policy) {
@@ -407,7 +467,7 @@ function queueStats() {
     runningCount,
     doneCount,
     failedCount,
-    concurrencyLimit: GLOBAL_MAX_CONCURRENCY,
+    concurrencyLimit: getGlobalConcurrency(),
     acceptingNewTasks: !shuttingDown,
   };
 }
@@ -421,11 +481,12 @@ function scheduleDrain() {
 }
 
 /**
- * 调度：全局顶棚 + 每用户 concurrencyCap（来自用户组策略）。
+ * 调度：全局顶棚（queue-policy.globalConcurrency）+ 每用户 concurrencyCap。
  * 队头用户若已满并发，跳过试下一位，避免堵死别人。
  */
 async function drainQueue() {
-  while (!shuttingDown && running.size < GLOBAL_MAX_CONCURRENCY && queue.length > 0) {
+  const globalCap = getGlobalConcurrency();
+  while (!shuttingDown && running.size < globalCap && queue.length > 0) {
     let started = false;
     for (let i = 0; i < queue.length; i += 1) {
       const id = queue[i];
@@ -440,7 +501,7 @@ async function drainQueue() {
         Math.min(8, Number(task.concurrencyCap) || DEFAULT_QUEUE_POLICY.userConcurrency),
       );
       if (runningCountForUser(task.ownerId) >= userCap) continue;
-      if (running.size >= GLOBAL_MAX_CONCURRENCY) break;
+      if (running.size >= globalCap) break;
 
       queue.splice(i, 1);
       running.add(id);
@@ -458,9 +519,14 @@ async function drainQueue() {
 function isRetryableError(err) {
   if (!err) return true;
   const status = Number(err.status || err.statusCode || 0);
-  if (status === 401 || status === 403 || status === 400) return false;
+  if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   const code = String(err.code || "");
-  if (code === "missing_reference_image" || code === "missing_api_key" || code === "upstream_blocked") {
+  if (
+    code === "missing_reference_image" ||
+    code === "missing_api_key" ||
+    code === "upstream_blocked" ||
+    code === "aborted"
+  ) {
     return false;
   }
   return true;
@@ -543,7 +609,10 @@ function guessUploadFilename(contentType, fallback = "image.png") {
  * 服务端下载上游图并上传到 Media Worker（Telegram）。
  * mediaBase 为 Worker 根域名。
  */
-async function uploadImageToMediaWorker(source, { mediaBase, mediaUploadToken, apiKey } = {}) {
+async function uploadImageToMediaWorker(
+  source,
+  { mediaBase, mediaUploadToken, apiKey, signal } = {},
+) {
   const base = normalizeRootBase(mediaBase);
   if (!base) {
     throw Object.assign(new Error("未配置 Media Base，无法上传 TG"), {
@@ -573,7 +642,12 @@ async function uploadImageToMediaWorker(source, { mediaBase, mediaUploadToken, a
     }
     const headers = { Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
-    const res = await httpRequestBinary(fetchUrl, { method: "GET", headers, timeoutMs: 120000 });
+    const res = await httpRequestBinary(fetchUrl, {
+      method: "GET",
+      headers,
+      timeoutMs: 120000,
+      signal,
+    });
     if (res.status < 200 || res.status >= 300 || !res.body?.length) {
       throw Object.assign(new Error(`拉取上游图片失败 HTTP ${res.status || 0}`), {
         status: res.status || 502,
@@ -607,6 +681,7 @@ async function uploadImageToMediaWorker(source, { mediaBase, mediaUploadToken, a
     headers: uploadHeaders,
     rawBody: payload,
     timeoutMs: 180000,
+    signal,
   });
   if (uploadRes.status < 200 || uploadRes.status >= 300) {
     const msg =
@@ -633,7 +708,7 @@ async function uploadImageToMediaWorker(source, { mediaBase, mediaUploadToken, a
 }
 
 /** 后台任务完成后按 storageMode 固化可访问 imageUrl */
-async function finalizeTaskImageUrl(task, rawImageUrl) {
+async function finalizeTaskImageUrl(task, rawImageUrl, signal) {
   const raw = String(rawImageUrl || "").trim();
   if (!raw) return raw;
   const mode = normalizeStorageMode(task.storageMode);
@@ -643,6 +718,7 @@ async function finalizeTaskImageUrl(task, rawImageUrl) {
       mediaBase: task.mediaBase,
       mediaUploadToken: task.mediaUploadToken,
       apiKey: secret?.apiKey,
+      signal,
     });
     return uploaded.url;
   }
@@ -656,6 +732,7 @@ async function finalizeTaskImageUrl(task, rawImageUrl) {
         mediaBase: task.mediaBase,
         mediaUploadToken: task.mediaUploadToken,
         apiKey: secret?.apiKey,
+        signal,
       });
       return uploaded.url;
     } catch (e) {
@@ -670,7 +747,7 @@ async function finalizeTaskImageUrl(task, rawImageUrl) {
 
 function httpRequestJson(
   targetUrl,
-  { method = "GET", headers = {}, body, rawBody, timeoutMs = 180000 } = {},
+  { method = "GET", headers = {}, body, rawBody, timeoutMs = 180000, signal } = {},
 ) {
   return new Promise((resolve, reject) => {
     let parsed;
@@ -678,6 +755,10 @@ function httpRequestJson(
       parsed = new URL(targetUrl);
     } catch (e) {
       reject(e);
+      return;
+    }
+    if (signal?.aborted) {
+      reject(Object.assign(new Error("任务已超时/取消"), { status: 499, code: "aborted" }));
       return;
     }
     const lib = parsed.protocol === "https:" ? https : http;
@@ -728,20 +809,39 @@ function httpRequestJson(
         });
       },
     );
+    const onAbort = () => {
+      req.destroy(Object.assign(new Error("任务已超时/取消"), { status: 499, code: "aborted" }));
+    };
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     req.on("timeout", () => req.destroy(Object.assign(new Error("上游超时"), { status: 504 })));
-    req.on("error", reject);
+    req.on("error", (err) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      reject(err);
+    });
+    req.on("close", () => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+    });
     if (payload) req.write(payload);
     req.end();
   });
 }
 
-function httpRequestBinary(targetUrl, { method = "GET", headers = {}, timeoutMs = 120000 } = {}) {
+function httpRequestBinary(
+  targetUrl,
+  { method = "GET", headers = {}, timeoutMs = 120000, signal } = {},
+) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
       parsed = new URL(targetUrl);
     } catch (e) {
       reject(e);
+      return;
+    }
+    if (signal?.aborted) {
+      reject(Object.assign(new Error("任务已超时/取消"), { status: 499, code: "aborted" }));
       return;
     }
     const lib = parsed.protocol === "https:" ? https : http;
@@ -768,8 +868,20 @@ function httpRequestBinary(targetUrl, { method = "GET", headers = {}, timeoutMs 
         });
       },
     );
+    const onAbort = () => {
+      req.destroy(Object.assign(new Error("任务已超时/取消"), { status: 499, code: "aborted" }));
+    };
+    if (signal) {
+      signal.addEventListener("abort", onAbort, { once: true });
+    }
     req.on("timeout", () => req.destroy(Object.assign(new Error("上游超时"), { status: 504 })));
-    req.on("error", reject);
+    req.on("error", (err) => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+      reject(err);
+    });
+    req.on("close", () => {
+      if (signal) signal.removeEventListener("abort", onAbort);
+    });
     req.end();
   });
 }
@@ -824,6 +936,7 @@ async function callUpstreamGenerate(task) {
     headers: { Authorization: `Bearer ${secret.apiKey}` },
     body,
     timeoutMs: 240000,
+    signal: task.abortSignal,
   });
 
   if (res.status < 200 || res.status >= 300) {
@@ -865,53 +978,127 @@ async function runOne(taskId) {
   task.status = "running";
   task.updatedAt = now();
   task.error = undefined;
+  task.startedAt = now();
   schedulePersist();
 
-  let attempt = 0;
-  for (;;) {
-    attempt += 1;
-    task.attempt = attempt;
-    task.updatedAt = now();
-    try {
-      const rawImageUrl = await callUpstreamGenerate(task);
-      const imageUrl = await finalizeTaskImageUrl(task, rawImageUrl);
-      task.status = "done";
-      task.imageUrl = imageUrl;
-      task.error = undefined;
-      task.finishedAt = now();
-      task.updatedAt = task.finishedAt;
-      // 落盘后清密钥/参考图；media token 仅内存
-      secrets.delete(taskId);
-      references.delete(taskId);
-      task.mediaUploadToken = undefined;
-      schedulePersist();
-      console.log(
-        `[task-queue] done ${taskId} attempt=${attempt} storage=${normalizeStorageMode(task.storageMode)}`,
-      );
-      return;
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      const retry = task.autoRetry === true && isRetryableError(err);
-      console.warn(`[task-queue] fail ${taskId} attempt=${attempt} retry=${retry}`, message);
-      if (!retry) {
-        task.status = "failed";
-        task.error = message.slice(0, 400);
-        task.finishedAt = now();
-        task.updatedAt = task.finishedAt;
+  const timeoutMs =
+    typeof task.timeoutMs === "number" && task.timeoutMs > 0
+      ? task.timeoutMs
+      : taskTimeoutMsForRole(task.ownerRole, loadRuntimePolicy());
+  const controller = new AbortController();
+  task.abortSignal = controller.signal;
+  let timeoutTimer = null;
+  if (timeoutMs > 0) {
+    timeoutTimer = setTimeout(() => {
+      controller.abort();
+      const latest = tasks.get(taskId);
+      if (latest && (latest.status === "running" || latest.status === "queued")) {
+        latest.status = "failed";
+        latest.error = `后台任务超时（${Math.round(timeoutMs / 60000)} 分钟），已自动停止`;
+        latest.finishedAt = now();
+        latest.updatedAt = latest.finishedAt;
         secrets.delete(taskId);
         references.delete(taskId);
+        latest.mediaUploadToken = undefined;
+        latest.abortSignal = undefined;
         schedulePersist();
+        console.warn(`[task-queue] timeout ${taskId} after ${timeoutMs}ms`);
+      }
+    }, timeoutMs);
+    timeoutTimer.unref?.();
+  }
+
+  let attempt = 0;
+  try {
+    for (;;) {
+      if (controller.signal.aborted) {
+        const latest = tasks.get(taskId);
+        if (latest && latest.status === "running") {
+          latest.status = "failed";
+          latest.error =
+            latest.error ||
+            (timeoutMs > 0
+              ? `后台任务超时（${Math.round(timeoutMs / 60000)} 分钟），已自动停止`
+              : "任务已取消");
+          latest.finishedAt = now();
+          latest.updatedAt = latest.finishedAt;
+          secrets.delete(taskId);
+          references.delete(taskId);
+          latest.mediaUploadToken = undefined;
+          schedulePersist();
+        }
         return;
       }
-      const waitMs = Math.min(8000, 1000 * 2 ** Math.min(attempt - 1, 3));
-      task.error = `自动重试中 · 第 ${attempt} 次失败：${message.slice(0, 120)}`;
+      attempt += 1;
+      task.attempt = attempt;
       task.updatedAt = now();
-      schedulePersist();
-      await sleep(waitMs);
-      // 若期间被取消
-      const latest = tasks.get(taskId);
-      if (!latest || latest.status === "cancelled") return;
+      try {
+        const rawImageUrl = await callUpstreamGenerate(task);
+        const imageUrl = await finalizeTaskImageUrl(task, rawImageUrl, controller.signal);
+        // 超时回调可能已标 failed
+        const latest = tasks.get(taskId);
+        if (!latest || latest.status === "failed" || latest.status === "cancelled") return;
+        latest.status = "done";
+        latest.imageUrl = imageUrl;
+        latest.error = undefined;
+        latest.finishedAt = now();
+        latest.updatedAt = latest.finishedAt;
+        secrets.delete(taskId);
+        references.delete(taskId);
+        latest.mediaUploadToken = undefined;
+        schedulePersist();
+        console.log(
+          `[task-queue] done ${taskId} attempt=${attempt} storage=${normalizeStorageMode(latest.storageMode)}`,
+        );
+        return;
+      } catch (err) {
+        const code = String(err?.code || "");
+        const aborted = controller.signal.aborted || code === "aborted";
+        const message = err instanceof Error ? err.message : String(err);
+        if (aborted) {
+          const latest = tasks.get(taskId);
+          if (latest && latest.status === "running") {
+            latest.status = "failed";
+            latest.error =
+              timeoutMs > 0
+                ? `后台任务超时（${Math.round(timeoutMs / 60000)} 分钟），已自动停止`
+                : message.slice(0, 400);
+            latest.finishedAt = now();
+            latest.updatedAt = latest.finishedAt;
+            secrets.delete(taskId);
+            references.delete(taskId);
+            latest.mediaUploadToken = undefined;
+            schedulePersist();
+          }
+          return;
+        }
+        const retry = task.autoRetry === true && isRetryableError(err);
+        console.warn(`[task-queue] fail ${taskId} attempt=${attempt} retry=${retry}`, message);
+        if (!retry) {
+          const latest = tasks.get(taskId);
+          if (!latest || latest.status === "cancelled" || latest.status === "failed") return;
+          latest.status = "failed";
+          latest.error = message.slice(0, 400);
+          latest.finishedAt = now();
+          latest.updatedAt = latest.finishedAt;
+          secrets.delete(taskId);
+          references.delete(taskId);
+          schedulePersist();
+          return;
+        }
+        const waitMs = Math.min(8000, 1000 * 2 ** Math.min(attempt - 1, 3));
+        task.error = `自动重试中 · 第 ${attempt} 次失败：${message.slice(0, 120)}`;
+        task.updatedAt = now();
+        schedulePersist();
+        await sleep(waitMs);
+        const latest = tasks.get(taskId);
+        if (!latest || latest.status === "cancelled" || latest.status === "failed") return;
+      }
     }
+  } finally {
+    if (timeoutTimer) clearTimeout(timeoutTimer);
+    const latest = tasks.get(taskId);
+    if (latest) latest.abortSignal = undefined;
   }
 }
 
@@ -1027,8 +1214,9 @@ async function createTasks(body, user, policy) {
   const batchId = typeof body?.batchId === "string" && body.batchId ? body.batchId : uid("batch-");
   const created = [];
   const t = now();
-  // 写入任务：该用户同时「生成中」上限（站长默认 5 等）
+  // 写入任务：该用户同时「生成中」上限 + 角色超时
   const concurrencyCap = concurrencyLimitForRole(user.role, policy);
+  const timeoutMs = taskTimeoutMsForRole(user.role, policy);
   for (const item of items) {
     const id = uid("task-");
     const task = {
@@ -1052,6 +1240,7 @@ async function createTasks(body, user, policy) {
       clientJobId: item.clientJobId,
       hasReference: Boolean(ref),
       concurrencyCap,
+      timeoutMs,
       storageMode,
       siteBase,
       mediaBase,
@@ -1211,9 +1400,26 @@ function cancelTaskForUser(user, id) {
   if (task.status === "done" || task.status === "failed" || task.status === "cancelled") {
     return publicTask(task);
   }
-  // 从排队移除
+  // 从排队移除；若 running 则 abort 上游请求
   const idx = queue.indexOf(id);
   if (idx >= 0) queue.splice(idx, 1);
+  try {
+    task.abortSignal?.aborted === false && task.abortController?.abort?.();
+  } catch {
+    /* ignore */
+  }
+  // runOne 使用 task.abortSignal（AbortController.signal）；兼容直接 abort 挂在 signal 上的 controller
+  if (task.abortSignal && typeof task.abortSignal.throwIfAborted !== "function") {
+    /* older node */
+  }
+  try {
+    // runOne 把 controller.signal 赋给 task.abortSignal；无 controller 引用时无法强断，超时/轮询会收敛
+    if (task._abortController && typeof task._abortController.abort === "function") {
+      task._abortController.abort();
+    }
+  } catch {
+    /* ignore */
+  }
   task.status = "cancelled";
   task.error = "已取消";
   task.finishedAt = now();
@@ -1452,7 +1658,7 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, HOST, () => {
   console.log(
-    `[task-queue] listening ${HOST}:${PORT} data=${DATA_DIR} globalConcurrency=${GLOBAL_MAX_CONCURRENCY} community=${COMMUNITY_BASE}`,
+    `[task-queue] listening ${HOST}:${PORT} data=${DATA_DIR} globalConcurrency=${getGlobalConcurrency()} community=${COMMUNITY_BASE}`,
   );
 });
 

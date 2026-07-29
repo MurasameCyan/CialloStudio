@@ -28,13 +28,23 @@ const FALLBACK_MASTER_PASSWORD = "admin123";
 const ENV_PASSWORD_MARKER = "__env_master__";
 
 const DEFAULT_COOLDOWN = { user: 60, vip: 15 };
-/** 排队：普通1 / VIP3 / 站长不限；并发：普通2 / VIP3 / 站长5；普通后台默认关 */
+/**
+ * 排队：普通1 / VIP3 / 站长不限
+ * 创作台并发：普通2 / VIP3 / 站长5
+ * 全站后台全局并发默认 8
+ * 单任务超时（分钟）：普通5 / VIP10 / 站长0=无限
+ * 普通后台默认关
+ */
 const DEFAULT_QUEUE_POLICY = {
   userLimit: 1,
   vipLimit: 3,
   userConcurrency: 2,
   vipConcurrency: 3,
   adminConcurrency: 5,
+  globalConcurrency: 8,
+  userTaskTimeoutMin: 5,
+  vipTaskTimeoutMin: 10,
+  adminTaskTimeoutMin: 0,
   userBackgroundEnabled: false,
 };
 
@@ -137,6 +147,18 @@ function clampConcurrencyCap(value, fallback) {
   return Math.min(8, Math.max(1, Math.round(n)));
 }
 
+function clampGlobalConcurrency(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(32, Math.max(1, Math.round(n)));
+}
+
+function clampTaskTimeoutMin(value, fallback) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(1440, Math.max(0, Math.round(n)));
+}
+
 function normalizeQueuePolicy(raw) {
   return {
     userLimit: clampQueueLimit(raw?.userLimit, DEFAULT_QUEUE_POLICY.userLimit),
@@ -149,6 +171,22 @@ function normalizeQueuePolicy(raw) {
     adminConcurrency: clampConcurrencyCap(
       raw?.adminConcurrency,
       DEFAULT_QUEUE_POLICY.adminConcurrency,
+    ),
+    globalConcurrency: clampGlobalConcurrency(
+      raw?.globalConcurrency,
+      DEFAULT_QUEUE_POLICY.globalConcurrency,
+    ),
+    userTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.userTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.userTaskTimeoutMin,
+    ),
+    vipTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.vipTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.vipTaskTimeoutMin,
+    ),
+    adminTaskTimeoutMin: clampTaskTimeoutMin(
+      raw?.adminTaskTimeoutMin,
+      DEFAULT_QUEUE_POLICY.adminTaskTimeoutMin,
     ),
     userBackgroundEnabled: raw?.userBackgroundEnabled === true,
   };

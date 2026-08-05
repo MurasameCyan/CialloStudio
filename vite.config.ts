@@ -71,60 +71,66 @@ const HOP_BY_HOP = new Set([
  * 管理页配置的 Base URL 决定上游；服务端校验拦截私网/SSRF。
  */
 function cialloV1ProxyPlugin(): Plugin {
+  const handleV1 = (req: IncomingMessage, res: ServerResponse, next: () => void) => {
+    const url = req.url || "";
+    const pathOnly = url.split("?")[0] || "";
+
+    // 调试：GET /debug/upstream?url= 或 /api/upstream-check?url=
+    if (pathOnly === "/debug/upstream" || pathOnly === "/api/upstream-check") {
+      void (async () => {
+        let probe = "";
+        try {
+          const u = new URL(url, "http://127.0.0.1");
+          probe = u.searchParams.get("url") || u.searchParams.get("upstream") || "";
+        } catch {
+          probe = "";
+        }
+        if (!probe) {
+          probe = readUpstreamRawFromRequest(req);
+        }
+        const detail = await debugValidateUpstream(probe);
+        res.statusCode = 200;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ service: "ciallo-vite-proxy", ...detail }, null, 2));
+      })().catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err);
+        res.statusCode = 500;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: { message, code: "debug_failed" } }));
+      });
+      return;
+    }
+
+    if (!url.startsWith("/v1")) {
+      next();
+      return;
+    }
+    void proxyToUpstream(req, res).catch((err: unknown) => {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error("[ciallo] proxy error", message);
+      if (!res.headersSent) {
+        res.statusCode = 502;
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+        res.end(
+          JSON.stringify({
+            error: {
+              message: `本地代理连不上上游：${message}`,
+              code: "proxy_upstream_unreachable",
+            },
+          }),
+        );
+      }
+    });
+  };
+
   return {
     name: "ciallo-v1-dynamic-proxy",
     configureServer(server) {
-      server.middlewares.use((req, res, next) => {
-        const url = req.url || "";
-        const pathOnly = url.split("?")[0] || "";
-
-        // 调试：GET /debug/upstream?url= 或 /api/upstream-check?url=
-        if (pathOnly === "/debug/upstream" || pathOnly === "/api/upstream-check") {
-          void (async () => {
-            let probe = "";
-            try {
-              const u = new URL(url, "http://127.0.0.1");
-              probe = u.searchParams.get("url") || u.searchParams.get("upstream") || "";
-            } catch {
-              probe = "";
-            }
-            if (!probe) {
-              probe = readUpstreamRawFromRequest(req as IncomingMessage);
-            }
-            const detail = await debugValidateUpstream(probe);
-            res.statusCode = 200;
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.end(JSON.stringify({ service: "ciallo-vite-proxy", ...detail }, null, 2));
-          })().catch((err: unknown) => {
-            const message = err instanceof Error ? err.message : String(err);
-            res.statusCode = 500;
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.end(JSON.stringify({ error: { message, code: "debug_failed" } }));
-          });
-          return;
-        }
-
-        if (!url.startsWith("/v1")) {
-          next();
-          return;
-        }
-        void proxyToUpstream(req as IncomingMessage, res as ServerResponse).catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          console.error("[ciallo] proxy error", message);
-          if (!res.headersSent) {
-            res.statusCode = 502;
-            res.setHeader("Content-Type", "application/json; charset=utf-8");
-            res.end(
-              JSON.stringify({
-                error: {
-                  message: `本地代理连不上上游：${message}`,
-                  code: "proxy_upstream_unreachable",
-                },
-              }),
-            );
-          }
-        });
-      });
+      server.middlewares.use(handleV1);
+    },
+    // vite preview 不走 configureServer；预览生产构建时同样要能打上游
+    configurePreviewServer(server) {
+      server.middlewares.use(handleV1);
     },
   };
 }
@@ -270,6 +276,21 @@ export default defineConfig({
     host: "127.0.0.1",
     port: 5173,
     // 社区默认 http：转发到本机 community-api（node server/community-api.mjs）
+    proxy: {
+      "/api/community": {
+        target: "http://127.0.0.1:8090",
+        changeOrigin: true,
+      },
+      "/api/tasks": {
+        target: "http://127.0.0.1:8092",
+        changeOrigin: true,
+      },
+    },
+  },
+  // server.proxy 不会被 preview 继承，预览生产构建时要重复一份
+  preview: {
+    host: "127.0.0.1",
+    port: 5175,
     proxy: {
       "/api/community": {
         target: "http://127.0.0.1:8090",

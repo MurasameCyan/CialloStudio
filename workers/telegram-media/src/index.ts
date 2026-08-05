@@ -103,6 +103,9 @@ type TgMessage = {
   message_id: number;
   document?: { file_id: string; file_name?: string; mime_type?: string; file_size?: number };
   photo?: Array<{ file_id: string; file_size?: number; width?: number; height?: number }>;
+  /** 发 mp4 时 Telegram 会把 sendDocument 转成 video 消息 */
+  video?: { file_id: string; mime_type?: string; file_size?: number };
+  animation?: { file_id: string; mime_type?: string; file_size?: number };
 };
 
 async function tgApi<T>(token: string, method: string, init?: RequestInit): Promise<T> {
@@ -115,8 +118,13 @@ async function tgApi<T>(token: string, method: string, init?: RequestInit): Prom
   return data.result;
 }
 
-function pickFileId(msg: TgMessage): { fileId: string; kind: "document" | "photo" } | null {
+function pickFileId(
+  msg: TgMessage,
+): { fileId: string; kind: "document" | "photo" | "video" } | null {
   if (msg.document?.file_id) return { fileId: msg.document.file_id, kind: "document" };
+  // mp4 走 sendDocument 也可能回 video/animation，漏掉会误判「未返回 file_id」
+  if (msg.video?.file_id) return { fileId: msg.video.file_id, kind: "video" };
+  if (msg.animation?.file_id) return { fileId: msg.animation.file_id, kind: "video" };
   if (msg.photo?.length) {
     // 取最大尺寸
     const best = [...msg.photo].sort((a, b) => (b.file_size || 0) - (a.file_size || 0))[0];
@@ -161,7 +169,11 @@ async function readUploadBytes(request: Request, limit: number): Promise<{
           ? "gif"
           : contentType.includes("jpeg") || contentType.includes("jpg")
             ? "jpg"
-            : "bin";
+            : contentType.includes("mp4")
+              ? "mp4"
+              : contentType.includes("webm")
+                ? "webm"
+                : "bin";
   return { bytes: buf, filename: `upload.${ext}`, contentType };
 }
 
@@ -308,6 +320,11 @@ function guessMime(path: string): string {
   if (p.endsWith(".webp")) return "image/webp";
   if (p.endsWith(".gif")) return "image/gif";
   if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+  if (p.endsWith(".mp4")) return "video/mp4";
+  if (p.endsWith(".webm")) return "video/webm";
+  if (p.endsWith(".mov")) return "video/quicktime";
+  // Telegram 把视频放 videos/ 下，无扩展名时按 mp4 服务，否则 <video> 播不了
+  if (/videos\//i.test(p)) return "video/mp4";
   // documents/file_N 无扩展名时，默认按 JPEG 图片服务（Studio 上传多为图）
   if (/\/file_\d+$/i.test(p) || /documents\//i.test(p)) return "image/jpeg";
   return "application/octet-stream";
@@ -319,6 +336,9 @@ function extFromMime(ct: string): string {
   if (t.includes("webp")) return ".webp";
   if (t.includes("gif")) return ".gif";
   if (t.includes("jpeg") || t.includes("jpg")) return ".jpg";
+  if (t.includes("mp4")) return ".mp4";
+  if (t.includes("webm")) return ".webm";
+  if (t.includes("quicktime")) return ".mov";
   return ".bin";
 }
 

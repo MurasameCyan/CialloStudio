@@ -22,6 +22,8 @@ import {
 import {
   ASPECT_RATIOS,
   RESOLUTIONS,
+  VIDEO_DURATIONS,
+  VIDEO_RESOLUTIONS,
   resolvePromptOptimizeEndpoint,
   type StudioSettings,
 } from "@/lib/settings";
@@ -61,6 +63,7 @@ const StudioJobCard = memo(function StudioJobCard({
   onShare: (job: StudioJob) => void;
 }) {
   const src = displayUrl(job);
+  const isVideo = job.kind === "video";
   const canSelect = job.status === "done" && Boolean(src || job.openUrl);
   const shareBusy = sharingId === job.id;
   const shareDisabled = alreadyShared || shareBusy || shareLocked;
@@ -110,13 +113,27 @@ const StudioJobCard = memo(function StudioJobCard({
       >
         {job.status === "done" && src ? (
           <>
-            <img
-              src={src}
-              alt={`${job.prompt} #${job.variant}`}
-              loading="lazy"
-              decoding="async"
-              draggable={false}
-            />
+            {isVideo ? (
+              <video
+                src={src}
+                controls
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                aria-label={`${job.prompt} #${job.variant}`}
+                onClick={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <img
+                src={src}
+                alt={`${job.prompt} #${job.variant}`}
+                loading="lazy"
+                decoding="async"
+                draggable={false}
+              />
+            )}
             <div className="card-overlay">
               <a
                 href={job.openUrl || src}
@@ -124,20 +141,20 @@ const StudioJobCard = memo(function StudioJobCard({
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
               >
-                打开原图
+                {isVideo ? "打开视频" : "打开原图"}
               </a>
               <button
                 type="button"
                 className="card-overlay-action"
-                title="页内大图预览"
+                title={isVideo ? "页内大屏播放" : "页内大图预览"}
                 onClick={(e) => {
                   e.stopPropagation();
                   onPreview(job);
                 }}
               >
-                显示大图
+                {isVideo ? "大屏播放" : "显示大图"}
               </button>
-              {allowReference ? (
+              {allowReference && !isVideo ? (
                 <button
                   type="button"
                   className="card-overlay-action"
@@ -150,18 +167,21 @@ const StudioJobCard = memo(function StudioJobCard({
                   作参考
                 </button>
               ) : null}
-              <button
-                type="button"
-                className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
-                disabled={shareDisabled}
-                title={shareTitle}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!alreadyShared) onShare(job);
-                }}
-              >
-                {shareLabel}
-              </button>
+              {/* 大厅只渲染 <img>，视频不提供分享入口 */}
+              {isVideo ? null : (
+                <button
+                  type="button"
+                  className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
+                  disabled={shareDisabled}
+                  title={shareTitle}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!alreadyShared) onShare(job);
+                  }}
+                >
+                  {shareLabel}
+                </button>
+              )}
             </div>
           </>
         ) : job.status === "failed" ? (
@@ -172,7 +192,17 @@ const StudioJobCard = memo(function StudioJobCard({
             <span style={{ color: "var(--danger)", fontSize: 13, textAlign: "center" }}>{job.error}</span>
           </div>
         ) : (
-          <div className="skeleton" />
+          // 视频异步生成较久：把进度/重试提示显示在骨架屏上
+          <div className="skeleton" style={{ display: "grid", placeItems: "center", padding: 16 }}>
+            {job.error ? (
+              <span
+                style={{ color: "var(--text-muted)", fontSize: 12, textAlign: "center" }}
+                aria-live="polite"
+              >
+                {job.error}
+              </span>
+            ) : null}
+          </div>
         )}
       </div>
       <div className="card-body">
@@ -254,6 +284,9 @@ export function StudioPage({
   const [serverQueueOpen, setServerQueueOpen] = useState(false);
   const [cancelingServerId, setCancelingServerId] = useState<string | null>(null);
   const [queueBulkBusy, setQueueBulkBusy] = useState<string | null>(null);
+  /** 视频模式：需站长开启开关 + 用户在创作台切到视频 */
+  const videoEnabled = settings.videoEnabled === true;
+  const videoMode = videoEnabled && draft.videoMode === true;
   /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
   const generateLocked = running || enqueueBusy;
   const stopEnabled = running || serverMode;
@@ -275,6 +308,17 @@ export function StudioPage({
         >
           自动重试
         </button>
+        {videoEnabled ? (
+          <button
+            type="button"
+            className={`chip studio-toggle-chip ${draft.videoMode ? "active" : ""}`}
+            aria-pressed={draft.videoMode}
+            title="文生视频：走 /videos/generations 异步生成，可配合「后台任务」交给服务端队列"
+            onClick={() => setDraft({ videoMode: !draft.videoMode })}
+          >
+            视频
+          </button>
+        ) : null}
         {canBackgroundTasks ? (
           <button
             type="button"
@@ -289,6 +333,64 @@ export function StudioPage({
       </div>
     </div>
   );
+
+  /** 分辨率：视频模式换成 480p/720p/1080p；控制台与对话共用 */
+  const resolutionField = (
+    <div className="field">
+      <label>分辨率</label>
+      <div className="segmented">
+        {videoMode
+          ? VIDEO_RESOLUTIONS.map((item) => (
+              <button
+                key={item}
+                type="button"
+                className={`chip ${draft.videoResolution === item ? "active" : ""}`}
+                title={`视频分辨率 ${item}`}
+                onClick={() => setDraft({ videoResolution: item })}
+              >
+                {item}
+              </button>
+            ))
+          : RESOLUTIONS.map((item) => {
+              const allowed = modelCap.allowedResolutions.includes(item);
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  className={`chip ${draft.resolution === item ? "active" : ""}`}
+                  disabled={!allowed}
+                  title={allowed ? item : `${settings.model} 不支持 ${item}`}
+                  onClick={() => {
+                    if (allowed) setDraft({ resolution: item });
+                  }}
+                >
+                  {item}
+                </button>
+              );
+            })}
+      </div>
+    </div>
+  );
+
+  /** 视频时长：仅视频模式出现 */
+  const videoDurationField = videoMode ? (
+    <div className="field">
+      <label>时长</label>
+      <div className="segmented">
+        {VIDEO_DURATIONS.map((item) => (
+          <button
+            key={item}
+            type="button"
+            className={`chip ${draft.videoDuration === item ? "active" : ""}`}
+            title={`${item} 秒`}
+            onClick={() => setDraft({ videoDuration: item })}
+          >
+            {item}s
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
 
   const serverQueueActiveCount = serverQueue.filter(
     (t) => t.status === "queued" || t.status === "running",
@@ -334,7 +436,7 @@ export function StudioPage({
     }
   }
 
-  /** 展开后在图片墙区域展示队列详情（替换/覆盖 gallery 上方内容） */
+  /** 展开后在作品墙区域展示队列详情（替换/覆盖 gallery 上方内容） */
   const serverQueueDetail =
     canBackgroundTasks && serverQueueOpen ? (
       <div className="studio-server-queue studio-server-queue-wall studio-server-queue-detail" role="region" aria-label="服务端队列详情">
@@ -470,12 +572,23 @@ export function StudioPage({
     ) : null;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
+  /**
+   * 参考图上传区：站长开启「图生图」开关，或模型本身是编辑类（必须带图）。
+   * 视频模式下参考图作首帧（图生视频），同样沿用开关。
+   */
   const showReferencePicker = useMemo(
-    () => isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
-    [settings.model],
+    () =>
+      settings.imageToImageEnabled === true ||
+      isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
+    [settings.imageToImageEnabled, settings.model],
+  );
+  /** 编辑类模型缺参考图会被上游拒绝；视频/普通生图留空则退化为纯文生成 */
+  const referenceRequired = useMemo(
+    () => !videoMode && isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
+    [videoMode, settings.model],
   );
 
-  // 切到非编辑模型时清掉参考图，避免误带到文生图请求
+  // 关掉图生图开关 / 切到非编辑模型时清掉参考图，避免误带到文生图请求
   useEffect(() => {
     if (showReferencePicker) return;
     if (!draft.referenceImageUrl && !draft.referenceImageName) return;
@@ -511,7 +624,7 @@ export function StudioPage({
   const historyWrapRef = useRef<HTMLDivElement | null>(null);
   const historyPanelRef = useRef<HTMLDivElement | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
-  /** 图片墙：仅展示 status=done 的卡片 */
+  /** 作品墙：仅展示 status=done 的卡片 */
   const [successOnly, setSuccessOnly] = useState(() => {
     try {
       return localStorage.getItem("ciallo.gallery.successOnly") === "1";
@@ -721,7 +834,7 @@ export function StudioPage({
     if (draft.promptText.trim()) rememberPrompt(draft.promptText);
     try {
       await onStart();
-      // 后台入队成功后自动展开图片墙队列，方便看到状态
+      // 后台入队成功后自动展开作品墙队列，方便看到状态
       if (draft.backgroundTasks && canBackgroundTasks) {
         setServerQueueOpen(true);
       }
@@ -1061,7 +1174,9 @@ export function StudioPage({
               <span className="reference-picker-name" title={draft.referenceImageName}>
                 {draft.referenceImageName || "参考图已就绪"}
               </span>
-              <span className="reference-picker-hint">图 + 提示词 · /images/edits</span>
+              <span className="reference-picker-hint">
+                {videoMode ? "首帧参考图 · /videos/generations" : "图 + 提示词 · /images/edits"}
+              </span>
             </div>
           </div>
         ) : (
@@ -1071,7 +1186,7 @@ export function StudioPage({
             disabled={running || optimizeBusy}
             onClick={() => inputRef.current?.click()}
           >
-            点击上传参考图（必填）
+            {referenceRequired ? "点击上传参考图（必填）" : "点击上传参考图（可选）"}
           </button>
         )}
         {referenceError ? (
@@ -1195,7 +1310,7 @@ export function StudioPage({
     sharedJobIds,
   ]);
 
-  /** 配置提示仍放创作台；分享结果放到图片墙选择栏，避免挤变形 */
+  /** 配置提示仍放创作台；分享结果放到作品墙选择栏，避免挤变形 */
   const setupFeedback = !configured ? (
     <div className="studio-feedback studio-feedback-muted" role="status">
       <span className="studio-feedback-dot muted" aria-hidden />
@@ -1342,11 +1457,22 @@ export function StudioPage({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="studio-lightbox-media">
-          <img
-            src={previewSrc}
-            alt={previewJob.prompt || "大图预览"}
-            decoding="async"
-          />
+          {previewJob.kind === "video" ? (
+            <video
+              src={previewSrc}
+              controls
+              autoPlay
+              loop
+              playsInline
+              aria-label={previewJob.prompt || "视频预览"}
+            />
+          ) : (
+            <img
+              src={previewSrc}
+              alt={previewJob.prompt || "大图预览"}
+              decoding="async"
+            />
+          )}
         </div>
         <div className="studio-lightbox-bottom">
           <div className="studio-lightbox-meta" title={previewJob.prompt}>
@@ -1364,20 +1490,22 @@ export function StudioPage({
                 target="_blank"
                 rel="noreferrer"
               >
-                打开原图
+                {previewJob.kind === "video" ? "打开视频" : "打开原图"}
               </a>
             ) : null}
-            <button
-              type="button"
-              className={`btn btn-sm ${previewAlreadyShared ? "btn-shared" : "btn-primary"}`}
-              disabled={previewShareDisabled}
-              title={previewShareTitle}
-              onClick={() => {
-                if (!previewAlreadyShared) void handleShareToHall(previewJob);
-              }}
-            >
-              {previewShareLabel}
-            </button>
+            {previewJob.kind === "video" ? null : (
+              <button
+                type="button"
+                className={`btn btn-sm ${previewAlreadyShared ? "btn-shared" : "btn-primary"}`}
+                disabled={previewShareDisabled}
+                title={previewShareTitle}
+                onClick={() => {
+                  if (!previewAlreadyShared) void handleShareToHall(previewJob);
+                }}
+              >
+                {previewShareLabel}
+              </button>
+            )}
             <button
               type="button"
               className="studio-lightbox-close"
@@ -1402,13 +1530,13 @@ export function StudioPage({
               <div>
                 <div className="panel-kicker">Chat</div>
                 <h2 className="panel-title studio-wall-title">
-                  对话流 · {successOnly ? wallJobs.length : stats.total} 张
+                  对话流 · {successOnly ? wallJobs.length : stats.total} 件
                 </h2>
               </div>
               <div className="results-toolbar-actions">
                 {queueToggleButton}
                 <div className="studio-wall-stat-chips" aria-label="生成统计">
-                  <span className="chip gallery-filter-chip studio-stat-chip" title="结果墙总数">
+                  <span className="chip gallery-filter-chip studio-stat-chip" title="作品墙总数">
                     总数
                     <strong className="studio-stat-chip-count">{stats.total}</strong>
                   </span>
@@ -1592,7 +1720,7 @@ export function StudioPage({
                   {draft.promptMode === "block" ? "整段" : "行数"} <strong>{prompts.length}</strong>
                 </span>
                 <span className="stat-pill">
-                  总张数 <strong>{plannedJobs}</strong>
+                  {videoMode ? "总条数" : "总张数"} <strong>{plannedJobs}</strong>
                 </span>
                 {showReferencePicker && draft.referenceImageUrl ? (
                   <span className="stat-pill">含参考图</span>
@@ -1667,27 +1795,8 @@ export function StudioPage({
                     </div>
                     {/* 对话模式：并发与分辨率之间保留竖线；控制台不加 */}
                     <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    <div className="field">
-                      <label>分辨率</label>
-                      <div className="segmented">
-                        {RESOLUTIONS.map((item) => {
-                          const allowed = modelCap.allowedResolutions.includes(item);
-                          return (
-                            <button
-                              key={item}
-                              type="button"
-                              className={`chip ${draft.resolution === item ? "active" : ""}`}
-                              disabled={!allowed}
-                              onClick={() => {
-                                if (allowed) setDraft({ resolution: item });
-                              }}
-                            >
-                              {item}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
+                    {resolutionField}
+                    {videoDurationField}
                     <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     {advancedField}
                   </div>
@@ -1847,11 +1956,11 @@ export function StudioPage({
               className="stat-pill"
               title={
                 draft.promptMode === "block"
-                  ? "总张数 = 1 × 生图数量 × 并发数"
-                  : "总张数 = Prompt 条数 × 生图数量 × 并发数"
+                  ? `总数 = 1 × ${videoMode ? "生成" : "生图"}数量 × 并发数`
+                  : `总数 = Prompt 条数 × ${videoMode ? "生成" : "生图"}数量 × 并发数`
               }
             >
-              总张数 <strong>{plannedJobs}</strong>
+              {videoMode ? "总条数" : "总张数"} <strong>{plannedJobs}</strong>
             </span>
           </div>
         </div>
@@ -1923,28 +2032,8 @@ export function StudioPage({
                     ))}
                   </div>
                 </div>
-                <div className="field">
-                  <label>分辨率</label>
-                  <div className="segmented">
-                    {RESOLUTIONS.map((item) => {
-                      const allowed = modelCap.allowedResolutions.includes(item);
-                      return (
-                        <button
-                          key={item}
-                          type="button"
-                          className={`chip ${draft.resolution === item ? "active" : ""}`}
-                          disabled={!allowed}
-                          title={allowed ? item : `${settings.model} 不支持 ${item}`}
-                          onClick={() => {
-                            if (allowed) setDraft({ resolution: item });
-                          }}
-                        >
-                          {item}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                {resolutionField}
+                {videoDurationField}
                 <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                 {advancedField}
               </div>
@@ -1976,7 +2065,7 @@ export function StudioPage({
           <div>
             <div className="panel-kicker">Results</div>
             <h2 className="panel-title studio-wall-title">
-              图片墙 · {successOnly ? wallJobs.length : stats.total} 张
+              作品墙 · {successOnly ? wallJobs.length : stats.total} 件
               {successOnly && stats.total > wallJobs.length ? (
                 <span className="studio-wall-filter-hint">（仅成功）</span>
               ) : null}
@@ -1986,7 +2075,7 @@ export function StudioPage({
             {/* 队列在总数左侧；KPI 始终占位 */}
             {queueToggleButton}
             <div className="studio-wall-stat-chips" aria-label="生成统计">
-              <span className="chip gallery-filter-chip studio-stat-chip" title="结果墙总数">
+              <span className="chip gallery-filter-chip studio-stat-chip" title="作品墙总数">
                 总数
                 <strong className="studio-stat-chip-count">{stats.total}</strong>
               </span>

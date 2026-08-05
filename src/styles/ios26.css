@@ -819,7 +819,7 @@ a {
   margin-bottom: 16px;
 }
 
-/* 图片墙工具栏：紧凑 KPI，排在「空闲」芯片左侧 */
+/* 作品墙工具栏：紧凑 KPI，排在「空闲」芯片左侧 */
 .kpi-row-inline {
   display: flex;
   flex-wrap: wrap;
@@ -933,6 +933,15 @@ a {
   display: block;
   background: var(--bg-soft);
   transition: transform 0.35s var(--ease);
+}
+
+/* 视频作品卡：与图片同框，但保留原始比例并允许播放控件 */
+.card video {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: contain;
+  display: block;
+  background: #000;
 }
 
 .card:hover img {
@@ -2800,7 +2809,7 @@ a {
   opacity: 0.78;
 }
 
-/* 服务端队列列表（图片墙区域） */
+/* 服务端队列列表（作品墙区域） */
 .studio-server-queue {
   display: grid;
   gap: 8px;
@@ -4361,7 +4370,8 @@ a {
   box-sizing: border-box;
 }
 
-.studio-lightbox-media img {
+.studio-lightbox-media img,
+.studio-lightbox-media video {
   max-width: 100%;
   max-height: min(72dvh, 860px);
   width: auto;
@@ -4415,7 +4425,8 @@ a {
     min-height: 160px;
   }
 
-  .studio-lightbox-media img {
+  .studio-lightbox-media img,
+  .studio-lightbox-media video {
     max-height: min(64dvh, 680px);
   }
 }

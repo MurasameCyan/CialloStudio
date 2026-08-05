@@ -12,6 +12,16 @@ export type StudioSettings = {
   promptOptimizeCustomUpstream: boolean;
   promptOptimizeBaseUrl: string;
   promptOptimizeApiKey: string;
+  /**
+   * 图生图开关：开启后创作台显示「参考图」上传区，
+   * 任何生图模型都可带参考图走 /images/edits。
+   * 编辑类模型（grok-imagine-image-edit）无论开关都必须带参考图。
+   */
+  imageToImageEnabled: boolean;
+  /** 文生视频开关：开启后创作台可切到视频模式（/videos/generations） */
+  videoEnabled: boolean;
+  /** 文生视频模型 ID */
+  videoModel: string;
 };
 
 export const DEFAULT_SETTINGS: StudioSettings = {
@@ -27,6 +37,9 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   promptOptimizeCustomUpstream: false,
   promptOptimizeBaseUrl: "",
   promptOptimizeApiKey: "",
+  imageToImageEnabled: false,
+  videoEnabled: false,
+  videoModel: "grok-imagine-video",
 };
 
 function asString(value: unknown, fallback: string): string {
@@ -69,6 +82,9 @@ export function loadSettings(): StudioSettings {
         asString(parsed.promptOptimizeBaseUrl, DEFAULT_SETTINGS.promptOptimizeBaseUrl),
       ),
       promptOptimizeApiKey: asString(parsed.promptOptimizeApiKey, DEFAULT_SETTINGS.promptOptimizeApiKey),
+      imageToImageEnabled: parsed.imageToImageEnabled === true,
+      videoEnabled: parsed.videoEnabled === true,
+      videoModel: asString(parsed.videoModel, DEFAULT_SETTINGS.videoModel) || DEFAULT_SETTINGS.videoModel,
     };
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -87,6 +103,9 @@ export function saveSettings(settings: StudioSettings): void {
     promptOptimizeCustomUpstream: settings.promptOptimizeCustomUpstream === true,
     promptOptimizeBaseUrl: normalizeBaseUrl(asString(settings.promptOptimizeBaseUrl, "")),
     promptOptimizeApiKey: asString(settings.promptOptimizeApiKey, ""),
+    imageToImageEnabled: settings.imageToImageEnabled === true,
+    videoEnabled: settings.videoEnabled === true,
+    videoModel: asString(settings.videoModel, DEFAULT_SETTINGS.videoModel).trim() || DEFAULT_SETTINGS.videoModel,
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
 }
@@ -151,3 +170,24 @@ export function resolvePromptOptimizeEndpoint(settings: StudioSettings): {
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
 /** grok2api 图片接口实际只认 1k / 2k；4k 会被拒绝或被 lite 模型忽略 */
 export const RESOLUTIONS = ["1k", "2k"] as const;
+
+/** grok2api /videos/generations 支持的分辨率 */
+export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p"] as const;
+/** grok2api /videos/generations 支持的时长（秒） */
+export const VIDEO_DURATIONS = [6, 10, 15] as const;
+
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+
+export function normalizeVideoResolution(value: unknown): VideoResolution {
+  const raw = asString(value, "").trim().toLowerCase();
+  return (VIDEO_RESOLUTIONS as readonly string[]).includes(raw) ? (raw as VideoResolution) : "720p";
+}
+
+/** 时长只认 6 / 10 / 15，其余就近取值 */
+export function normalizeVideoDuration(value: unknown): number {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return 6;
+  return VIDEO_DURATIONS.reduce((best, item) =>
+    Math.abs(item - n) < Math.abs(best - n) ? item : best,
+  );
+}

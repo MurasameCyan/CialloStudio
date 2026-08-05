@@ -86,6 +86,30 @@ export function isImageEditModel(model: string): boolean {
   return false;
 }
 
+/**
+ * 解析本次生成要不要带参考图。
+ * - 编辑类模型：参考图必填，缺失直接判错（上游 /images/edits 必须有图）
+ * - 图生图开关开启：任意生图模型都可带参考图，留空则退化为纯文生图
+ * 开关关闭且非编辑模型：忽略草稿里的参考图，避免误带进文生图请求。
+ */
+export function resolveReferenceImage(input: {
+  model: string;
+  referenceImageUrl?: string;
+  imageToImageEnabled: boolean;
+}): { referenceUrl?: string; error?: { message: string; code: string } } {
+  const model = typeof input.model === "string" ? input.model.trim() : "";
+  const ref = typeof input.referenceImageUrl === "string" ? input.referenceImageUrl.trim() : "";
+  const isEdit = isImageEditModel(model);
+
+  if (isEdit && !ref) {
+    return {
+      error: { message: "当前为图生图模型，请先上传参考图", code: "missing_reference_image" },
+    };
+  }
+  if (!isEdit && !input.imageToImageEnabled) return {};
+  return { referenceUrl: ref || undefined };
+}
+
 export function normalizeResolutionForModel(model: string, resolution: string): ResolutionOption {
   const cap = getImageModelCapability(model);
   const value = resolution.trim().toLowerCase() as ResolutionOption;

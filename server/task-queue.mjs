@@ -347,6 +347,8 @@ function publicTask(task) {
     prompt: task.prompt,
     model: task.model,
     baseUrl: task.baseUrl,
+    kind: task.kind === "video" ? "video" : "image",
+    duration: task.duration,
     aspectRatio: task.aspectRatio,
     resolution: task.resolution,
     imageUrl: task.imageUrl,
@@ -518,6 +520,8 @@ async function drainQueue() {
 
 function isRetryableError(err) {
   if (!err) return true;
+  // 显式终态优先（如上游把视频判为 failed，无论它带什么 code）
+  if (err.terminal === true) return false;
   const status = Number(err.status || err.statusCode || 0);
   if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   const code = String(err.code || "");
@@ -525,15 +529,32 @@ function isRetryableError(err) {
     code === "missing_reference_image" ||
     code === "missing_api_key" ||
     code === "upstream_blocked" ||
-    code === "aborted"
+    code === "aborted" ||
+    // 上游未带 code 时的视频失败兜底（带 code 的走 err.terminal）
+    code === "video_failed"
   ) {
     return false;
   }
   return true;
 }
 
-function sleep(ms) {
-  return new Promise((r) => setTimeout(r, ms));
+/** 可中断 sleep：取消/超时不必白等一个轮询周期 */
+function sleep(ms, signal) {
+  if (!signal) return new Promise((r) => setTimeout(r, ms));
+  if (signal.aborted) {
+    return Promise.reject(Object.assign(new Error("任务已取消"), { code: "aborted" }));
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(Object.assign(new Error("任务已取消"), { code: "aborted" }));
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function normalizeBaseUrl(raw) {
@@ -582,7 +603,10 @@ function rewriteMediaUrlToSiteBase(rawUrl, siteBase) {
     const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
     const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
     const isMediaPath =
-      path.includes("/v1/media/") || path.startsWith("/media/") || path.includes("/images/");
+      path.includes("/v1/media/") ||
+      path.startsWith("/media/") ||
+      path.includes("/images/") ||
+      path.includes("/videos/");
     if (isLoopback || isMediaPath) {
       return `${base}${path.startsWith("/") ? path : `/${path}`}`;
     }
@@ -598,6 +622,9 @@ function rewriteMediaUrlToSiteBase(rawUrl, siteBase) {
 
 function guessUploadFilename(contentType, fallback = "image.png") {
   const t = String(contentType || "").toLowerCase();
+  if (t.includes("mp4")) return "video.mp4";
+  if (t.includes("webm")) return "video.webm";
+  if (t.includes("quicktime") || t.includes("mov")) return "video.mov";
   if (t.includes("jpeg") || t.includes("jpg")) return "image.jpg";
   if (t.includes("webp")) return "image.webp";
   if (t.includes("gif")) return "image.gif";
@@ -611,7 +638,7 @@ function guessUploadFilename(contentType, fallback = "image.png") {
  */
 async function uploadImageToMediaWorker(
   source,
-  { mediaBase, mediaUploadToken, apiKey, signal } = {},
+  { mediaBase, mediaUploadToken, apiKey, signal, kind = "image" } = {},
 ) {
   const base = normalizeRootBase(mediaBase);
   if (!base) {
@@ -621,26 +648,34 @@ async function uploadImageToMediaWorker(
     });
   }
 
+  const isVideo = kind === "video";
+  const defaultType = isVideo ? "video/mp4" : "image/png";
+  const defaultName = isVideo ? "video.mp4" : "image.png";
+
   let body;
-  let contentType = "image/png";
-  let filename = "image.png";
+  let contentType = defaultType;
+  let filename = defaultName;
 
   if (typeof source === "string" && source.startsWith("data:")) {
     const m = /^data:([^;,]+)?(;base64)?,(.*)$/i.exec(source);
     if (!m) {
       throw Object.assign(new Error("无效 data URL"), { status: 400, code: "invalid_data_url" });
     }
-    contentType = (m[1] || "image/png").trim() || "image/png";
+    contentType = (m[1] || defaultType).trim() || defaultType;
     const isB64 = Boolean(m[2]);
     const dataPart = m[3] || "";
     body = isB64 ? Buffer.from(dataPart, "base64") : Buffer.from(decodeURIComponent(dataPart), "utf8");
-    filename = guessUploadFilename(contentType);
+    filename = guessUploadFilename(contentType, defaultName);
   } else {
     const fetchUrl = String(source || "").trim();
     if (!fetchUrl) {
       throw Object.assign(new Error("缺少图片源"), { status: 400, code: "missing_image_source" });
     }
-    const headers = { Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" };
+    const headers = {
+      Accept: isVideo
+        ? "video/*,application/octet-stream;q=0.9,*/*;q=0.8"
+        : "image/*,application/octet-stream;q=0.9,*/*;q=0.8",
+    };
     if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
     const res = await httpRequestBinary(fetchUrl, {
       method: "GET",
@@ -649,14 +684,18 @@ async function uploadImageToMediaWorker(
       signal,
     });
     if (res.status < 200 || res.status >= 300 || !res.body?.length) {
-      throw Object.assign(new Error(`拉取上游图片失败 HTTP ${res.status || 0}`), {
-        status: res.status || 502,
-        code: "media_fetch_failed",
-      });
+      throw Object.assign(
+        new Error(`拉取上游${isVideo ? "视频" : "图片"}失败 HTTP ${res.status || 0}`),
+        {
+          status: res.status || 502,
+          code: "media_fetch_failed",
+        },
+      );
     }
     body = res.body;
-    contentType = String(res.headers?.["content-type"] || "image/png").split(";")[0].trim() || "image/png";
-    filename = guessUploadFilename(contentType);
+    contentType =
+      String(res.headers?.["content-type"] || defaultType).split(";")[0].trim() || defaultType;
+    filename = guessUploadFilename(contentType, defaultName);
   }
 
   const boundary = `ciallo-${crypto.randomBytes(12).toString("hex")}`;
@@ -711,6 +750,7 @@ async function uploadImageToMediaWorker(
 async function finalizeTaskImageUrl(task, rawImageUrl, signal) {
   const raw = String(rawImageUrl || "").trim();
   if (!raw) return raw;
+  const kind = task.kind === "video" ? "video" : "image";
   const mode = normalizeStorageMode(task.storageMode);
   if (mode === "media") {
     const secret = secrets.get(task.id);
@@ -719,6 +759,7 @@ async function finalizeTaskImageUrl(task, rawImageUrl, signal) {
       mediaUploadToken: task.mediaUploadToken,
       apiKey: secret?.apiKey,
       signal,
+      kind,
     });
     return uploaded.url;
   }
@@ -733,6 +774,7 @@ async function finalizeTaskImageUrl(task, rawImageUrl, signal) {
         mediaUploadToken: task.mediaUploadToken,
         apiKey: secret?.apiKey,
         signal,
+        kind,
       });
       return uploaded.url;
     } catch (e) {
@@ -886,6 +928,102 @@ function httpRequestBinary(
   });
 }
 
+/** 上游视频轮询间隔 / 上限（与前端 api.ts 一致：3s × 200 ≈ 10 分钟） */
+const VIDEO_POLL_INTERVAL_MS = 3000;
+const VIDEO_POLL_MAX_ATTEMPTS = 200;
+
+/**
+ * 文生/图生视频：POST /videos/generations 入队，再轮询 GET /videos/{id} 到终态。
+ * 上游是异步接口，没法像生图那样一次拿结果。
+ */
+async function callUpstreamGenerateVideo(task, base, apiKey) {
+  const ref = references.get(task.id);
+  const hasRef = typeof ref === "string" && ref.trim();
+  const root = base.replace(/\/+$/, "");
+
+  const body = {
+    model: task.model,
+    prompt: task.prompt,
+    duration: task.duration || 6,
+    aspect_ratio: task.aspectRatio || "1:1",
+    resolution: task.resolution || "720p",
+  };
+  if (hasRef) body.image = { url: ref };
+
+  const createRes = await httpRequestJson(`${root}/videos/generations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body,
+    timeoutMs: 120000,
+    signal: task.abortSignal,
+  });
+  if (createRes.status < 200 || createRes.status >= 300) {
+    const msg =
+      createRes.json?.error?.message ||
+      createRes.json?.message ||
+      createRes.raw?.slice(0, 200) ||
+      `上游 HTTP ${createRes.status}`;
+    throw Object.assign(new Error(msg), {
+      status: createRes.status,
+      code: createRes.json?.error?.code || "upstream_error",
+    });
+  }
+  const requestId = String(createRes.json?.request_id || "").trim();
+  if (!requestId) {
+    throw Object.assign(new Error("视频响应中没有 request_id"), {
+      status: 200,
+      code: "invalid_response",
+    });
+  }
+
+  for (let attempt = 1; attempt <= VIDEO_POLL_MAX_ATTEMPTS; attempt += 1) {
+    await sleep(VIDEO_POLL_INTERVAL_MS, task.abortSignal);
+    const res = await httpRequestJson(`${root}/videos/${encodeURIComponent(requestId)}`, {
+      method: "GET",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      timeoutMs: 60000,
+      signal: task.abortSignal,
+    });
+    if (res.status < 200 || res.status >= 300) {
+      const msg =
+        res.json?.error?.message ||
+        res.json?.message ||
+        res.raw?.slice(0, 200) ||
+        `上游 HTTP ${res.status}`;
+      throw Object.assign(new Error(msg), {
+        status: res.status,
+        code: res.json?.error?.code || "upstream_error",
+      });
+    }
+
+    const status = String(res.json?.status || "").trim();
+    if (status === "failed") {
+      throw Object.assign(new Error(res.json?.error?.message || "视频生成失败"), {
+        status: 200,
+        code: res.json?.error?.code || "video_failed",
+        // 上游判定 failed 即终态（多为审核拒绝），重试只会重复扣额度。
+        // 用独立标记而非 code：上游会带自己的 code，靠 code 名字判断会漏。
+        terminal: true,
+      });
+    }
+    if (status === "done") {
+      const url = String(res.json?.video?.url || "").trim();
+      if (!url) {
+        throw Object.assign(new Error("视频完成但未返回地址"), {
+          status: 200,
+          code: "invalid_response",
+        });
+      }
+      return url;
+    }
+  }
+
+  throw Object.assign(new Error("视频生成超时（上游长时间未完成）"), {
+    status: 504,
+    code: "video_timeout",
+  });
+}
+
 async function callUpstreamGenerate(task) {
   const secret = secrets.get(task.id);
   if (!secret?.apiKey) {
@@ -902,6 +1040,9 @@ async function callUpstreamGenerate(task) {
     });
   }
   const base = normalizeBaseUrl(task.baseUrl);
+  if (task.kind === "video") {
+    return callUpstreamGenerateVideo(task, base, secret.apiKey);
+  }
   const ref = references.get(task.id);
   const hasRef = typeof ref === "string" && ref.trim();
   const pathName = hasRef ? "/images/edits" : "/images/generations";
@@ -1048,7 +1189,7 @@ async function runOne(taskId) {
         latest.mediaUploadToken = undefined;
         schedulePersist();
         console.log(
-          `[task-queue] done ${taskId} attempt=${attempt} storage=${normalizeStorageMode(latest.storageMode)}`,
+          `[task-queue] done ${taskId} kind=${latest.kind === "video" ? "video" : "image"} attempt=${attempt} storage=${normalizeStorageMode(latest.storageMode)}`,
         );
         return;
       } catch (err) {
@@ -1183,8 +1324,13 @@ async function createTasks(body, user, policy) {
     );
   }
 
+  const kind = body?.kind === "video" ? "video" : "image";
   const aspectRatio = String(body?.aspectRatio || "1:1").trim() || "1:1";
-  const resolution = String(body?.resolution || "1k").trim() || "1k";
+  const resolution =
+    String(body?.resolution || (kind === "video" ? "720p" : "1k")).trim() ||
+    (kind === "video" ? "720p" : "1k");
+  // 上游只接受 6/10/15
+  const duration = kind === "video" ? ([6, 10, 15].includes(Number(body?.duration)) ? Number(body.duration) : 6) : undefined;
   const autoRetry = body?.autoRetry === true;
   const storageMode = normalizeStorageMode(body?.storageMode);
   const siteBase = normalizeRootBase(body?.siteBase);
@@ -1228,6 +1374,8 @@ async function createTasks(body, user, policy) {
       prompt: item.prompt,
       model,
       baseUrl,
+      kind,
+      duration,
       aspectRatio,
       resolution,
       autoRetry,
@@ -1256,7 +1404,7 @@ async function createTasks(body, user, policy) {
   schedulePersist();
   scheduleDrain();
   console.log(
-    `[task-queue] enqueue n=${created.length} user=${user.username || user.id} model=${model}`,
+    `[task-queue] enqueue n=${created.length} user=${user.username || user.id} kind=${kind} model=${model}`,
   );
   return { batchId, tasks: created, stats: queueStats() };
 }

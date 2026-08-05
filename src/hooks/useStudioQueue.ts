@@ -1,13 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, generateImage, rewriteMediaUrl } from "@/lib/api";
-import { normalizeResolutionForModel } from "@/lib/imageModels";
+import { ApiError, generateImage, generateVideo, rewriteMediaUrl } from "@/lib/api";
+import { normalizeResolutionForModel, resolveReferenceImage } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
   getQueueStorageConfig,
   rewriteMediaUrlToSiteBase,
 } from "@/lib/media/client";
 import { runPool } from "@/lib/runPool";
-import { clampConcurrency, type StudioSettings } from "@/lib/settings";
+import {
+  clampConcurrency,
+  normalizeVideoDuration,
+  normalizeVideoResolution,
+  type StudioSettings,
+} from "@/lib/settings";
 import {
   DEFAULT_VARIANTS,
   clampVariants,
@@ -126,7 +131,11 @@ function isAbortError(error: unknown): boolean {
 function isAutoRetryableError(error: unknown): boolean {
   if (isAbortError(error)) return false;
   if (error instanceof ApiError) {
+    // 显式终态优先：上游带自己的 code 时，靠 code 名字判断会漏
+    if (error.terminal) return false;
     if (error.code === "missing_reference_image" || error.code === "missing_api_key") return false;
+    if (error.code === "missing_video_model" || error.code === "empty_prompt") return false;
+    if (error.code === "video_failed") return false;
     if (error.status === 401 || error.status === 403) return false;
   }
   return true;
@@ -169,6 +178,9 @@ export function useStudioQueue(
       autoRetry: false,
       backgroundTasks: false,
       promptMode: "lines",
+      videoMode: false,
+      videoDuration: 6,
+      videoResolution: "720p",
     }),
   );
   const [jobs, setJobs] = useState<StudioJob[]>(() =>
@@ -292,6 +304,13 @@ export function useStudioQueue(
           patch.promptMode !== undefined
             ? normalizePromptMode(patch.promptMode)
             : normalizePromptMode(prev.promptMode),
+        videoMode: patch.videoMode !== undefined ? patch.videoMode === true : prev.videoMode === true,
+        videoDuration: normalizeVideoDuration(
+          patch.videoDuration !== undefined ? patch.videoDuration : prev.videoDuration,
+        ),
+        videoResolution: normalizeVideoResolution(
+          patch.videoResolution !== undefined ? patch.videoResolution : prev.videoResolution,
+        ),
       };
       draftRef.current = next;
       return next;
@@ -346,6 +365,9 @@ export function useStudioQueue(
             status: "done",
             imageUrl,
             openUrl,
+            // 关页重开时本地 job 可能是重建的，kind 只能由服务端给
+            kind: task.kind === "video" ? "video" : item.kind,
+            duration: task.duration ?? item.duration,
             error: undefined,
             finishedAt: task.finishedAt || Date.now(),
             serverTaskId: task.id,
@@ -599,6 +621,8 @@ export function useStudioQueue(
                   createdAt: t.createdAt,
                   resolution: undefined,
                   aspectRatio: undefined,
+                  kind: t.kind === "video" ? "video" : "image",
+                  duration: t.duration,
                   serverTaskId: t.id,
                   error: t.error,
                 });
@@ -650,9 +674,13 @@ export function useStudioQueue(
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
     const autoRetry = currentDraft.autoRetry === true;
-    const useServerQueue = currentDraft.backgroundTasks === true;
     const resolution = normalizeResolutionForModel(currentSettings.model, currentDraft.resolution);
     const aspectRatio = currentDraft.aspectRatio;
+    // 视频需站长在管理页开启开关，否则忽略草稿里的 videoMode
+    const videoMode = currentSettings.videoEnabled === true && currentDraft.videoMode === true;
+    const videoDuration = normalizeVideoDuration(currentDraft.videoDuration);
+    const videoResolution = normalizeVideoResolution(currentDraft.videoResolution);
+    const useServerQueue = currentDraft.backgroundTasks === true;
 
     if (resolution !== currentDraft.resolution) {
       log("warn", `分辨率已按模型能力纠正：${currentDraft.resolution} → ${resolution}`, {
@@ -674,8 +702,10 @@ export function useStudioQueue(
       }
 
       const batch = expandJobs(currentPrompts, variants, concurrency, {
-        resolution,
+        resolution: videoMode ? videoResolution : resolution,
         aspectRatio,
+        kind: videoMode ? "video" : "image",
+        duration: videoMode ? videoDuration : undefined,
       });
       const batchIds = new Set(batch.map((j) => j.id));
 
@@ -700,8 +730,9 @@ export function useStudioQueue(
 
       log(
         "info",
-        `服务端入队：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · 自动重试=${autoRetry ? "开" : "关"}`,
+        `服务端入队：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} ${videoMode ? "生成" : "生图"} × ${concurrency} 并发 · 自动重试=${autoRetry ? "开" : "关"}`,
         {
+          kind: videoMode ? "video" : "image",
           concurrency,
           variants,
           promptCount: currentPrompts.length,
@@ -709,24 +740,22 @@ export function useStudioQueue(
           appendResults,
           autoRetry,
           aspectRatio,
-          resolution,
-          model: currentSettings.model,
+          resolution: videoMode ? videoResolution : resolution,
+          duration: videoMode ? videoDuration : undefined,
+          model: videoMode ? currentSettings.videoModel : currentSettings.model,
         },
       );
 
       try {
-        const modelId =
-          typeof currentSettings.model === "string" ? currentSettings.model.trim() : "";
-        const isEdit =
-          modelId === "grok-imagine-image-edit" ||
-          /imagine.*image.*edit|image.*edit|img.?edit/i.test(modelId);
-        const ref =
-          isEdit && typeof currentDraft.referenceImageUrl === "string"
-            ? currentDraft.referenceImageUrl.trim()
-            : "";
-        if (isEdit && !ref) {
-          throw new ApiError(400, "当前为图生图模型，请先上传参考图", "missing_reference_image");
+        const resolvedRef = resolveReferenceImage({
+          model: videoMode ? currentSettings.videoModel : currentSettings.model,
+          referenceImageUrl: currentDraft.referenceImageUrl,
+          imageToImageEnabled: currentSettings.imageToImageEnabled === true,
+        });
+        if (resolvedRef.error) {
+          throw new ApiError(400, resolvedRef.error.message, resolvedRef.error.code);
         }
+        const ref = resolvedRef.referenceUrl ?? "";
 
         const storage = getQueueStorageConfig();
         if (storage.storageMode === "media" && !storage.mediaBase) {
@@ -746,9 +775,11 @@ export function useStudioQueue(
         const created = await createServerTasks({
           baseUrl: currentSettings.baseUrl,
           apiKey,
-          model: currentSettings.model,
+          model: videoMode ? currentSettings.videoModel : currentSettings.model,
+          kind: videoMode ? "video" : "image",
+          duration: videoMode ? videoDuration : undefined,
           aspectRatio,
-          resolution,
+          resolution: videoMode ? videoResolution : resolution,
           autoRetry,
           referenceImageUrl: ref || undefined,
           batchId: batch[0]?.batchId,
@@ -843,13 +874,15 @@ export function useStudioQueue(
 
     // 总张数 = 生图数量 × 并发数（× prompt 条数）
     const batch = expandJobs(currentPrompts, variants, concurrency, {
-      resolution,
+      resolution: videoMode ? videoResolution : resolution,
       aspectRatio,
+      kind: videoMode ? "video" : "image",
+      duration: videoMode ? videoDuration : undefined,
     });
     const batchIds = new Set(batch.map((j) => j.id));
     activeBatchIdsRef.current = batchIds;
 
-    // 默认替换结果墙：整表换成 batch，绝不再 prepend 历史
+    // 默认替换作品墙：整表换成 batch，绝不再 prepend 历史
     if (appendResults) {
       setJobs((prev) => [...batch, ...prev].slice(0, 120));
     } else {
@@ -862,7 +895,7 @@ export function useStudioQueue(
     const perPrompt = variants * concurrency;
     log(
       "info",
-      `并发生图开始：本次 ${batch.length} 张 = ${currentPrompts.length} 条 prompt × ${variants} 生图 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=浏览器`,
+      `${videoMode ? "并发生视频" : "并发生图"}开始：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} ${videoMode ? "生成" : "生图"} × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=浏览器`,
       {
         concurrency,
         effectiveWorkers,
@@ -874,8 +907,10 @@ export function useStudioQueue(
         autoRetry,
         useServerQueue: false,
         aspectRatio,
-        resolution,
-        model: currentSettings.model,
+        kind: videoMode ? "video" : "image",
+        resolution: videoMode ? videoResolution : resolution,
+        duration: videoMode ? videoDuration : undefined,
+        model: videoMode ? currentSettings.videoModel : currentSettings.model,
       },
     );
 
@@ -910,7 +945,7 @@ export function useStudioQueue(
             batchId: job.batchId,
             concurrency,
             resolution,
-            model: currentSettings.model,
+            model: videoMode ? currentSettings.videoModel : currentSettings.model,
             autoRetry,
             hasReference: Boolean(
               typeof currentDraft.referenceImageUrl === "string" &&
@@ -918,23 +953,17 @@ export function useStudioQueue(
             ),
           });
 
-          // 仅编辑模型（如 grok-imagine-image-edit）携带参考图 → /images/edits
-          const modelId =
-            typeof currentSettings.model === "string" ? currentSettings.model.trim() : "";
-          const isEdit =
-            modelId === "grok-imagine-image-edit" ||
-            /imagine.*image.*edit|image.*edit|img.?edit/i.test(modelId);
-          const ref =
-            isEdit && typeof currentDraft.referenceImageUrl === "string"
-              ? currentDraft.referenceImageUrl.trim()
-              : "";
-          if (isEdit && !ref) {
-            throw new ApiError(
-              400,
-              "当前为图生图模型，请先上传参考图",
-              "missing_reference_image",
-            );
+          // 编辑模型必带参考图；图生图开关开启时任意模型都可带 → /images/edits
+          // 视频模式必须按视频模型判定，否则图片模型是 edit 类时会误要求参考图
+          const resolvedRef = resolveReferenceImage({
+            model: videoMode ? currentSettings.videoModel : currentSettings.model,
+            referenceImageUrl: currentDraft.referenceImageUrl,
+            imageToImageEnabled: currentSettings.imageToImageEnabled === true,
+          });
+          if (resolvedRef.error) {
+            throw new ApiError(400, resolvedRef.error.message, resolvedRef.error.code);
           }
+          const ref = resolvedRef.referenceUrl ?? "";
 
           let attempt = 0;
           for (;;) {
@@ -943,6 +972,28 @@ export function useStudioQueue(
             }
             attempt += 1;
             try {
+              if (videoMode) {
+                const video = await generateVideo({
+                  baseUrl: currentSettings.baseUrl,
+                  apiKey,
+                  model: currentSettings.videoModel,
+                  prompt: job.prompt,
+                  duration: videoDuration,
+                  aspectRatio,
+                  resolution: videoResolution,
+                  imageUrl: ref || undefined,
+                  signal: controller.signal,
+                  onProgress: (p) => {
+                    patchJob(job.id, { status: "running", error: `生成中 · ${p}%` });
+                  },
+                });
+                log("ok", `视频子任务 ${job.variant}/${job.variants} 完成 ${job.id}`, {
+                  duration: video.duration,
+                  attempts: attempt,
+                });
+                return { imageUrl: video.url, openUrl: video.openUrl };
+              }
+
               const images = await generateImage({
                 baseUrl: currentSettings.baseUrl,
                 apiKey,
@@ -1021,6 +1072,8 @@ export function useStudioQueue(
                 status: "done",
                 imageUrl: result.value.imageUrl,
                 openUrl: result.value.openUrl,
+                // 清掉重试 / 视频进度写入的临时提示
+                error: undefined,
                 finishedAt: Date.now(),
               });
               return;
@@ -1051,7 +1104,7 @@ export function useStudioQueue(
       );
       log(
         "ok",
-        `并发生图结束：本批 ${batch.length} 张 · 结果墙模式=${appendResults ? "追加" : "替换"}`,
+        `${videoMode ? "并发生视频" : "并发生图"}结束：本批 ${batch.length} ${videoMode ? "条" : "张"} · 作品墙模式=${appendResults ? "追加" : "替换"}`,
       );
     } finally {
       // 浏览器本地路径收尾；服务端轮询独立，勿清掉服务端 inFlight

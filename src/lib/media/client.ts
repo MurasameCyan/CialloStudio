@@ -163,7 +163,8 @@ export function rewriteMediaUrlToSiteBase(rawUrl: string, siteBase?: string): st
     const isMediaPath =
       path.includes("/v1/media/") ||
       path.startsWith("/media/") ||
-      path.includes("/images/");
+      path.includes("/images/") ||
+      path.includes("/videos/");
     if (isLoopback || isMediaPath) {
       return `${base}${path.startsWith("/") ? path : `/${path}`}`;
     }

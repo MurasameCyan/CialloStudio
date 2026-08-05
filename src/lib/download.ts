@@ -15,7 +15,8 @@ export function jobFileName(job: StudioJob, index?: number): string {
   const prompt = safeFilePart(job.prompt);
   const res = job.resolution ? `_${job.resolution}` : "";
   const n = typeof index === "number" ? `_${String(index + 1).padStart(2, "0")}` : `_${job.variant}`;
-  return `ciallo${n}_${prompt}${res}.jpg`;
+  const ext = job.kind === "video" ? "mp4" : "jpg";
+  return `ciallo${n}_${prompt}${res}.${ext}`;
 }
 
 async function blobFromUrl(url: string, apiKey?: string): Promise<Blob> {
@@ -24,7 +25,7 @@ async function blobFromUrl(url: string, apiKey?: string): Promise<Blob> {
     return res.blob();
   }
 
-  const headers = new Headers({ Accept: "image/*,*/*" });
+  const headers = new Headers({ Accept: "image/*,video/*,*/*" });
   if (apiKey?.trim()) {
     headers.set("Authorization", `Bearer ${apiKey.trim()}`);
   }

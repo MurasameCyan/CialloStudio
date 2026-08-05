@@ -23,7 +23,10 @@ function rewriteMediaUrlToSiteBase(rawUrl, siteBase) {
     const path = `${parsed.pathname}${parsed.search}${parsed.hash}`;
     const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
     const isMediaPath =
-      path.includes("/v1/media/") || path.startsWith("/media/") || path.includes("/images/");
+      path.includes("/v1/media/") ||
+      path.startsWith("/media/") ||
+      path.includes("/images/") ||
+      path.includes("/videos/");
     if (isLoopback || isMediaPath) {
       return `${base}${path.startsWith("/") ? path : `/${path}`}`;
     }
@@ -58,4 +61,63 @@ assert(
 assert(rewriteMediaUrlToSiteBase("data:image/png;base64,aaa", site).startsWith("data:"), "keep data");
 assert(rewriteMediaUrlToSiteBase(raw, "") === raw, "no site keeps raw");
 
-console.log("media root base / site rewrite ok");
+// 视频：上游走 /videos/ 路径，漏掉会导致后台队列出的视频停在 loopback 地址播不了
+assert(
+  rewriteMediaUrlToSiteBase("http://127.0.0.1:8000/v1/videos/vid_abc.mp4", site) ===
+    "https://img.example.com/v1/videos/vid_abc.mp4",
+  "rewrite loopback video",
+);
+assert(
+  rewriteMediaUrlToSiteBase("https://upstream.example.org/videos/vid_abc.mp4", site) ===
+    "https://img.example.com/videos/vid_abc.mp4",
+  "rewrite remote video path",
+);
+
+// —— 上传文件名按 MIME 推断（视频不能落成 image.png，否则 TG 存成图、<video> 播不了）——
+function guessUploadFilename(contentType, fallback = "image.png") {
+  const t = String(contentType || "").toLowerCase();
+  if (t.includes("mp4")) return "video.mp4";
+  if (t.includes("webm")) return "video.webm";
+  if (t.includes("quicktime") || t.includes("mov")) return "video.mov";
+  if (t.includes("jpeg") || t.includes("jpg")) return "image.jpg";
+  if (t.includes("webp")) return "image.webp";
+  if (t.includes("gif")) return "image.gif";
+  if (t.includes("png")) return "image.png";
+  return fallback;
+}
+
+assert(guessUploadFilename("video/mp4") === "video.mp4", "mp4 filename");
+assert(guessUploadFilename("video/webm") === "video.webm", "webm filename");
+assert(guessUploadFilename("image/jpeg") === "image.jpg", "jpeg filename");
+assert(guessUploadFilename("", "video.mp4") === "video.mp4", "video fallback");
+assert(guessUploadFilename("application/octet-stream") === "image.png", "image fallback");
+
+// —— Telegram file_path → MIME（mp4 被识别成图片时 <video> 直接播不了）——
+function guessMime(p0) {
+  const p = String(p0 || "").toLowerCase();
+  if (p.endsWith(".png")) return "image/png";
+  if (p.endsWith(".webp")) return "image/webp";
+  if (p.endsWith(".gif")) return "image/gif";
+  if (p.endsWith(".jpg") || p.endsWith(".jpeg")) return "image/jpeg";
+  if (p.endsWith(".mp4")) return "video/mp4";
+  if (p.endsWith(".webm")) return "video/webm";
+  if (p.endsWith(".mov")) return "video/quicktime";
+  if (/videos\//i.test(p)) return "video/mp4";
+  if (/\/file_\d+$/i.test(p) || /documents\//i.test(p)) return "image/jpeg";
+  return "application/octet-stream";
+}
+
+assert(guessMime("videos/file_12.mp4") === "video/mp4", "tg video ext");
+// Telegram 常给 videos/file_N 无扩展名：必须仍判成视频，不能落到 documents→jpeg 分支
+assert(guessMime("videos/file_12") === "video/mp4", "tg video no ext");
+assert(guessMime("documents/file_9") === "image/jpeg", "tg doc defaults image");
+assert(guessMime("photos/file_3.jpg") === "image/jpeg", "tg photo ext");
+
+// —— 上游视频时长白名单（上游只接受 6/10/15）——
+const pickDuration = (v) => ([6, 10, 15].includes(Number(v)) ? Number(v) : 6);
+assert(pickDuration(10) === 10, "duration 10");
+assert(pickDuration("15") === 15, "duration string coerced");
+assert(pickDuration(7) === 6, "invalid duration falls back");
+assert(pickDuration(undefined) === 6, "missing duration falls back");
+
+console.log("media root base / site rewrite / video mime ok");

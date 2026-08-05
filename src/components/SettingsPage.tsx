@@ -145,6 +145,12 @@ export function SettingsPage({
     return models.filter((m) => m.id.toLowerCase().includes(q));
   }, [models, optimizeModelFilter]);
 
+  /** 视频模型候选：模型列表里 id 带 video 的 */
+  const filteredVideoModels = useMemo(
+    () => models.filter((m) => /video/i.test(m.id)),
+    [models],
+  );
+
   function update<K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
@@ -797,6 +803,113 @@ export function SettingsPage({
                         点下方「测试连接」加载列表（需支持 chat/completions）
                       </p>
                     )}
+                  </div>
+                </div>
+
+                <div className="studio-params-divider" role="separator" />
+
+                <div className="admin-block-label">功能开关</div>
+                <div className="admin-dual-cols">
+                  <div className="admin-dual-col">
+                    <div className="field">
+                      <div className="label-row">
+                        <label>图生图</label>
+                      </div>
+                      <div className="segmented">
+                        <button
+                          type="button"
+                          className={`chip ${!draft.imageToImageEnabled ? "active" : ""}`}
+                          aria-pressed={!draft.imageToImageEnabled}
+                          onClick={() => update("imageToImageEnabled", false)}
+                        >
+                          关闭
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.imageToImageEnabled ? "active" : ""}`}
+                          aria-pressed={draft.imageToImageEnabled}
+                          onClick={() => update("imageToImageEnabled", true)}
+                        >
+                          开启
+                        </button>
+                      </div>
+                      <p className="footer-note" style={{ marginTop: 6 }}>
+                        {draft.imageToImageEnabled
+                          ? "创作台显示「参考图」上传区，带图生成走 /images/edits"
+                          : "创作台隐藏参考图；图生图专用模型仍会强制要求参考图"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="admin-dual-col">
+                    <div className="field">
+                      <div className="label-row">
+                        <label>文生视频</label>
+                      </div>
+                      <div className="segmented">
+                        <button
+                          type="button"
+                          className={`chip ${!draft.videoEnabled ? "active" : ""}`}
+                          aria-pressed={!draft.videoEnabled}
+                          onClick={() => update("videoEnabled", false)}
+                        >
+                          关闭
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.videoEnabled ? "active" : ""}`}
+                          aria-pressed={draft.videoEnabled}
+                          onClick={() => update("videoEnabled", true)}
+                        >
+                          开启
+                        </button>
+                      </div>
+                      <p className="footer-note" style={{ marginTop: 6 }}>
+                        {draft.videoEnabled
+                          ? "创作台可切「视频」模式，走 /videos/generations 异步轮询"
+                          : "开启后创作台出现视频模式开关"}
+                      </p>
+                    </div>
+
+                    {draft.videoEnabled ? (
+                      <div className="field">
+                        <div className="label-row">
+                          <label htmlFor="videoModel">视频模型</label>
+                        </div>
+                        <input
+                          id="videoModel"
+                          className="control mono"
+                          value={typeof draft.videoModel === "string" ? draft.videoModel : ""}
+                          placeholder="grok-imagine-video"
+                          onChange={(e) => update("videoModel", e.target.value)}
+                          autoComplete="off"
+                          spellCheck={false}
+                        />
+                        {filteredVideoModels.length > 0 ? (
+                          <div className="admin-model-grid" role="listbox" aria-label="视频模型">
+                            {filteredVideoModels.map((model) => (
+                              <button
+                                key={`vid-${model.id}`}
+                                type="button"
+                                role="option"
+                                aria-selected={draft.videoModel === model.id}
+                                title={model.id}
+                                className={`chip admin-model-chip ${
+                                  draft.videoModel === model.id ? "active" : ""
+                                }`}
+                                onClick={() => update("videoModel", model.id)}
+                              >
+                                <span className="admin-model-chip-text">{model.id}</span>
+                              </button>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="footer-note" style={{ marginTop: 6 }}>
+                            点「测试连接」加载模型列表后可点选带 video 的模型
+                          </p>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 </div>
 

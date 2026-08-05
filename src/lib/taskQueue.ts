@@ -14,6 +14,10 @@ export type ServerTask = {
   prompt: string;
   model: string;
   baseUrl: string;
+  /** image=生图；video=文生/图生视频 */
+  kind?: "image" | "video";
+  /** 视频时长（秒），仅 kind=video */
+  duration?: number;
   aspectRatio: string;
   resolution: string;
   imageUrl?: string;
@@ -44,6 +48,10 @@ export type CreateServerTasksInput = {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** image=生图；video=文生/图生视频（服务端走 /videos/generations + 轮询） */
+  kind?: "image" | "video";
+  /** 视频时长（秒）：6 / 10 / 15，仅 kind=video */
+  duration?: number;
   aspectRatio?: string;
   resolution?: string;
   autoRetry?: boolean;

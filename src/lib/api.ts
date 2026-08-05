@@ -21,12 +21,15 @@ export type ImageResult = {
 export class ApiError extends Error {
   readonly status: number;
   readonly code?: string;
+  /** 终态：不该自动重试。上游会带自己的 code，靠 code 名字判断会漏 */
+  readonly terminal: boolean;
 
-  constructor(status: number, message: string, code?: string) {
+  constructor(status: number, message: string, code?: string, terminal = false) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.code = code;
+    this.terminal = terminal;
   }
 }
 
@@ -592,6 +595,219 @@ export async function generateImage(input: {
 
   log("ok", `生图完成 ${images.length} 张`);
   return images;
+}
+
+export type VideoStatus = "pending" | "done" | "failed";
+
+export type VideoResult = {
+  status: VideoStatus;
+  model?: string;
+  /** 0–100 */
+  progress: number;
+  video?: {
+    url: string;
+    duration?: number;
+    respectModeration?: boolean;
+  };
+  error?: { code?: string; message: string };
+};
+
+function isVideoStatus(value: unknown): value is VideoStatus {
+  return value === "pending" || value === "done" || value === "failed";
+}
+
+/**
+ * 文生视频入队：POST /videos/generations → request_id（异步，需轮询）。
+ * 带 imageUrl 时为图生视频（上游字段 image.url）。
+ */
+export async function createVideoTask(input: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  /** 6 / 10 / 15 秒 */
+  duration: number;
+  aspectRatio: string;
+  /** 480p / 720p / 1080p */
+  resolution: string;
+  /** 可选首帧参考图：URL / data URL / blob:（会转 data URL） */
+  imageUrl?: string;
+  signal?: AbortSignal;
+}): Promise<string> {
+  const model = typeof input.model === "string" ? input.model.trim() : "";
+  if (!model) {
+    throw new ApiError(400, "请先在管理页填写「视频模型」", "missing_video_model");
+  }
+  const prompt = typeof input.prompt === "string" ? input.prompt.trim() : "";
+  if (!prompt) {
+    throw new ApiError(400, "请先输入提示词", "empty_prompt");
+  }
+
+  const body: Record<string, unknown> = {
+    model,
+    prompt,
+    duration: input.duration,
+    aspect_ratio: input.aspectRatio,
+    resolution: input.resolution,
+  };
+  const ref = typeof input.imageUrl === "string" ? input.imageUrl.trim() : "";
+  if (ref) {
+    body.image = { url: await normalizeReferenceImageUrl(ref, input.signal) };
+  }
+
+  log("info", "开始生成视频", {
+    model,
+    prompt,
+    duration: input.duration,
+    aspectRatio: input.aspectRatio,
+    resolution: input.resolution,
+    reference: ref ? "image" : "none",
+  });
+
+  const payload = await apiRequest(input.baseUrl, input.apiKey, "/videos/generations", {
+    method: "POST",
+    signal: input.signal,
+    body,
+  });
+
+  const requestId =
+    isRecord(payload) && typeof payload.request_id === "string" ? payload.request_id.trim() : "";
+  if (!requestId) {
+    throw new ApiError(200, "视频响应中没有 request_id", "invalid_response");
+  }
+  log("ok", "视频任务已入队", { requestId });
+  return requestId;
+}
+
+/** 查询视频任务：GET /videos/{request_id} */
+export async function getVideoTask(input: {
+  baseUrl: string;
+  apiKey: string;
+  requestId: string;
+  signal?: AbortSignal;
+}): Promise<VideoResult> {
+  const payload = await apiRequest(
+    input.baseUrl,
+    input.apiKey,
+    `/videos/${encodeURIComponent(input.requestId)}`,
+    { method: "GET", signal: input.signal },
+  );
+
+  if (!isRecord(payload) || !isVideoStatus(payload.status)) {
+    throw new ApiError(200, "视频状态响应无效", "invalid_response");
+  }
+
+  const progressRaw = typeof payload.progress === "number" ? payload.progress : NaN;
+  const result: VideoResult = {
+    status: payload.status,
+    model: typeof payload.model === "string" ? payload.model : undefined,
+    progress: Number.isFinite(progressRaw)
+      ? Math.max(0, Math.min(100, progressRaw))
+      : payload.status === "done"
+        ? 100
+        : 0,
+  };
+
+  if (isRecord(payload.video) && typeof payload.video.url === "string" && payload.video.url.trim()) {
+    result.video = {
+      url: rewriteMediaUrl(payload.video.url, input.baseUrl),
+      duration: typeof payload.video.duration === "number" ? payload.video.duration : undefined,
+      respectModeration:
+        typeof payload.video.respect_moderation === "boolean"
+          ? payload.video.respect_moderation
+          : undefined,
+    };
+  }
+
+  const err = isRecord(payload.error) ? payload.error : undefined;
+  if (err && typeof err.message === "string") {
+    result.error = {
+      code: typeof err.code === "string" ? err.code : undefined,
+      message: err.message,
+    };
+  }
+
+  return result;
+}
+
+/** 轮询间隔：上游生成 6–15s 视频通常需要数十秒 */
+const VIDEO_POLL_INTERVAL_MS = 3000;
+/** 兜底上限，防止 pending 卡死时无限轮询（约 10 分钟） */
+const VIDEO_POLL_MAX_ATTEMPTS = 200;
+
+/**
+ * 入队 + 轮询直到 done/failed，返回可播放的视频地址。
+ * 同源 /v1/media 路径会被 blob 化，避免 <video> 带不了上游头。
+ */
+export async function generateVideo(input: {
+  baseUrl: string;
+  apiKey: string;
+  model: string;
+  prompt: string;
+  duration: number;
+  aspectRatio: string;
+  resolution: string;
+  imageUrl?: string;
+  signal?: AbortSignal;
+  onProgress?: (progress: number) => void;
+}): Promise<{ url: string; openUrl?: string; duration?: number }> {
+  const requestId = await createVideoTask(input);
+
+  for (let attempt = 1; attempt <= VIDEO_POLL_MAX_ATTEMPTS; attempt += 1) {
+    await sleep(VIDEO_POLL_INTERVAL_MS, input.signal);
+    const status = await getVideoTask({
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      requestId,
+      signal: input.signal,
+    });
+    input.onProgress?.(status.progress);
+
+    if (status.status === "failed") {
+      throw new ApiError(
+        200,
+        status.error?.message || "视频生成失败",
+        status.error?.code || "video_failed",
+        // 上游判 failed 即终态（多为审核拒绝），重试只会重复扣额度
+        true,
+      );
+    }
+
+    if (status.status === "done") {
+      const rawUrl = status.video?.url;
+      if (!rawUrl) {
+        throw new ApiError(200, "视频完成但未返回地址", "invalid_response");
+      }
+      rememberUpstreamOrigin(input.baseUrl);
+
+      let display = rawUrl;
+      const needsMaterialize =
+        isSameOriginMediaPath(rawUrl) ||
+        /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rawUrl);
+      if (needsMaterialize) {
+        try {
+          display = await materializeImageUrl({
+            rawUrl,
+            baseUrl: input.baseUrl,
+            apiKey: input.apiKey,
+            signal: input.signal,
+          });
+        } catch (error) {
+          log("warn", "视频 blob 化失败，回退直链（依赖 cookie 代理）", error);
+          display = rawUrl;
+        }
+      }
+
+      log("ok", "视频生成完成", { requestId, duration: status.video?.duration });
+      return {
+        url: display,
+        openUrl: rawUrl.startsWith("blob:") || rawUrl.startsWith("data:") ? undefined : rawUrl,
+        duration: status.video?.duration,
+      };
+    }
+  }
+
+  throw new ApiError(408, "视频生成超时，请稍后在上游查询任务", "video_timeout");
 }
 
 const PROMPT_OPTIMIZE_SYSTEM_LINES = [

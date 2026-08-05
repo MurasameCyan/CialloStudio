@@ -1,6 +1,9 @@
-import { clampConcurrency } from "./settings";
+import { clampConcurrency, normalizeVideoDuration, normalizeVideoResolution } from "./settings";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
+
+/** 作品类型：图片 / 视频（文生视频） */
+export type JobKind = "image" | "video";
 
 export type StudioJob = {
   id: string;
@@ -9,6 +12,10 @@ export type StudioJob = {
   variants: number;
   prompt: string;
   status: JobStatus;
+  /** 缺省视作 image，兼容旧数据 */
+  kind?: JobKind;
+  /** 视频时长（秒），仅 kind=video */
+  duration?: number;
   /** 展示用 URL：优先 openUrl / 可持久化地址，避免 blob 丢失 */
   imageUrl?: string;
   openUrl?: string;
@@ -30,7 +37,7 @@ export type StudioDraft = {
   resolution: string;
   variants: number;
   concurrency: number;
-  /** 新生成是否追加到结果墙；false=只保留本次 */
+  /** 新生成是否追加到作品墙；false=只保留本次 */
   appendResults: boolean;
   /** 失败后自动重试当前子任务，直到成功或用户停止 */
   autoRetry: boolean;
@@ -48,9 +55,15 @@ export type StudioDraft = {
   referenceImageUrl?: string;
   /** 参考图文件名，仅 UI 展示 */
   referenceImageName?: string;
+  /** true = 走文生视频（/videos/generations）；需站长开启视频开关 */
+  videoMode: boolean;
+  /** 视频时长（秒）：6 / 10 / 15 */
+  videoDuration: number;
+  /** 视频分辨率：480p / 720p / 1080p */
+  videoResolution: string;
 };
 
-// v2：清空旧版结果墙历史（v1 曾默认追加，容易看起来像「点一次出十几张」）
+// v2：清空旧版作品墙历史（v1 曾默认追加，容易看起来像「点一次出十几张」）
 const JOBS_KEY = "ciallo-studio.jobs.v2";
 const DRAFT_KEY = "ciallo-studio.draft.v2";
 const MAX_JOBS = 120;
@@ -143,7 +156,7 @@ export function expandJobs(
   prompts: string[],
   variants: number,
   concurrency: number,
-  meta?: { resolution?: string; aspectRatio?: string },
+  meta?: { resolution?: string; aspectRatio?: string; kind?: JobKind; duration?: number },
 ): StudioJob[] {
   const count = imagesPerPrompt(variants, concurrency);
   const now = Date.now();
@@ -158,6 +171,8 @@ export function expandJobs(
         variants: count,
         prompt,
         status: "queued",
+        kind: meta?.kind ?? "image",
+        duration: meta?.duration,
         createdAt: now,
         resolution: meta?.resolution,
         aspectRatio: meta?.aspectRatio,
@@ -167,7 +182,7 @@ export function expandJobs(
   return jobs;
 }
 
-/** 启动时清掉 v1 残留，避免旧结果墙/旧 draft 继续干扰 */
+/** 启动时清掉 v1 残留，避免旧作品墙/旧 draft 继续干扰 */
 export function migrateLegacyStorage(): void {
   try {
     for (const key of LEGACY_KEYS) {
@@ -258,6 +273,9 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         autoRetry: defaults.autoRetry === true,
         backgroundTasks: defaults.backgroundTasks === true,
         promptMode: normalizePromptMode(defaults.promptMode),
+        videoMode: defaults.videoMode === true,
+        videoDuration: normalizeVideoDuration(defaults.videoDuration),
+        videoResolution: normalizeVideoResolution(defaults.videoResolution),
       };
     }
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
@@ -267,13 +285,16 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       resolution: typeof parsed.resolution === "string" ? parsed.resolution : defaults.resolution,
       variants: clampVariants(Number(parsed.variants ?? defaults.variants ?? DEFAULT_VARIANTS)),
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
-      // 缺省 / 非 boolean 一律 false：替换结果墙
+      // 缺省 / 非 boolean 一律 false：替换作品墙
       appendResults: parsed.appendResults === true,
       autoRetry: parsed.autoRetry === true,
       backgroundTasks: parsed.backgroundTasks === true,
       promptMode: normalizePromptMode(
         parsed.promptMode ?? defaults.promptMode ?? "lines",
       ),
+      videoMode: parsed.videoMode === true,
+      videoDuration: normalizeVideoDuration(parsed.videoDuration ?? defaults.videoDuration),
+      videoResolution: normalizeVideoResolution(parsed.videoResolution ?? defaults.videoResolution),
     };
   } catch {
     return {
@@ -284,6 +305,9 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       autoRetry: false,
       backgroundTasks: false,
       promptMode: normalizePromptMode(defaults.promptMode),
+      videoMode: false,
+      videoDuration: normalizeVideoDuration(defaults.videoDuration),
+      videoResolution: normalizeVideoResolution(defaults.videoResolution),
     };
   }
 }
@@ -302,6 +326,9 @@ export function saveDraft(draft: StudioDraft): void {
         autoRetry: draft.autoRetry === true,
         backgroundTasks: draft.backgroundTasks === true,
         promptMode: normalizePromptMode(draft.promptMode),
+        videoMode: draft.videoMode === true,
+        videoDuration: normalizeVideoDuration(draft.videoDuration),
+        videoResolution: normalizeVideoResolution(draft.videoResolution),
       }),
     );
   } catch {

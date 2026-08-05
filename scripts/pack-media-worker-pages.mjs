@@ -122,12 +122,12 @@ function main() {
    TELEGRAM_CHAT_ID     (Secret)  群 ID，如 -100...
    UPLOAD_TOKEN         (Secret)  上传口令（建议）
    ALLOWED_ORIGINS      (可选)    CORS 白名单，逗号分隔
-   MAX_UPLOAD_BYTES     (可选)    默认 20971520（20 MB）
+   MAX_UPLOAD_BYTES     (可选)    20971520（20 MB），不建议上调
 
-   注意上传与下载上限不对称：sendDocument 允许 50 MB，但 getFile 只能
-   下载 ≤20 MB。调到 52428800 后，20–50 MB 的文件会上传成功却读不回来
-   （/v1/media/:id → 404）。可播放的实际上限仍是 20 MB；1080p 长视频
-   建议改用 Site 储存（直连上游图站），不要走 TG。
+   20 MB 是 getFile 的下载上限，也就是本 worker 真正能读回来的上限。
+   sendDocument 虽然收 50 MB，但 20–50 MB 的文件会上传成功却永远读不
+   回来（/v1/media/:id 走 getFile 失败 → 404），等于只写不可读。
+   1080p 长视频请改用 Site 储存（直连上游图站），不要过 TG。
 
 7. 保存后若变量是后加的，点「Retry deployment」或重新 Deploy
 8. 公网地址形如：https://ciallo-media.pages.dev

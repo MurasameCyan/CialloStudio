@@ -86,7 +86,7 @@ function main() {
   </head>
   <body>
     <h1>Ciallo Telegram Media</h1>
-    <p>图片存储反代已运行（Cloudflare Pages + <code>_worker.js</code>）。</p>
+    <p>图片 / 视频存储反代已运行（Cloudflare Pages + <code>_worker.js</code>）。</p>
     <ul>
       <li><a href="/healthz"><code>GET /healthz</code></a></li>
       <li><code>POST /v1/upload</code>（multipart <code>file</code>）</li>
@@ -122,7 +122,9 @@ function main() {
    TELEGRAM_CHAT_ID     (Secret)  群 ID，如 -100...
    UPLOAD_TOKEN         (Secret)  上传口令（建议）
    ALLOWED_ORIGINS      (可选)    CORS 白名单，逗号分隔
-   MAX_UPLOAD_BYTES     (可选)    默认 20971520
+   MAX_UPLOAD_BYTES     (可选)    默认 20971520（20 MB）
+                                  存视频建议 52428800（50 MB，Telegram
+                                  bot 接口硬上限）；1080p 长视频易超 20 MB
 
 7. 保存后若变量是后加的，点「Retry deployment」或重新 Deploy
 8. 公网地址形如：https://ciallo-media.pages.dev
@@ -134,6 +136,8 @@ function main() {
 
 说明：
   Pages 的 _worker.js 会处理 API；静态 index.html 仅作说明页。
+  图片与视频（mp4/webm/mov）都走 POST /v1/upload；上传一律用 sendDocument
+  保真，Telegram 可能把 mp4 转成 video 类型消息，worker 两种都能接。
 `,
     "utf8",
   );

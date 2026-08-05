@@ -16,4 +16,6 @@ workers_dev = true
 #   MAX_UPLOAD_BYTES
 
 [vars]
-MAX_UPLOAD_BYTES = "20971520"
+# 50 MB = sendDocument 的 bot 上限。注意 getFile 只能下载 ≤20 MB：
+# 20–50 MB 的文件能上传成功但读不回来（/v1/media/:id 会 404）。
+MAX_UPLOAD_BYTES = "52428800"

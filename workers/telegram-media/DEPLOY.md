@@ -18,9 +18,14 @@ GET  /healthz
 | `TELEGRAM_CHAT_ID` | **Secret** | 是 | 群/频道 ID，如 `-1004398134093` |
 | `UPLOAD_TOKEN` | **Secret** | 强烈建议 | 上传鉴权；浏览器管理页填同一个 |
 | `ALLOWED_ORIGINS` | Secret 或 Variable | 否 | CORS 白名单，逗号分隔；空=反射 Origin |
-| `MAX_UPLOAD_BYTES` | Variable | 否 | 默认 `20971520`（20MB） |
+| `MAX_UPLOAD_BYTES` | Variable | 否 | 缺省 `20971520`（20MB）；`wrangler.toml` 现设 `52428800`（50MB） |
 
 > Bot Token **不要**写进本 zip、Git、前端。
+
+> **上传与下载上限不对称**：`sendDocument` 允许 50 MB，但 `getFile` 只能下载
+> ≤20 MB。20–50 MB 的文件会上传成功、却永远读不回来（`/v1/media/:id` 走
+> `getFile` 失败 → 404）。要真正可播放，**实际可用上限仍是 20 MB**。
+> 1080p 长视频建议改用 Site 储存（直连上游图站），不要走 TG。
 
 ---
 

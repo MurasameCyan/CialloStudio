@@ -123,8 +123,11 @@ function main() {
    UPLOAD_TOKEN         (Secret)  上传口令（建议）
    ALLOWED_ORIGINS      (可选)    CORS 白名单，逗号分隔
    MAX_UPLOAD_BYTES     (可选)    默认 20971520（20 MB）
-                                  存视频建议 52428800（50 MB，Telegram
-                                  bot 接口硬上限）；1080p 长视频易超 20 MB
+
+   注意上传与下载上限不对称：sendDocument 允许 50 MB，但 getFile 只能
+   下载 ≤20 MB。调到 52428800 后，20–50 MB 的文件会上传成功却读不回来
+   （/v1/media/:id → 404）。可播放的实际上限仍是 20 MB；1080p 长视频
+   建议改用 Site 储存（直连上游图站），不要走 TG。
 
 7. 保存后若变量是后加的，点「Retry deployment」或重新 Deploy
 8. 公网地址形如：https://ciallo-media.pages.dev

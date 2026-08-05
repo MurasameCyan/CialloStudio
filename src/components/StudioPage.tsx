@@ -294,6 +294,9 @@ export function StudioPage({
     () => concurrencyOptionsForCap(concurrencyCap),
     [concurrencyCap],
   );
+  // resolutionField 是立即构造的 JSX，里面的 .map() 当场就读 modelCap，
+  // 所以必须声明在它之前，否则 TDZ。
+  const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   /** 高级：内联在分辨率右侧，不单独占行 */
   const advancedField = (
     <div className="field studio-advanced-field">
@@ -571,7 +574,6 @@ export function StudioPage({
       </div>
     ) : null;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
-  const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
   /**
    * 参考图上传区：站长开启「图生图」开关，或模型本身是编辑类（必须带图）。
    * 视频模式下参考图作首帧（图生视频），同样沿用开关。

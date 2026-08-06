@@ -15,9 +15,16 @@ const CAPABILITIES: Record<string, ImageModelCapability> = {
   "grok-imagine-image": {
     id: "grok-imagine-image",
     label: "Fast（Lite）",
-    supportsResolution: false,
-    allowedResolutions: ["1k"],
-    note: "快速模型（imagine-lite）会忽略 resolution，出图像素由上游固定，常见约 1K 级。",
+    supportsResolution: true,
+    allowedResolutions: ["1k", "2k"],
+    note: "快速模型（imagine-lite），现已支持 1k / 2k。",
+  },
+  "grok-imagine-image-lite": {
+    id: "grok-imagine-image-lite",
+    label: "Fast（Lite）",
+    supportsResolution: true,
+    allowedResolutions: ["1k", "2k"],
+    note: "快速模型（imagine-lite），现已支持 1k / 2k。",
   },
   "grok-imagine-image-quality": {
     id: "grok-imagine-image-quality",
@@ -58,18 +65,18 @@ export function getImageModelCapability(model: string): ImageModelCapability {
     return {
       id,
       label: "Image",
-      supportsResolution: false,
-      allowedResolutions: ["1k"],
-      note: "未知图片模型：可能不支持 resolution。若尺寸不变，请换 quality 模型。",
+      supportsResolution: true,
+      allowedResolutions: ["1k", "2k"],
+      note: "未知图片模型：按支持 1k / 2k 处理。若尺寸不变，说明上游忽略了该参数。",
     };
   }
 
   return {
     id,
     label: model || "未知",
-    supportsResolution: false,
-    allowedResolutions: ["1k"],
-    note: "当前模型可能不是图片模型，或不支持分辨率参数。",
+    supportsResolution: true,
+    allowedResolutions: ["1k", "2k"],
+    note: "当前模型可能不是图片模型；分辨率照常提交，由上游决定是否生效。",
   };
 }
 

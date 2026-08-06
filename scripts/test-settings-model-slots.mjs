@@ -4,8 +4,13 @@
  * Run: node --experimental-strip-types scripts/test-settings-model-slots.mjs
  */
 import assert from "node:assert/strict";
-import { DEFAULT_SETTINGS, loadSettings, normalizeSettings } from "../src/lib/settings.ts";
-import { resolveGenerationTarget } from "../src/lib/imageModels.ts";
+import {
+  DEFAULT_SETTINGS,
+  loadSettings,
+  normalizeSettings,
+  resolvePromptOptimizeEndpoint,
+} from "../src/lib/settings.ts";
+import { getImageModelCapability, resolveGenerationTarget } from "../src/lib/imageModels.ts";
 
 // —— normalizeSettings ——
 {
@@ -26,15 +31,40 @@ import { resolveGenerationTarget } from "../src/lib/imageModels.ts";
   assert.equal(normalizeSettings({ videoDuration: "oops" }).videoDuration, 6, "NaN 时长回落 6s");
   assert.equal(normalizeSettings({ videoResolution: "4K" }).videoResolution, "720p", "非法分辨率回落");
   assert.equal(normalizeSettings({ resolution: "4k" }).resolution, "1k", "图片分辨率只有 1k/2k");
+  assert.equal(normalizeSettings({ resolution: "2k" }).resolution, "2k", "2k 是合法图片分辨率");
+}
 
-  // 关掉独立上游时不留残值，避免旧 Key 继续被带走
-  const reused = normalizeSettings({
-    promptOptimizeCustomUpstream: false,
-    promptOptimizeBaseUrl: "https://old/v1",
-    promptOptimizeApiKey: "sk-old",
-  });
-  assert.equal(reused.promptOptimizeBaseUrl, "");
-  assert.equal(reused.promptOptimizeApiKey, "");
+// —— 未选择时的默认模型 ——
+{
+  assert.equal(DEFAULT_SETTINGS.model, "grok-imagine-image-lite", "文生图默认模型");
+  assert.equal(DEFAULT_SETTINGS.imageEditModel, "grok-imagine-image-quality", "图生图默认模型");
+  assert.equal(DEFAULT_SETTINGS.videoModel, "grok-imagine-video", "视频默认模型");
+  assert.equal(DEFAULT_SETTINGS.promptOptimizeModel, "grok-4.5", "提示词默认模型");
+}
+
+// —— 提示词优化统一复用生图上游（独立上游已移除）——
+{
+  const ep = resolvePromptOptimizeEndpoint(
+    normalizeSettings({ baseUrl: "https://x/v1", apiKey: "g2a_x", promptOptimizeModel: "grok-4.5" }),
+  );
+  assert.equal(ep.baseUrl, "https://x/v1", "优化走生图 Base");
+  assert.equal(ep.apiKey, "g2a_x", "优化走生图 Key");
+  assert.equal(ep.model, "grok-4.5");
+  assert.equal("usingCustomUpstream" in ep, false, "独立上游字段已彻底移除");
+}
+
+// —— 图片分辨率能力：现在所有图片模型都可选 2k ——
+{
+  for (const id of [
+    "grok-imagine-image-lite",
+    "grok-imagine-image",
+    "grok-imagine-image-quality",
+    "grok-imagine-image-edit",
+  ]) {
+    const cap = getImageModelCapability(id);
+    assert.ok(cap.allowedResolutions.includes("2k"), `${id} 应允许 2k`);
+    assert.ok(cap.allowedResolutions.includes("1k"), `${id} 应允许 1k`);
+  }
 }
 
 // —— resolveGenerationTarget ——

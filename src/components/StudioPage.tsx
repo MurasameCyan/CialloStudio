@@ -1019,9 +1019,7 @@ export function StudioPage({
     if (!ep.baseUrl || !ep.apiKey) {
       setOptimizeNotice({
         ok: false,
-        text: ep.usingCustomUpstream
-          ? "请填写独立优化 API Base URL 与 Key"
-          : "请先配置生图 API Base URL 与 Key",
+        text: "请先配置生图 API Base URL 与 Key",
       });
       openConfigOrLogin();
       return;
@@ -1048,7 +1046,6 @@ export function StudioPage({
       setOptimizeNotice({ ok: true, text: "已优化并覆盖输入框 · 可点「回退」恢复" });
       log("ok", "提示词优化完成", {
         model: ep.model,
-        customUpstream: ep.usingCustomUpstream,
         promptMode: draft.promptMode,
       });
     } catch (error) {
@@ -1885,9 +1882,7 @@ export function StudioPage({
                   !optimizeEndpoint.model
                     ? "请先在设置页填写「提示词优化模型」"
                     : !optimizeEndpoint.apiKey || !optimizeEndpoint.baseUrl
-                      ? optimizeEndpoint.usingCustomUpstream
-                        ? "请填写独立优化 API Base / Key"
-                        : "请先配置生图 API"
+                      ? "请先配置生图 API"
                       : !draft.promptText.trim()
                         ? "请先输入提示词"
                         : "调用 chat 模型优化当前提示词"

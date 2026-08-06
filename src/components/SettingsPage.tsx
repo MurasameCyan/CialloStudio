@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AdminTaskQueuePanel } from "@/components/AdminTaskQueuePanel";
 import { LogPanel } from "@/components/LogPanel";
 import { UserPoolPanel } from "@/components/UserPoolPanel";
@@ -46,6 +47,7 @@ type AdminSection = "api" | "users" | "tasks";
 /**
  * 模型下拉。模型列表要点「测试连接」才有，所以已存的模型 id 即使不在列表里也保留成选项，
  * 否则换台机器打开管理页会把已配好的模型选空。
+ * 用主题同步的自定义弹层代替原生 select，复用 .prompt-history-panel 模式。
  */
 function ModelSelect({
   id,
@@ -53,7 +55,6 @@ function ModelSelect({
   value,
   options,
   emptyLabel,
-  hint,
   onPick,
 }: {
   id: string;
@@ -61,31 +62,169 @@ function ModelSelect({
   value: string;
   options: OpenAIModel[];
   emptyLabel: string;
-  hint?: string;
   onPick: (next: string) => void;
 }) {
+  const [open, setOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<{
+    top: number;
+    left: number;
+    width: number;
+    maxHeight: number;
+  } | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
   const current = typeof value === "string" ? value.trim() : "";
   const ids = options.map((m) => m.id);
   const list = current && !ids.includes(current) ? [current, ...ids] : ids;
+
+  function updatePanelPosition() {
+    const anchor = btnRef.current;
+    if (!anchor) return;
+    const rect = anchor.getBoundingClientRect();
+    const pad = 12;
+    const gap = 4;
+    const width = rect.width;
+    const spaceBelow = window.innerHeight - rect.bottom - gap - pad;
+    const spaceAbove = rect.top - gap - pad;
+    const preferBelow = spaceBelow >= 200 || spaceBelow >= spaceAbove;
+    const maxHeight = Math.min(280, Math.max(120, preferBelow ? spaceBelow : spaceAbove));
+    const left = rect.left;
+    const top = preferBelow ? rect.bottom + gap : Math.max(pad, rect.top - gap - maxHeight);
+    setPanelStyle({ top, left, width, maxHeight });
+  }
+
+  useEffect(() => {
+    if (open) {
+      updatePanelPosition();
+      window.addEventListener("resize", updatePanelPosition);
+      window.addEventListener("scroll", updatePanelPosition, true);
+      return () => {
+        window.removeEventListener("resize", updatePanelPosition);
+        window.removeEventListener("scroll", updatePanelPosition, true);
+      };
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDoc(e: MouseEvent) {
+      const target = e.target as Node;
+      if (btnRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        // 弹层 portal 到 body 末尾，不还焦点的话键盘用户会被丢到页面开头
+        btnRef.current?.focus();
+      }
+    }
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  // 同理：Tab 顺序跟 DOM 走，不主动聚焦选中项键盘就进不了弹层
+  useEffect(() => {
+    if (!open || !panelStyle) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const target =
+      panel.querySelector<HTMLButtonElement>('[aria-selected="true"]') ??
+      panel.querySelector<HTMLButtonElement>('[role="option"]');
+    target?.focus();
+  }, [open, panelStyle]);
+
+  const panel =
+    open && panelStyle
+      ? createPortal(
+          <div
+            ref={panelRef}
+            className="prompt-history-panel"
+            role="listbox"
+            aria-label={label}
+            style={{
+              top: panelStyle.top,
+              left: panelStyle.left,
+              width: panelStyle.width,
+              maxHeight: panelStyle.maxHeight,
+            }}
+          >
+            <div className="prompt-history-list">
+              <button
+                type="button"
+                role="option"
+                aria-selected={!current}
+                className="prompt-history-item"
+                onClick={() => {
+                  onPick("");
+                  setOpen(false);
+                }}
+                style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+              >
+                <span className="prompt-history-text">{emptyLabel}</span>
+              </button>
+              {list.map((mid) => (
+                <button
+                  key={`${id}-${mid}`}
+                  type="button"
+                  role="option"
+                  aria-selected={mid === current}
+                  className="prompt-history-item"
+                  onClick={() => {
+                    onPick(mid);
+                    setOpen(false);
+                  }}
+                  style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" }}
+                >
+                  <span className="prompt-history-text">{mid}</span>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <div className="field">
       <div className="label-row">
         <label htmlFor={id}>{label}</label>
       </div>
-      <select
+      <button
+        ref={btnRef}
         id={id}
-        className="select mono"
-        value={current}
-        onChange={(e) => onPick(e.target.value)}
+        type="button"
+        className="control mono"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        style={{
+          textAlign: "left",
+          cursor: "pointer",
+          paddingRight: "2em",
+          position: "relative",
+        }}
+        onClick={() => setOpen((v) => !v)}
       >
-        <option value="">{emptyLabel}</option>
-        {list.map((mid) => (
-          <option key={`${id}-${mid}`} value={mid}>
-            {mid}
-          </option>
-        ))}
-      </select>
-      {hint ? <p className="footer-note">{hint}</p> : null}
+        {current || emptyLabel}
+        <span
+          style={{
+            position: "absolute",
+            right: "0.75em",
+            top: "50%",
+            transform: "translateY(-50%)",
+            pointerEvents: "none",
+          }}
+        >
+          ▾
+        </span>
+      </button>
+      {panel}
     </div>
   );
 }
@@ -109,7 +248,6 @@ export function SettingsPage({
   const isStationMaster = communityUser?.role === "admin";
   const [section, setSection] = useState<AdminSection>("api");
   const [draft, setDraft] = useState<StudioSettings>(() => normalizeSettings(settings ?? {}));
-  const [showOptimizeKey, setShowOptimizeKey] = useState(false);
   const [models, setModels] = useState<OpenAIModel[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -180,9 +318,6 @@ export function SettingsPage({
     const normalized = normalizeSettings(next);
     saveSettings(normalized);
     rememberUpstreamOrigin(normalized.baseUrl);
-    if (normalized.promptOptimizeCustomUpstream && normalized.promptOptimizeBaseUrl) {
-      rememberUpstreamOrigin(normalized.promptOptimizeBaseUrl);
-    }
     onChange(normalized);
     setDraft(normalized);
     return normalized;
@@ -576,7 +711,6 @@ export function SettingsPage({
                       value={draft.imageEditModel}
                       options={nonVideoModelOptions}
                       emptyLabel="不启用"
-                      hint="留空 = 创作台不显示参考图；选了则带参考图时走 /images/edits"
                       onPick={(next) => update("imageEditModel", next)}
                     />
                     <ModelSelect
@@ -585,7 +719,6 @@ export function SettingsPage({
                       value={draft.videoModel}
                       options={videoModelOptions}
                       emptyLabel="不启用"
-                      hint="留空 = 创作台没有「视频」模式；走 /videos/generations 异步轮询"
                       onPick={(next) => update("videoModel", next)}
                     />
                     <ModelSelect
@@ -594,73 +727,8 @@ export function SettingsPage({
                       value={draft.promptOptimizeModel}
                       options={nonVideoModelOptions}
                       emptyLabel="不启用"
-                      hint="需支持 chat/completions"
                       onPick={(next) => update("promptOptimizeModel", next)}
                     />
-
-                    <div className="field">
-                      <div className="label-row">
-                        <label>提示词上游</label>
-                      </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          aria-pressed={!draft.promptOptimizeCustomUpstream}
-                          onClick={() => update("promptOptimizeCustomUpstream", false)}
-                        >
-                          复用生图
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          aria-pressed={draft.promptOptimizeCustomUpstream}
-                          onClick={() => update("promptOptimizeCustomUpstream", true)}
-                        >
-                          单独设定
-                        </button>
-                      </div>
-                    </div>
-
-                    {draft.promptOptimizeCustomUpstream ? (
-                      <>
-                        <div className="field">
-                          <div className="label-row">
-                            <label htmlFor="prompt-optimize-base">提示词 API Base URL</label>
-                          </div>
-                          <input
-                            id="prompt-optimize-base"
-                            className="control mono"
-                            value={draft.promptOptimizeBaseUrl}
-                            onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
-                            placeholder="https://other-gateway/v1"
-                            spellCheck={false}
-                          />
-                        </div>
-                        <div className="field">
-                          <div className="label-row">
-                            <label htmlFor="prompt-optimize-key">提示词 API Key</label>
-                            <button
-                              type="button"
-                              className="text-link"
-                              onClick={() => setShowOptimizeKey((v) => !v)}
-                            >
-                              {showOptimizeKey ? "隐藏" : "显示"}
-                            </button>
-                          </div>
-                          <input
-                            id="prompt-optimize-key"
-                            className="control mono"
-                            type={showOptimizeKey ? "text" : "password"}
-                            value={draft.promptOptimizeApiKey}
-                            onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
-                            placeholder="独立上游密钥"
-                            autoComplete="off"
-                            spellCheck={false}
-                          />
-                        </div>
-                      </>
-                    ) : null}
 
                   </div>
                 </div>
@@ -784,7 +852,7 @@ export function SettingsPage({
                 <div className="admin-section-head">
                   <div>
                     <div className="section-card-title">Media</div>
-                    <h3 className="admin-section-title">图片存储与后台队列</h3>
+                    <h3 className="admin-section-title">存储设置</h3>
                   </div>
                 </div>
                 <div className="admin-stack">

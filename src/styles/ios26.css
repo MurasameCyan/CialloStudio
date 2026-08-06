@@ -494,10 +494,6 @@ a {
   .select {
     background: rgba(255, 255, 255, 0.04);
   }
-
-  .select {
-    color-scheme: light;
-  }
 }
 
 .control:hover,

@@ -14,10 +14,6 @@ export type StudioSettings = {
   videoModel: string;
   /** 提示词优化专用 chat 模型 ID */
   promptOptimizeModel: string;
-  /** true = 优化走独立 Base/Key；false = 复用生图上游 */
-  promptOptimizeCustomUpstream: boolean;
-  promptOptimizeBaseUrl: string;
-  promptOptimizeApiKey: string;
   /** 图片默认：宽高比 / 分辨率 */
   aspectRatio: string;
   resolution: string;
@@ -32,14 +28,10 @@ export const DEFAULT_SETTINGS: StudioSettings = {
   // 浏览器实际请求走同源 /v1 + 头 X-Ciallo-Upstream（免 CORS，不写 .env）
   baseUrl: "",
   apiKey: "",
-  model: "grok-imagine-image",
-  // 图生图 / 视频默认留空：选了模型才在创作台出现对应入口
-  imageEditModel: "",
-  videoModel: "",
-  promptOptimizeModel: "",
-  promptOptimizeCustomUpstream: false,
-  promptOptimizeBaseUrl: "",
-  promptOptimizeApiKey: "",
+  model: "grok-imagine-image-lite",
+  imageEditModel: "grok-imagine-image-quality",
+  videoModel: "grok-imagine-video",
+  promptOptimizeModel: "grok-4.5",
   aspectRatio: "1:1",
   resolution: "1k",
   videoAspectRatio: "16:9",
@@ -100,21 +92,14 @@ function migrateLegacyToggles(raw: unknown): Partial<StudioSettings> {
  */
 export function normalizeSettings(input: Partial<StudioSettings>): StudioSettings {
   const resolutionRaw = asString(input.resolution, DEFAULT_SETTINGS.resolution).toLowerCase();
-  const customUpstream = input.promptOptimizeCustomUpstream === true;
   return {
     baseUrl: normalizeBaseUrl(asString(input.baseUrl, DEFAULT_SETTINGS.baseUrl)),
     apiKey: asString(input.apiKey, DEFAULT_SETTINGS.apiKey),
     model: asString(input.model, DEFAULT_SETTINGS.model).trim() || DEFAULT_SETTINGS.model,
-    // 图生图 / 视频模型可以为空（= 该功能未启用），所以不套默认值
+    // 图生图 / 视频 / 提示词模型可以为空（= 用户选了「不启用」），所以不套默认值
     imageEditModel: asString(input.imageEditModel, "").trim(),
     videoModel: asString(input.videoModel, "").trim(),
     promptOptimizeModel: asString(input.promptOptimizeModel, "").trim(),
-    promptOptimizeCustomUpstream: customUpstream,
-    // 复用生图上游时不留残值，避免关掉独立上游后仍带着旧 Key
-    promptOptimizeBaseUrl: customUpstream
-      ? normalizeBaseUrl(asString(input.promptOptimizeBaseUrl, ""))
-      : "",
-    promptOptimizeApiKey: customUpstream ? asString(input.promptOptimizeApiKey, "") : "",
     aspectRatio: asString(input.aspectRatio, DEFAULT_SETTINGS.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
     resolution: resolutionRaw === "2k" ? "2k" : "1k",
     videoAspectRatio:
@@ -162,27 +147,16 @@ export function clampConcurrency(value: unknown, maxCap = 8): number {
   return Math.min(cap, Math.max(1, Math.round(n)));
 }
 
-/** 解析提示词优化实际使用的上游 + 模型 */
+/** 解析提示词优化实际使用的上游 + 模型（统一复用生图上游，不再有独立上游） */
 export function resolvePromptOptimizeEndpoint(settings: StudioSettings): {
   baseUrl: string;
   apiKey: string;
   model: string;
-  usingCustomUpstream: boolean;
 } {
-  const model = asString(settings.promptOptimizeModel, "").trim();
-  if (settings.promptOptimizeCustomUpstream) {
-    return {
-      baseUrl: normalizeBaseUrl(asString(settings.promptOptimizeBaseUrl, "")),
-      apiKey: asString(settings.promptOptimizeApiKey, "").trim(),
-      model,
-      usingCustomUpstream: true,
-    };
-  }
   return {
     baseUrl: normalizeBaseUrl(asString(settings.baseUrl, "")),
     apiKey: asString(settings.apiKey, "").trim(),
-    model,
-    usingCustomUpstream: false,
+    model: asString(settings.promptOptimizeModel, "").trim(),
   };
 }
 

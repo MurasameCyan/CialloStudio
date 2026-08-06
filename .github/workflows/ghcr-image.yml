@@ -5,6 +5,9 @@ on:
     branches:
       - main
       - beta
+    # 纯文档改动不触发构建；其余提交自动触发 CI
+    paths-ignore:
+      - "*.md"
     tags:
       - "v*.*.*"
   pull_request:

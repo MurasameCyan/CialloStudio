@@ -2754,6 +2754,78 @@ a {
   white-space: nowrap;
 }
 
+/* 模式切换器：文生图 / 图生图 / 视频，纯图标按钮 */
+.studio-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 2px;
+  border-radius: 12px;
+  background: var(--bg-soft-2);
+  border: 1px solid var(--separator);
+}
+
+.studio-mode-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  user-select: none;
+}
+
+.studio-mode-btn:hover:not([aria-pressed="true"]) {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.studio-mode-btn[aria-pressed="true"] {
+  background: var(--bg-solid);
+  color: var(--accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.studio-mode-btn:active {
+  transform: scale(0.96);
+}
+
+/* data-tip 提示 */
+.studio-mode-btn[data-tip]::before {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) scale(0.92);
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-solid);
+  border: 1px solid var(--separator);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 100;
+}
+
+.studio-mode-btn[data-tip]:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+
 .studio-params-divider {
   height: 1px;
   margin: 0;

@@ -55,6 +55,11 @@ export type StudioDraft = {
   referenceImageUrl?: string;
   /** 参考图文件名，仅 UI 展示 */
   referenceImageName?: string;
+  /**
+   * true = 创作台切到「图生图」，显示参考图上传区。
+   * 仅控制 UI；实际是否走 /images/edits 由「带没带参考图」决定。
+   */
+  imageEditMode: boolean;
   /** true = 走文生视频（/videos/generations）；需站长开启视频开关 */
   videoMode: boolean;
   /** 视频时长（秒）：6 / 10 / 15 */
@@ -273,6 +278,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
         autoRetry: defaults.autoRetry === true,
         backgroundTasks: defaults.backgroundTasks === true,
         promptMode: normalizePromptMode(defaults.promptMode),
+        imageEditMode: defaults.imageEditMode === true,
         videoMode: defaults.videoMode === true,
         videoDuration: normalizeVideoDuration(defaults.videoDuration),
         videoResolution: normalizeVideoResolution(defaults.videoResolution),
@@ -292,6 +298,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       promptMode: normalizePromptMode(
         parsed.promptMode ?? defaults.promptMode ?? "lines",
       ),
+      imageEditMode: parsed.imageEditMode === true,
       videoMode: parsed.videoMode === true,
       videoDuration: normalizeVideoDuration(parsed.videoDuration ?? defaults.videoDuration),
       videoResolution: normalizeVideoResolution(parsed.videoResolution ?? defaults.videoResolution),
@@ -305,6 +312,7 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
       autoRetry: false,
       backgroundTasks: false,
       promptMode: normalizePromptMode(defaults.promptMode),
+      imageEditMode: false,
       videoMode: false,
       videoDuration: normalizeVideoDuration(defaults.videoDuration),
       videoResolution: normalizeVideoResolution(defaults.videoResolution),
@@ -326,6 +334,7 @@ export function saveDraft(draft: StudioDraft): void {
         autoRetry: draft.autoRetry === true,
         backgroundTasks: draft.backgroundTasks === true,
         promptMode: normalizePromptMode(draft.promptMode),
+        imageEditMode: draft.imageEditMode === true,
         videoMode: draft.videoMode === true,
         videoDuration: normalizeVideoDuration(draft.videoDuration),
         videoResolution: normalizeVideoResolution(draft.videoResolution),

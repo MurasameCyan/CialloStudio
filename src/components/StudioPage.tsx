@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, Sparkles, Video } from "lucide-react";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -36,6 +36,9 @@ import {
 } from "@/lib/studioQueue";
 import type { ServerQueueItem } from "@/hooks/useStudioQueue";
 import type { StudioMode } from "@/lib/studioMode";
+
+/** 创作台生成模式：文生图 / 图生图 / 视频，三选一 */
+type GenMode = "text" | "edit" | "video";
 
 const StudioJobCard = memo(function StudioJobCard({
   job,
@@ -287,6 +290,8 @@ export function StudioPage({
   /** 视频模式：管理页配了视频模型 + 用户在创作台切到视频 */
   const videoEnabled = Boolean((settings.videoModel ?? "").trim());
   const videoMode = videoEnabled && draft.videoMode === true;
+  /** 图生图功能可用 = 管理页配了图生图模型 */
+  const imageEditEnabled = Boolean((settings.imageEditModel ?? "").trim());
   /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
   const generateLocked = running || enqueueBusy;
   const stopEnabled = running || serverMode;
@@ -294,6 +299,75 @@ export function StudioPage({
     () => concurrencyOptionsForCap(concurrencyCap),
     [concurrencyCap],
   );
+  /** 文生图槽本身填的就是编辑类模型（必须带图）→ 强制留在图生图 */
+  const referenceForced = isImageEditModel(typeof settings.model === "string" ? settings.model : "");
+  /** 图生图模式：配了图生图模型且用户切过去；文生图槽是编辑类模型时强制生效 */
+  const imageEditMode =
+    !videoMode && (referenceForced || (imageEditEnabled && draft.imageEditMode === true));
+  /** 创作台当前模式，三选一；下方参数区按它切换 */
+  const genMode: GenMode = videoMode ? "video" : imageEditMode ? "edit" : "text";
+
+  /**
+   * 模式切换：只要图标，名字走 hover 提示（data-tip）。
+   * 切到/离开视频时套用管理页对应的默认宽高比（图片与视频常用比例不同）。
+   */
+  const pickGenMode = (next: GenMode) => {
+    if (next === genMode) return;
+    if (next === "video") {
+      setDraft({ videoMode: true, aspectRatio: settings.videoAspectRatio });
+      return;
+    }
+    setDraft({
+      videoMode: false,
+      imageEditMode: next === "edit",
+      aspectRatio: videoMode ? settings.aspectRatio : draft.aspectRatio,
+    });
+  };
+
+  const genModeOptions: {
+    key: GenMode;
+    label: string;
+    tip: string;
+    available: boolean;
+    Icon: typeof Sparkles;
+  }[] = [
+    {
+      key: "text",
+      label: "文生图",
+      tip: referenceForced ? `文生图模型「${settings.model}」必须带参考图` : "文生图",
+      available: !referenceForced,
+      Icon: Sparkles,
+    },
+    {
+      key: "edit",
+      label: "图生图",
+      tip: "图生图",
+      available: imageEditEnabled || referenceForced,
+      Icon: ImagePlus,
+    },
+    { key: "video", label: "视频", tip: "视频", available: videoEnabled, Icon: Video },
+  ];
+  const availableGenModes = genModeOptions.filter((item) => item.available);
+  /** 只有一种模式可用时不显示切换器（没什么可切） */
+  const genModeSwitch =
+    availableGenModes.length > 1 ? (
+      <div className="studio-mode-switch" role="group" aria-label="生成模式">
+        {availableGenModes.map(({ key, label, tip, Icon }) => (
+          <button
+            key={key}
+            type="button"
+            className={`studio-mode-btn ${genMode === key ? "active" : ""}`}
+            aria-pressed={genMode === key}
+            aria-label={label}
+            data-tip={tip}
+            onClick={() => pickGenMode(key)}
+          >
+            <Icon size={17} strokeWidth={2} aria-hidden />
+          </button>
+        ))}
+      </div>
+    ) : null;
+
   /** 实际生图模型：带参考图且配了图生图模型时走图生图（与 resolveGenerationTarget 一致） */
   const activeImageModel =
     draft.referenceImageUrl && (settings.imageEditModel ?? "").trim()
@@ -316,23 +390,6 @@ export function StudioPage({
         >
           自动重试
         </button>
-        {videoEnabled ? (
-          <button
-            type="button"
-            className={`chip studio-toggle-chip ${draft.videoMode ? "active" : ""}`}
-            aria-pressed={draft.videoMode}
-            title="文生视频：走 /videos/generations 异步生成，可配合「后台任务」交给服务端队列"
-            // 切换模式时套用管理页对应的默认宽高比（图片/视频常用比例不同）
-            onClick={() =>
-              setDraft({
-                videoMode: !draft.videoMode,
-                aspectRatio: draft.videoMode ? settings.aspectRatio : settings.videoAspectRatio,
-              })
-            }
-          >
-            视频
-          </button>
-        ) : null}
         {canBackgroundTasks ? (
           <button
             type="button"
@@ -586,22 +643,22 @@ export function StudioPage({
     ) : null;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   /**
-   * 参考图上传区：管理页配了「图生图模型」，或文生图槽本身填的是编辑类模型（必须带图）。
-   * 视频模式下参考图作首帧（图生视频），同样沿用图生图模型这个开关。
+   * 参考图上传区：跟着模式走。
+   * - 图生图：显示（这就是该模式的核心输入）
+   * - 视频：配了图生图模型时显示，参考图作首帧（图生视频）
+   * - 文生图：不显示
    */
   const showReferencePicker = useMemo(
-    () =>
-      Boolean((settings.imageEditModel ?? "").trim()) ||
-      isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
-    [settings.imageEditModel, settings.model],
+    () => (videoMode ? imageEditEnabled : imageEditMode),
+    [videoMode, imageEditEnabled, imageEditMode],
   );
   /** 编辑类模型缺参考图会被上游拒绝；视频/普通生图留空则退化为纯文生成 */
   const referenceRequired = useMemo(
-    () => !videoMode && isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
-    [videoMode, settings.model],
+    () => imageEditMode && !videoMode && referenceForced,
+    [imageEditMode, videoMode, referenceForced],
   );
 
-  // 没配图生图模型 / 切到非编辑模型时清掉参考图，避免误带到文生图请求
+  // 切到文生图 / 视频时清掉参考图
   useEffect(() => {
     if (showReferencePicker) return;
     if (!draft.referenceImageUrl && !draft.referenceImageName) return;
@@ -1742,9 +1799,7 @@ export function StudioPage({
               >
                 {chatParamsOpen ? "收起参数" : "参数"}
               </button>
-              <button type="button" className="btn btn-ghost" onClick={openConfigOrLogin}>
-                模型 {settings.model || "未选择"} →
-              </button>
+              {genModeSwitch}
               <div className="btn-row" style={{ marginLeft: "auto" }}>
                 <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
                   停止
@@ -1988,9 +2043,7 @@ export function StudioPage({
                   停止
                 </button>
               </div>
-              <button type="button" className="btn btn-ghost studio-toolbar-model" onClick={openConfigOrLogin}>
-                模型 {settings.model || "未选择"} →
-              </button>
+              {genModeSwitch}
             </div>
 
             {queueNoticeBanner}

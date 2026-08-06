@@ -179,6 +179,7 @@ export function useStudioQueue(
       autoRetry: false,
       backgroundTasks: false,
       promptMode: "lines",
+      imageEditMode: false,
       videoMode: false,
       videoDuration: settings.videoDuration,
       videoResolution: settings.videoResolution,
@@ -305,6 +306,8 @@ export function useStudioQueue(
           patch.promptMode !== undefined
             ? normalizePromptMode(patch.promptMode)
             : normalizePromptMode(prev.promptMode),
+        imageEditMode:
+          patch.imageEditMode !== undefined ? patch.imageEditMode === true : prev.imageEditMode === true,
         videoMode: patch.videoMode !== undefined ? patch.videoMode === true : prev.videoMode === true,
         videoDuration: normalizeVideoDuration(
           patch.videoDuration !== undefined ? patch.videoDuration : prev.videoDuration,

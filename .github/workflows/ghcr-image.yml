@@ -6,8 +6,10 @@ on:
       - main
       - beta
     # 纯文档改动不触发构建；其余提交自动触发 CI
+    # "**.md" 覆盖任意层级的 markdown（"*.md" 只匹配仓库根目录）
     paths-ignore:
-      - "*.md"
+      - "**.md"
+      - "docs/**"
     tags:
       - "v*.*.*"
   pull_request:
@@ -45,7 +47,7 @@ jobs:
 
   check_ghcr_image:
     name: Build image (${{ matrix.arch }})
-    if: github.event_name != 'push'
+    if: github.event_name == 'pull_request'
     needs: verify
     strategy:
       fail-fast: false
@@ -78,7 +80,8 @@ jobs:
 
   build_ghcr_image:
     name: Publish image (${{ matrix.arch }})
-    if: github.event_name == 'push'
+    # push 与手动触发都发布镜像；PR 只走上面的 check（push: false）
+    if: github.event_name != 'pull_request'
     needs: verify
     permissions:
       contents: read
@@ -160,7 +163,7 @@ jobs:
 
   merge:
     name: Merge multi-arch image
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     needs:
       - build_ghcr_image
     runs-on: ubuntu-latest

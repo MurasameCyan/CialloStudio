@@ -1147,36 +1147,16 @@ export function StudioPage({
       <div className="field reference-picker-field">
         <div className="label-row prompt-label-row">
           <label htmlFor={inputId}>参考图</label>
-          <div className="reference-picker-actions">
-            <input
-              ref={inputRef}
-              id={inputId}
-              type="file"
-              accept="image/*"
-              hidden
-              disabled={running || optimizeBusy}
-              onChange={handleReferenceInputChange}
-            />
-            <button
-              type="button"
-              className="hall-chip"
-              disabled={running || optimizeBusy}
-              onClick={() => inputRef.current?.click()}
-            >
-              {draft.referenceImageUrl ? "更换" : "上传"}
-            </button>
-            {draft.referenceImageUrl ? (
-              <button
-                type="button"
-                className="hall-chip"
-                disabled={running || optimizeBusy}
-                onClick={clearReferenceImage}
-              >
-                清除
-              </button>
-            ) : null}
-          </div>
         </div>
+        <input
+          ref={inputRef}
+          id={inputId}
+          type="file"
+          accept="image/*"
+          hidden
+          disabled={running || optimizeBusy}
+          onChange={handleReferenceInputChange}
+        />
         {draft.referenceImageUrl ? (
           <div className="reference-picker-preview">
             <img src={draft.referenceImageUrl} alt={draft.referenceImageName || "参考图"} />
@@ -1187,6 +1167,24 @@ export function StudioPage({
               <span className="reference-picker-hint">
                 {videoMode ? "首帧参考图 · /videos/generations" : "图 + 提示词 · /images/edits"}
               </span>
+            </div>
+            <div className="reference-picker-actions">
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={running || optimizeBusy}
+                onClick={() => inputRef.current?.click()}
+              >
+                更换
+              </button>
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={running || optimizeBusy}
+                onClick={clearReferenceImage}
+              >
+                清除
+              </button>
             </div>
           </div>
         ) : (
@@ -1730,7 +1728,7 @@ export function StudioPage({
                   {draft.promptMode === "block" ? "整段" : "行数"} <strong>{prompts.length}</strong>
                 </span>
                 <span className="stat-pill">
-                  {videoMode ? "总条数" : "总张数"} <strong>{plannedJobs}</strong>
+                  {videoMode ? "总条数" : "总数"} <strong>{plannedJobs}</strong>
                 </span>
                 {showReferencePicker && draft.referenceImageUrl ? (
                   <span className="stat-pill">含参考图</span>
@@ -1949,10 +1947,10 @@ export function StudioPage({
               {draft.promptMode === "block" ? "整段" : "行数"}{" "}
               <strong>{prompts.length}</strong>
             </span>
-            <span className="stat-pill" title="生图数量（variants）">
-              生图 <strong>{draft.variants}</strong>
+            <span className="stat-pill" title="生成数量（variants）">
+              数量 <strong>{draft.variants}</strong>
             </span>
-            <span className="stat-pill" title="同时请求数，也会乘进总张数">
+            <span className="stat-pill" title="同时请求数，也会乘进总数">
               并发 <strong>{draft.concurrency}</strong>
             </span>
             {showReferencePicker && draft.referenceImageUrl ? (
@@ -1968,7 +1966,7 @@ export function StudioPage({
                   : `总数 = Prompt 条数 × ${videoMode ? "生成" : "生图"}数量 × 并发数`
               }
             >
-              {videoMode ? "总条数" : "总张数"} <strong>{plannedJobs}</strong>
+              {videoMode ? "总条数" : "总数"} <strong>{plannedJobs}</strong>
             </span>
           </div>
         </div>

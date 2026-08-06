@@ -87,27 +87,38 @@ export function isImageEditModel(model: string): boolean {
 }
 
 /**
- * 解析本次生成要不要带参考图。
- * - 编辑类模型：参考图必填，缺失直接判错（上游 /images/edits 必须有图）
- * - 图生图开关开启：任意生图模型都可带参考图，留空则退化为纯文生图
- * 开关关闭且非编辑模型：忽略草稿里的参考图，避免误带进文生图请求。
+ * 解析本次生成用哪个模型、要不要带参考图。
+ * 管理页的三个模型槽就是开关：填了图生图/视频模型才有对应能力。
+ * - 视频模式：用视频模型，参考图当首帧（可空）
+ * - 有参考图 + 配了图生图模型：换成图生图模型走 /images/edits
+ * - 文生图槽里填的就是编辑类模型：参考图必填（上游 /images/edits 必须有图）
+ * - 其余情况忽略草稿里的参考图，避免误带进文生图请求
  */
-export function resolveReferenceImage(input: {
+export function resolveGenerationTarget(input: {
   model: string;
+  imageEditModel: string;
+  videoModel: string;
+  videoMode: boolean;
   referenceImageUrl?: string;
-  imageToImageEnabled: boolean;
-}): { referenceUrl?: string; error?: { message: string; code: string } } {
-  const model = typeof input.model === "string" ? input.model.trim() : "";
-  const ref = typeof input.referenceImageUrl === "string" ? input.referenceImageUrl.trim() : "";
-  const isEdit = isImageEditModel(model);
+}): { model: string; referenceUrl?: string; error?: { message: string; code: string } } {
+  const trim = (value: unknown) => (typeof value === "string" ? value.trim() : "");
+  const ref = trim(input.referenceImageUrl);
+  if (input.videoMode) {
+    return { model: trim(input.videoModel), referenceUrl: ref || undefined };
+  }
 
-  if (isEdit && !ref) {
+  const editModel = trim(input.imageEditModel);
+  const usingEdit = Boolean(ref && editModel);
+  const model = usingEdit ? editModel : trim(input.model);
+
+  if (isImageEditModel(model) && !ref) {
     return {
+      model,
       error: { message: "当前为图生图模型，请先上传参考图", code: "missing_reference_image" },
     };
   }
-  if (!isEdit && !input.imageToImageEnabled) return {};
-  return { referenceUrl: ref || undefined };
+  if (!usingEdit && !isImageEditModel(model)) return { model };
+  return { model, referenceUrl: ref || undefined };
 }
 
 export function normalizeResolutionForModel(model: string, resolution: string): ResolutionOption {

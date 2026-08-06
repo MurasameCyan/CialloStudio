@@ -34,13 +34,61 @@ import {
   ASPECT_RATIOS,
   DEFAULT_SETTINGS,
   RESOLUTIONS,
+  VIDEO_DURATIONS,
+  VIDEO_RESOLUTIONS,
   type StudioSettings,
-  clampConcurrency,
-  normalizeBaseUrl,
+  normalizeSettings,
   saveSettings,
 } from "@/lib/settings";
 
 type AdminSection = "api" | "users" | "tasks";
+
+/**
+ * 模型下拉。模型列表要点「测试连接」才有，所以已存的模型 id 即使不在列表里也保留成选项，
+ * 否则换台机器打开管理页会把已配好的模型选空。
+ */
+function ModelSelect({
+  id,
+  label,
+  value,
+  options,
+  emptyLabel,
+  hint,
+  onPick,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  options: OpenAIModel[];
+  emptyLabel: string;
+  hint?: string;
+  onPick: (next: string) => void;
+}) {
+  const current = typeof value === "string" ? value.trim() : "";
+  const ids = options.map((m) => m.id);
+  const list = current && !ids.includes(current) ? [current, ...ids] : ids;
+  return (
+    <div className="field">
+      <div className="label-row">
+        <label htmlFor={id}>{label}</label>
+      </div>
+      <select
+        id={id}
+        className="select mono"
+        value={current}
+        onChange={(e) => onPick(e.target.value)}
+      >
+        <option value="">{emptyLabel}</option>
+        {list.map((mid) => (
+          <option key={`${id}-${mid}`} value={mid}>
+            {mid}
+          </option>
+        ))}
+      </select>
+      {hint ? <p className="footer-note">{hint}</p> : null}
+    </div>
+  );
+}
 
 type Props = {
   settings: StudioSettings;
@@ -60,24 +108,9 @@ export function SettingsPage({
 }: Props) {
   const isStationMaster = communityUser?.role === "admin";
   const [section, setSection] = useState<AdminSection>("api");
-  const [draft, setDraft] = useState<StudioSettings>(() => ({
-    ...DEFAULT_SETTINGS,
-    ...settings,
-    baseUrl: settings?.baseUrl ?? DEFAULT_SETTINGS.baseUrl,
-    apiKey: settings?.apiKey ?? DEFAULT_SETTINGS.apiKey,
-    model: settings?.model || DEFAULT_SETTINGS.model,
-    aspectRatio: settings?.aspectRatio || DEFAULT_SETTINGS.aspectRatio,
-    resolution: settings?.resolution === "2k" ? "2k" : "1k",
-    concurrency: clampConcurrency(settings?.concurrency),
-    promptOptimizeModel: settings?.promptOptimizeModel ?? DEFAULT_SETTINGS.promptOptimizeModel,
-    promptOptimizeCustomUpstream: settings?.promptOptimizeCustomUpstream === true,
-    promptOptimizeBaseUrl: settings?.promptOptimizeBaseUrl ?? DEFAULT_SETTINGS.promptOptimizeBaseUrl,
-    promptOptimizeApiKey: settings?.promptOptimizeApiKey ?? DEFAULT_SETTINGS.promptOptimizeApiKey,
-  }));
+  const [draft, setDraft] = useState<StudioSettings>(() => normalizeSettings(settings ?? {}));
   const [showOptimizeKey, setShowOptimizeKey] = useState(false);
   const [models, setModels] = useState<OpenAIModel[]>([]);
-  const [imageModelFilter, setImageModelFilter] = useState("");
-  const [optimizeModelFilter, setOptimizeModelFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string>("");
   const [ok, setOk] = useState<boolean | null>(null);
@@ -133,58 +166,18 @@ export function SettingsPage({
     [draft.model],
   );
 
-  const filteredImageModels = useMemo(() => {
-    const q = imageModelFilter.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter((m) => m.id.toLowerCase().includes(q));
-  }, [models, imageModelFilter]);
-
-  const filteredOptimizeModels = useMemo(() => {
-    const q = optimizeModelFilter.trim().toLowerCase();
-    if (!q) return models;
-    return models.filter((m) => m.id.toLowerCase().includes(q));
-  }, [models, optimizeModelFilter]);
-
   /** 视频模型候选：模型列表里 id 带 video 的 */
-  const filteredVideoModels = useMemo(
-    () => models.filter((m) => /video/i.test(m.id)),
-    [models],
-  );
+  const videoModelOptions = useMemo(() => models.filter((m) => /video/i.test(m.id)), [models]);
+  /** 图片 / 提示词模型候选：视频模型不该出现在这些槽里 */
+  const nonVideoModelOptions = useMemo(() => models.filter((m) => !/video/i.test(m.id)), [models]);
 
   function update<K extends keyof StudioSettings>(key: K, value: StudioSettings[K]) {
     setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
   function persist(next: StudioSettings) {
-    // 全局并发槽仅站长可改；普通用户保存时保留已有 concurrency
-    const concurrency = clampConcurrency(
-      isStationMaster ? next.concurrency : (settings?.concurrency ?? DEFAULT_SETTINGS.concurrency),
-    );
-    const customUp = next.promptOptimizeCustomUpstream === true;
-    const normalized: StudioSettings = {
-      ...DEFAULT_SETTINGS,
-      ...next,
-      baseUrl: normalizeBaseUrl(typeof next.baseUrl === "string" ? next.baseUrl : baseUrl),
-      apiKey: typeof next.apiKey === "string" ? next.apiKey : apiKey,
-      model: (typeof next.model === "string" && next.model) || DEFAULT_SETTINGS.model,
-      aspectRatio:
-        (typeof next.aspectRatio === "string" && next.aspectRatio) || DEFAULT_SETTINGS.aspectRatio,
-      resolution: next.resolution === "2k" ? "2k" : "1k",
-      concurrency,
-      promptOptimizeModel:
-        typeof next.promptOptimizeModel === "string" ? next.promptOptimizeModel.trim() : "",
-      promptOptimizeCustomUpstream: customUp,
-      promptOptimizeBaseUrl: customUp
-        ? normalizeBaseUrl(
-            typeof next.promptOptimizeBaseUrl === "string" ? next.promptOptimizeBaseUrl : "",
-          )
-        : "",
-      promptOptimizeApiKey: customUp
-        ? typeof next.promptOptimizeApiKey === "string"
-          ? next.promptOptimizeApiKey
-          : ""
-        : "",
-    };
+    // 钳制逻辑只在 settings.ts 里一份，这里不再重复
+    const normalized = normalizeSettings(next);
     saveSettings(normalized);
     rememberUpstreamOrigin(normalized.baseUrl);
     if (normalized.promptOptimizeCustomUpstream && normalized.promptOptimizeBaseUrl) {
@@ -212,10 +205,12 @@ export function SettingsPage({
         apiKey: normalized.apiKey,
       });
       setModels(list);
+      // 自动兜底只在图片模型里挑，别把视频模型塞进「文生图模型」槽
+      const imageish = list.filter((m) => !/video/i.test(m.id));
       const preferred =
         list.find((m) => m.id === normalized.model)?.id ||
-        list.find((m) => m.id.includes("imagine") || m.id.includes("image"))?.id ||
-        list[0]?.id ||
+        imageish.find((m) => m.id.includes("imagine") || m.id.includes("image"))?.id ||
+        imageish[0]?.id ||
         normalized.model;
       if (preferred !== normalized.model) {
         persist({ ...normalized, model: preferred });
@@ -255,34 +250,20 @@ export function SettingsPage({
       setMessage("请填写 API Key");
       return;
     }
-    const normalized = persist({
-      ...draft,
-      baseUrl,
-      apiKey,
-      model: typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model,
-    });
+    const normalized = persist({ ...draft, baseUrl, apiKey });
     log("ok", "设置已保存", {
       baseUrl: normalized.baseUrl,
       requestBase: resolveBrowserApiBase(normalized.baseUrl),
       model: normalized.model,
-      concurrency: normalized.concurrency,
+      imageEditModel: normalized.imageEditModel || "(off)",
+      videoModel: normalized.videoModel || "(off)",
     });
     setOk(true);
-    setMessage(
-      isStationMaster
-        ? `已保存 · 模型 ${normalized.model} · 并发 ${normalized.concurrency}`
-        : `已保存 · 模型 ${normalized.model}`,
-    );
+    setMessage(`已保存 · 文生图 ${normalized.model}`);
   }
 
   function handleReset() {
-    setDraft({
-      ...DEFAULT_SETTINGS,
-      // 非站长不能通过恢复默认改掉并发槽
-      concurrency: isStationMaster
-        ? DEFAULT_SETTINGS.concurrency
-        : clampConcurrency(settings?.concurrency ?? DEFAULT_SETTINGS.concurrency),
-    });
+    setDraft({ ...DEFAULT_SETTINGS });
     setModels([]);
     setOk(null);
     setMessage("已恢复默认值（尚未写入本地，需点保存）");
@@ -350,12 +331,6 @@ export function SettingsPage({
           {draft.model || "—"}
         </strong>
       </div>
-      {isStationMaster ? (
-        <div className="admin-status-card">
-          <span className="admin-status-label">并发</span>
-          <strong className="admin-status-value">{draft.concurrency}</strong>
-        </div>
-      ) : null}
       <div className="admin-status-card">
         <span className="admin-status-label">请求通道</span>
         <strong className="admin-status-value mono-tight" title={requestBase}>
@@ -511,15 +486,10 @@ export function SettingsPage({
               </div>
 
               <div className="admin-stack">
-                {/* 左：生图 · 右：优化 — 对称顺序 */}
+                {/* 左：接口（上游 + 动作） · 右：四个模型槽 */}
                 <div className="admin-dual-cols">
                   <div className="admin-dual-col">
-                    <div className="admin-block-label">当前模型</div>
-                    <div className="admin-selected-models">
-                      <span className="admin-selected-pill" title="生图模型">
-                        生图 · <strong className="mono-tight">{draft.model || "未选"}</strong>
-                      </span>
-                    </div>
+                    <div className="admin-block-label">接口</div>
 
                     <div className="field">
                       <div className="label-row">
@@ -554,14 +524,161 @@ export function SettingsPage({
                       />
                     </div>
 
+                    <div className="admin-actions admin-actions-inline">
+                      <div className="btn-row">
+                        <button
+                          type="button"
+                          className="btn btn-primary"
+                          disabled={busy}
+                          onClick={handleTestAndLoadModels}
+                        >
+                          {busy ? "测试中…" : "测试连接"}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary"
+                          disabled={busy}
+                          onClick={handleSave}
+                        >
+                          保存设置
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger"
+                          disabled={busy}
+                          onClick={handleReset}
+                        >
+                          恢复默认
+                        </button>
+                      </div>
+                      {message ? (
+                        <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>
+                          {message}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="admin-dual-col">
+                    <div className="admin-block-label">模型</div>
+
+                    <ModelSelect
+                      id="model-text2img"
+                      label="文生图模型"
+                      value={draft.model}
+                      options={nonVideoModelOptions}
+                      emptyLabel={models.length ? "未选择" : "点「测试连接」加载列表"}
+                      onPick={(next) => update("model", next || DEFAULT_SETTINGS.model)}
+                    />
+                    <ModelSelect
+                      id="model-img2img"
+                      label="图生图模型"
+                      value={draft.imageEditModel}
+                      options={nonVideoModelOptions}
+                      emptyLabel="不启用"
+                      hint="留空 = 创作台不显示参考图；选了则带参考图时走 /images/edits"
+                      onPick={(next) => update("imageEditModel", next)}
+                    />
+                    <ModelSelect
+                      id="model-video"
+                      label="视频模型"
+                      value={draft.videoModel}
+                      options={videoModelOptions}
+                      emptyLabel="不启用"
+                      hint="留空 = 创作台没有「视频」模式；走 /videos/generations 异步轮询"
+                      onPick={(next) => update("videoModel", next)}
+                    />
+                    <ModelSelect
+                      id="model-optimize"
+                      label="提示词模型"
+                      value={draft.promptOptimizeModel}
+                      options={nonVideoModelOptions}
+                      emptyLabel="不启用"
+                      hint="需支持 chat/completions"
+                      onPick={(next) => update("promptOptimizeModel", next)}
+                    />
+
                     <div className="field">
                       <div className="label-row">
-                        <label>默认宽高比</label>
+                        <label>提示词上游</label>
+                      </div>
+                      <div className="segmented">
+                        <button
+                          type="button"
+                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          aria-pressed={!draft.promptOptimizeCustomUpstream}
+                          onClick={() => update("promptOptimizeCustomUpstream", false)}
+                        >
+                          复用生图
+                        </button>
+                        <button
+                          type="button"
+                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
+                          aria-pressed={draft.promptOptimizeCustomUpstream}
+                          onClick={() => update("promptOptimizeCustomUpstream", true)}
+                        >
+                          单独设定
+                        </button>
+                      </div>
+                    </div>
+
+                    {draft.promptOptimizeCustomUpstream ? (
+                      <>
+                        <div className="field">
+                          <div className="label-row">
+                            <label htmlFor="prompt-optimize-base">提示词 API Base URL</label>
+                          </div>
+                          <input
+                            id="prompt-optimize-base"
+                            className="control mono"
+                            value={draft.promptOptimizeBaseUrl}
+                            onChange={(e) => update("promptOptimizeBaseUrl", e.target.value)}
+                            placeholder="https://other-gateway/v1"
+                            spellCheck={false}
+                          />
+                        </div>
+                        <div className="field">
+                          <div className="label-row">
+                            <label htmlFor="prompt-optimize-key">提示词 API Key</label>
+                            <button
+                              type="button"
+                              className="text-link"
+                              onClick={() => setShowOptimizeKey((v) => !v)}
+                            >
+                              {showOptimizeKey ? "隐藏" : "显示"}
+                            </button>
+                          </div>
+                          <input
+                            id="prompt-optimize-key"
+                            className="control mono"
+                            type={showOptimizeKey ? "text" : "password"}
+                            value={draft.promptOptimizeApiKey}
+                            onChange={(e) => update("promptOptimizeApiKey", e.target.value)}
+                            placeholder="独立上游密钥"
+                            autoComplete="off"
+                            spellCheck={false}
+                          />
+                        </div>
+                      </>
+                    ) : null}
+
+                  </div>
+                </div>
+
+                <div className="studio-params-divider" role="separator" />
+
+                <div className="admin-block-label">默认设置</div>
+                <div className="admin-dual-cols">
+                  <div className="admin-dual-col">
+                    <div className="admin-block-label admin-block-label-sub">图片</div>
+                    <div className="field">
+                      <div className="label-row">
+                        <label>宽高比</label>
                       </div>
                       <div className="segmented">
                         {ASPECT_RATIOS.map((ratio) => (
                           <button
-                            key={ratio}
+                            key={`img-ar-${ratio}`}
                             type="button"
                             className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
                             onClick={() => update("aspectRatio", ratio)}
@@ -574,17 +691,18 @@ export function SettingsPage({
 
                     <div className="field">
                       <div className="label-row">
-                        <label>默认分辨率</label>
+                        <label>分辨率</label>
                       </div>
                       <div className="segmented">
                         {RESOLUTIONS.map((item) => {
                           const allowed = modelCap.allowedResolutions.includes(item);
                           return (
                             <button
-                              key={item}
+                              key={`img-res-${item}`}
                               type="button"
                               className={`chip ${draft.resolution === item ? "active" : ""}`}
                               disabled={!allowed}
+                              title={allowed ? item : `${draft.model} 不支持 ${item}`}
                               onClick={() => {
                                 if (allowed) update("resolution", item);
                               }}
@@ -595,339 +713,66 @@ export function SettingsPage({
                         })}
                       </div>
                     </div>
-
-                    {isStationMaster ? (
-                      <div className="field">
-                        <div className="label-row">
-                          <label htmlFor="concurrency">全局并发槽</label>
-                        </div>
-                        <input
-                          id="concurrency"
-                          className="control"
-                          type="number"
-                          min={1}
-                          max={2}
-                          value={draft.concurrency}
-                          onChange={(e) => update("concurrency", Number(e.target.value))}
-                        />
-                      </div>
-                    ) : null}
-
-                    <div className="admin-model-picker-head">
-                      <div className="admin-block-label admin-block-label-sub">点选生图模型</div>
-                      <input
-                        type="search"
-                        className="control mono admin-model-filter"
-                        value={imageModelFilter}
-                        onChange={(e) => setImageModelFilter(e.target.value)}
-                        placeholder="筛选…"
-                        disabled={models.length === 0}
-                        aria-label="筛选生图模型"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                    </div>
-                    {models.length > 0 ? (
-                      filteredImageModels.length > 0 ? (
-                        <div className="admin-model-grid" role="listbox" aria-label="生图模型">
-                          {filteredImageModels.map((model) => (
-                            <button
-                              key={`img-${model.id}`}
-                              type="button"
-                              role="option"
-                              aria-selected={draft.model === model.id}
-                              title={model.id}
-                              className={`chip admin-model-chip ${draft.model === model.id ? "active" : ""}`}
-                              onClick={() => update("model", model.id)}
-                            >
-                              <span className="admin-model-chip-text">{model.id}</span>
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="footer-note">无匹配「{imageModelFilter.trim()}」</p>
-                      )
-                    ) : (
-                      <p className="footer-note">点下方「测试连接」加载列表后点选</p>
-                    )}
                   </div>
 
                   <div className="admin-dual-col">
-                    <div className="admin-block-label">当前模型</div>
-                    <div className="admin-selected-models">
-                      <span className="admin-selected-pill" title="提示词优化模型">
-                        优化 ·{" "}
-                        <strong className="mono-tight">
-                          {draft.promptOptimizeModel?.trim() || "未选"}
-                        </strong>
-                      </span>
-                    </div>
-
+                    <div className="admin-block-label admin-block-label-sub">视频</div>
                     <div className="field">
                       <div className="label-row">
-                        <label htmlFor="prompt-optimize-base">API Base URL</label>
+                        <label>宽高比</label>
                       </div>
-                      <input
-                        id="prompt-optimize-base"
-                        className="control mono"
-                        value={
-                          draft.promptOptimizeCustomUpstream
-                            ? typeof draft.promptOptimizeBaseUrl === "string"
-                              ? draft.promptOptimizeBaseUrl
-                              : ""
-                            : baseUrl
-                        }
-                        onChange={(e) => {
-                          if (draft.promptOptimizeCustomUpstream) {
-                            update("promptOptimizeBaseUrl", e.target.value);
-                          }
-                        }}
-                        placeholder="https://other-gateway/v1"
-                        disabled={!draft.promptOptimizeCustomUpstream}
-                        spellCheck={false}
-                      />
-                    </div>
-                    <div className="field">
-                      <div className="label-row">
-                        <label htmlFor="prompt-optimize-key">API Key</label>
-                        {draft.promptOptimizeCustomUpstream ? (
+                      <div className="segmented">
+                        {ASPECT_RATIOS.map((ratio) => (
                           <button
+                            key={`vid-ar-${ratio}`}
                             type="button"
-                            className="text-link"
-                            onClick={() => setShowOptimizeKey((v) => !v)}
+                            className={`chip ${draft.videoAspectRatio === ratio ? "active" : ""}`}
+                            onClick={() => update("videoAspectRatio", ratio)}
                           >
-                            {showOptimizeKey ? "隐藏" : "显示"}
+                            {ratio}
                           </button>
-                        ) : null}
+                        ))}
                       </div>
-                      <input
-                        id="prompt-optimize-key"
-                        className="control mono"
-                        type={
-                          draft.promptOptimizeCustomUpstream
-                            ? showOptimizeKey
-                              ? "text"
-                              : "password"
-                            : showKey
-                              ? "text"
-                              : "password"
-                        }
-                        value={
-                          draft.promptOptimizeCustomUpstream
-                            ? typeof draft.promptOptimizeApiKey === "string"
-                              ? draft.promptOptimizeApiKey
-                              : ""
-                            : apiKey
-                        }
-                        onChange={(e) => {
-                          if (draft.promptOptimizeCustomUpstream) {
-                            update("promptOptimizeApiKey", e.target.value);
-                          }
-                        }}
-                        placeholder={draft.promptOptimizeCustomUpstream ? "独立上游密钥" : "g2a_..."}
-                        disabled={!draft.promptOptimizeCustomUpstream}
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
                     </div>
 
-                    <div className="field">
-                      <div className="label-row">
-                        <label>独立优化上游</label>
-                      </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", false)}
-                        >
-                          复用生图
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.promptOptimizeCustomUpstream ? "active" : ""}`}
-                          onClick={() => update("promptOptimizeCustomUpstream", true)}
-                        >
-                          单独设定
-                        </button>
-                      </div>
-                      {!draft.promptOptimizeCustomUpstream ? (
-                        <p className="footer-note" style={{ marginTop: 6 }}>
-                          复用左侧生图接口（上方 URL / Key 只读同步）
-                        </p>
-                      ) : (
-                        <p className="footer-note" style={{ marginTop: 6 }}>
-                          已单独设定：请填写上方优化 API Base / Key
-                        </p>
-                      )}
-                    </div>
-
-                    <div className="admin-model-picker-head">
-                      <div className="admin-block-label admin-block-label-sub">点选优化模型</div>
-                      <input
-                        type="search"
-                        className="control mono admin-model-filter"
-                        value={optimizeModelFilter}
-                        onChange={(e) => setOptimizeModelFilter(e.target.value)}
-                        placeholder="筛选…"
-                        disabled={models.length === 0}
-                        aria-label="筛选优化模型"
-                        autoComplete="off"
-                        spellCheck={false}
-                      />
-                    </div>
-                    {models.length > 0 ? (
-                      filteredOptimizeModels.length > 0 ? (
-                        <div className="admin-model-grid" role="listbox" aria-label="提示词优化模型">
-                          {filteredOptimizeModels.map((model) => (
+                    <div className="admin-fields-2">
+                      <div className="field">
+                        <div className="label-row">
+                          <label>分辨率</label>
+                        </div>
+                        <div className="segmented">
+                          {VIDEO_RESOLUTIONS.map((item) => (
                             <button
-                              key={`opt-${model.id}`}
+                              key={`vid-res-${item}`}
                               type="button"
-                              role="option"
-                              aria-selected={draft.promptOptimizeModel === model.id}
-                              title={model.id}
-                              className={`chip admin-model-chip ${
-                                draft.promptOptimizeModel === model.id ? "active" : ""
-                              }`}
-                              onClick={() => update("promptOptimizeModel", model.id)}
+                              className={`chip ${draft.videoResolution === item ? "active" : ""}`}
+                              onClick={() => update("videoResolution", item)}
                             >
-                              <span className="admin-model-chip-text">{model.id}</span>
+                              {item}
                             </button>
                           ))}
                         </div>
-                      ) : (
-                        <p className="footer-note">无匹配「{optimizeModelFilter.trim()}」</p>
-                      )
-                    ) : (
-                      <p className="footer-note">
-                        点下方「测试连接」加载列表（需支持 chat/completions）
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="studio-params-divider" role="separator" />
-
-                <div className="admin-block-label">功能开关</div>
-                <div className="admin-dual-cols">
-                  <div className="admin-dual-col">
-                    <div className="field">
-                      <div className="label-row">
-                        <label>图生图</label>
                       </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.imageToImageEnabled ? "active" : ""}`}
-                          aria-pressed={!draft.imageToImageEnabled}
-                          onClick={() => update("imageToImageEnabled", false)}
-                        >
-                          关闭
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.imageToImageEnabled ? "active" : ""}`}
-                          aria-pressed={draft.imageToImageEnabled}
-                          onClick={() => update("imageToImageEnabled", true)}
-                        >
-                          开启
-                        </button>
-                      </div>
-                      <p className="footer-note" style={{ marginTop: 6 }}>
-                        {draft.imageToImageEnabled
-                          ? "创作台显示「参考图」上传区，带图生成走 /images/edits"
-                          : "创作台隐藏参考图；图生图专用模型仍会强制要求参考图"}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="admin-dual-col">
-                    <div className="field">
-                      <div className="label-row">
-                        <label>文生视频</label>
-                      </div>
-                      <div className="segmented">
-                        <button
-                          type="button"
-                          className={`chip ${!draft.videoEnabled ? "active" : ""}`}
-                          aria-pressed={!draft.videoEnabled}
-                          onClick={() => update("videoEnabled", false)}
-                        >
-                          关闭
-                        </button>
-                        <button
-                          type="button"
-                          className={`chip ${draft.videoEnabled ? "active" : ""}`}
-                          aria-pressed={draft.videoEnabled}
-                          onClick={() => update("videoEnabled", true)}
-                        >
-                          开启
-                        </button>
-                      </div>
-                      <p className="footer-note" style={{ marginTop: 6 }}>
-                        {draft.videoEnabled
-                          ? "创作台可切「视频」模式，走 /videos/generations 异步轮询"
-                          : "开启后创作台出现视频模式开关"}
-                      </p>
-                    </div>
-
-                    {draft.videoEnabled ? (
                       <div className="field">
                         <div className="label-row">
-                          <label htmlFor="videoModel">视频模型</label>
+                          <label>时长</label>
                         </div>
-                        <input
-                          id="videoModel"
-                          className="control mono"
-                          value={typeof draft.videoModel === "string" ? draft.videoModel : ""}
-                          placeholder="grok-imagine-video"
-                          onChange={(e) => update("videoModel", e.target.value)}
-                          autoComplete="off"
-                          spellCheck={false}
-                        />
-                        {filteredVideoModels.length > 0 ? (
-                          <div className="admin-model-grid" role="listbox" aria-label="视频模型">
-                            {filteredVideoModels.map((model) => (
-                              <button
-                                key={`vid-${model.id}`}
-                                type="button"
-                                role="option"
-                                aria-selected={draft.videoModel === model.id}
-                                title={model.id}
-                                className={`chip admin-model-chip ${
-                                  draft.videoModel === model.id ? "active" : ""
-                                }`}
-                                onClick={() => update("videoModel", model.id)}
-                              >
-                                <span className="admin-model-chip-text">{model.id}</span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="footer-note" style={{ marginTop: 6 }}>
-                            点「测试连接」加载模型列表后可点选带 video 的模型
-                          </p>
-                        )}
+                        <div className="segmented">
+                          {VIDEO_DURATIONS.map((item) => (
+                            <button
+                              key={`vid-dur-${item}`}
+                              type="button"
+                              className={`chip ${draft.videoDuration === item ? "active" : ""}`}
+                              onClick={() => update("videoDuration", item)}
+                            >
+                              {item}s
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    ) : null}
+                    </div>
                   </div>
-                </div>
-
-                <div className="admin-actions admin-actions-inline">
-                  <div className="btn-row">
-                    <button type="button" className="btn btn-primary" disabled={busy} onClick={handleTestAndLoadModels}>
-                      {busy ? "测试中…" : "测试连接"}
-                    </button>
-                    <button type="button" className="btn btn-secondary" disabled={busy} onClick={handleSave}>
-                      保存设置
-                    </button>
-                    <button type="button" className="btn btn-danger" disabled={busy} onClick={handleReset}>
-                      恢复默认
-                    </button>
-                  </div>
-                  {message ? (
-                    <div className={`status ${ok === true ? "ok" : ok === false ? "err" : ""}`}>{message}</div>
-                  ) : null}
                 </div>
               </div>
             </div>

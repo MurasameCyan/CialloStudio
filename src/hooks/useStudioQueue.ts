@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, generateImage, generateVideo, rewriteMediaUrl } from "@/lib/api";
-import { normalizeResolutionForModel, resolveReferenceImage } from "@/lib/imageModels";
+import { normalizeResolutionForModel, resolveGenerationTarget } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
   getQueueStorageConfig,
@@ -173,14 +173,15 @@ export function useStudioQueue(
       aspectRatio: settings.aspectRatio,
       resolution: settings.resolution,
       variants: DEFAULT_VARIANTS,
-      concurrency: clampConcurrency(settings.concurrency, concurrencyCap),
+      // 首次进创作台给 1 并发；实际上限由用户组 cap 收紧
+      concurrency: clampConcurrency(1, concurrencyCap),
       appendResults: false,
       autoRetry: false,
       backgroundTasks: false,
       promptMode: "lines",
       videoMode: false,
-      videoDuration: 6,
-      videoResolution: "720p",
+      videoDuration: settings.videoDuration,
+      videoResolution: settings.videoResolution,
     }),
   );
   const [jobs, setJobs] = useState<StudioJob[]>(() =>
@@ -674,18 +675,31 @@ export function useStudioQueue(
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
     const autoRetry = currentDraft.autoRetry === true;
-    const resolution = normalizeResolutionForModel(currentSettings.model, currentDraft.resolution);
     const aspectRatio = currentDraft.aspectRatio;
-    // 视频需站长在管理页开启开关，否则忽略草稿里的 videoMode
-    const videoMode = currentSettings.videoEnabled === true && currentDraft.videoMode === true;
+    // 管理页没配视频模型 = 没有视频能力，忽略草稿里的 videoMode
+    const videoMode =
+      Boolean(currentSettings.videoModel.trim()) && currentDraft.videoMode === true;
     const videoDuration = normalizeVideoDuration(currentDraft.videoDuration);
     const videoResolution = normalizeVideoResolution(currentDraft.videoResolution);
     const useServerQueue = currentDraft.backgroundTasks === true;
 
+    // 模型 + 参考图一次定完：带图且配了图生图模型就换成 /images/edits 那个模型
+    const target = resolveGenerationTarget({
+      model: currentSettings.model,
+      imageEditModel: currentSettings.imageEditModel,
+      videoModel: currentSettings.videoModel,
+      videoMode,
+      referenceImageUrl: currentDraft.referenceImageUrl,
+    });
+    if (target.error) {
+      throw new ApiError(400, target.error.message, target.error.code);
+    }
+    const model = target.model;
+    const ref = target.referenceUrl ?? "";
+    const resolution = normalizeResolutionForModel(model, currentDraft.resolution);
+
     if (resolution !== currentDraft.resolution) {
-      log("warn", `分辨率已按模型能力纠正：${currentDraft.resolution} → ${resolution}`, {
-        model: currentSettings.model,
-      });
+      log("warn", `分辨率已按模型能力纠正：${currentDraft.resolution} → ${resolution}`, { model });
       setDraft({ resolution });
     }
 
@@ -742,21 +756,11 @@ export function useStudioQueue(
           aspectRatio,
           resolution: videoMode ? videoResolution : resolution,
           duration: videoMode ? videoDuration : undefined,
-          model: videoMode ? currentSettings.videoModel : currentSettings.model,
+          model,
         },
       );
 
       try {
-        const resolvedRef = resolveReferenceImage({
-          model: videoMode ? currentSettings.videoModel : currentSettings.model,
-          referenceImageUrl: currentDraft.referenceImageUrl,
-          imageToImageEnabled: currentSettings.imageToImageEnabled === true,
-        });
-        if (resolvedRef.error) {
-          throw new ApiError(400, resolvedRef.error.message, resolvedRef.error.code);
-        }
-        const ref = resolvedRef.referenceUrl ?? "";
-
         const storage = getQueueStorageConfig();
         if (storage.storageMode === "media" && !storage.mediaBase) {
           throw new ApiError(
@@ -775,7 +779,7 @@ export function useStudioQueue(
         const created = await createServerTasks({
           baseUrl: currentSettings.baseUrl,
           apiKey,
-          model: videoMode ? currentSettings.videoModel : currentSettings.model,
+          model,
           kind: videoMode ? "video" : "image",
           duration: videoMode ? videoDuration : undefined,
           aspectRatio,
@@ -910,7 +914,7 @@ export function useStudioQueue(
         kind: videoMode ? "video" : "image",
         resolution: videoMode ? videoResolution : resolution,
         duration: videoMode ? videoDuration : undefined,
-        model: videoMode ? currentSettings.videoModel : currentSettings.model,
+        model,
       },
     );
 
@@ -945,25 +949,10 @@ export function useStudioQueue(
             batchId: job.batchId,
             concurrency,
             resolution,
-            model: videoMode ? currentSettings.videoModel : currentSettings.model,
+            model,
             autoRetry,
-            hasReference: Boolean(
-              typeof currentDraft.referenceImageUrl === "string" &&
-                currentDraft.referenceImageUrl.trim(),
-            ),
+            hasReference: Boolean(ref),
           });
-
-          // 编辑模型必带参考图；图生图开关开启时任意模型都可带 → /images/edits
-          // 视频模式必须按视频模型判定，否则图片模型是 edit 类时会误要求参考图
-          const resolvedRef = resolveReferenceImage({
-            model: videoMode ? currentSettings.videoModel : currentSettings.model,
-            referenceImageUrl: currentDraft.referenceImageUrl,
-            imageToImageEnabled: currentSettings.imageToImageEnabled === true,
-          });
-          if (resolvedRef.error) {
-            throw new ApiError(400, resolvedRef.error.message, resolvedRef.error.code);
-          }
-          const ref = resolvedRef.referenceUrl ?? "";
 
           let attempt = 0;
           for (;;) {
@@ -976,7 +965,7 @@ export function useStudioQueue(
                 const video = await generateVideo({
                   baseUrl: currentSettings.baseUrl,
                   apiKey,
-                  model: currentSettings.videoModel,
+                  model,
                   prompt: job.prompt,
                   duration: videoDuration,
                   aspectRatio,
@@ -997,7 +986,7 @@ export function useStudioQueue(
               const images = await generateImage({
                 baseUrl: currentSettings.baseUrl,
                 apiKey,
-                model: currentSettings.model,
+                model,
                 prompt: job.prompt,
                 n: 1,
                 aspectRatio,

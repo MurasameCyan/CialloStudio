@@ -284,8 +284,8 @@ export function StudioPage({
   const [serverQueueOpen, setServerQueueOpen] = useState(false);
   const [cancelingServerId, setCancelingServerId] = useState<string | null>(null);
   const [queueBulkBusy, setQueueBulkBusy] = useState<string | null>(null);
-  /** 视频模式：需站长开启开关 + 用户在创作台切到视频 */
-  const videoEnabled = settings.videoEnabled === true;
+  /** 视频模式：管理页配了视频模型 + 用户在创作台切到视频 */
+  const videoEnabled = Boolean((settings.videoModel ?? "").trim());
   const videoMode = videoEnabled && draft.videoMode === true;
   /** 服务端后台：生成按钮不因 running 锁死，仅入队瞬间 busy */
   const generateLocked = running || enqueueBusy;
@@ -294,9 +294,14 @@ export function StudioPage({
     () => concurrencyOptionsForCap(concurrencyCap),
     [concurrencyCap],
   );
+  /** 实际生图模型：带参考图且配了图生图模型时走图生图（与 resolveGenerationTarget 一致） */
+  const activeImageModel =
+    draft.referenceImageUrl && (settings.imageEditModel ?? "").trim()
+      ? settings.imageEditModel.trim()
+      : settings.model;
   // resolutionField 是立即构造的 JSX，里面的 .map() 当场就读 modelCap，
   // 所以必须声明在它之前，否则 TDZ。
-  const modelCap = useMemo(() => getImageModelCapability(settings.model), [settings.model]);
+  const modelCap = useMemo(() => getImageModelCapability(activeImageModel), [activeImageModel]);
   /** 高级：内联在分辨率右侧，不单独占行 */
   const advancedField = (
     <div className="field studio-advanced-field">
@@ -317,7 +322,13 @@ export function StudioPage({
             className={`chip studio-toggle-chip ${draft.videoMode ? "active" : ""}`}
             aria-pressed={draft.videoMode}
             title="文生视频：走 /videos/generations 异步生成，可配合「后台任务」交给服务端队列"
-            onClick={() => setDraft({ videoMode: !draft.videoMode })}
+            // 切换模式时套用管理页对应的默认宽高比（图片/视频常用比例不同）
+            onClick={() =>
+              setDraft({
+                videoMode: !draft.videoMode,
+                aspectRatio: draft.videoMode ? settings.aspectRatio : settings.videoAspectRatio,
+              })
+            }
           >
             视频
           </button>
@@ -362,7 +373,7 @@ export function StudioPage({
                   type="button"
                   className={`chip ${draft.resolution === item ? "active" : ""}`}
                   disabled={!allowed}
-                  title={allowed ? item : `${settings.model} 不支持 ${item}`}
+                  title={allowed ? item : `${activeImageModel} 不支持 ${item}`}
                   onClick={() => {
                     if (allowed) setDraft({ resolution: item });
                   }}
@@ -575,14 +586,14 @@ export function StudioPage({
     ) : null;
   const configured = Boolean((typeof settings.apiKey === "string" ? settings.apiKey : "").trim());
   /**
-   * 参考图上传区：站长开启「图生图」开关，或模型本身是编辑类（必须带图）。
-   * 视频模式下参考图作首帧（图生视频），同样沿用开关。
+   * 参考图上传区：管理页配了「图生图模型」，或文生图槽本身填的是编辑类模型（必须带图）。
+   * 视频模式下参考图作首帧（图生视频），同样沿用图生图模型这个开关。
    */
   const showReferencePicker = useMemo(
     () =>
-      settings.imageToImageEnabled === true ||
+      Boolean((settings.imageEditModel ?? "").trim()) ||
       isImageEditModel(typeof settings.model === "string" ? settings.model : ""),
-    [settings.imageToImageEnabled, settings.model],
+    [settings.imageEditModel, settings.model],
   );
   /** 编辑类模型缺参考图会被上游拒绝；视频/普通生图留空则退化为纯文生成 */
   const referenceRequired = useMemo(
@@ -590,7 +601,7 @@ export function StudioPage({
     [videoMode, settings.model],
   );
 
-  // 关掉图生图开关 / 切到非编辑模型时清掉参考图，避免误带到文生图请求
+  // 没配图生图模型 / 切到非编辑模型时清掉参考图，避免误带到文生图请求
   useEffect(() => {
     if (showReferencePicker) return;
     if (!draft.referenceImageUrl && !draft.referenceImageName) return;

@@ -143,6 +143,10 @@ function extractMediaPath(pathname: string, search = "", hash = ""): string | nu
   if (mediaIdx >= 0) {
     return `${pathname.slice(mediaIdx)}${search}${hash}`;
   }
+  const videoIdx = pathname.indexOf("/v1/videos/");
+  if (videoIdx >= 0) {
+    return `${pathname.slice(videoIdx)}${search}${hash}`;
+  }
   if (pathname.startsWith("/media/")) {
     return `/v1${pathname}${search}${hash}`;
   }
@@ -171,7 +175,7 @@ export function rewriteMediaUrl(rawUrl: string, baseUrl: string): string {
     const isLoopback = LOOPBACK_HOSTS.has(parsed.hostname);
 
     // 内网地址或明确 media 路径：一律改写
-    if (mediaPath && (isLoopback || mediaPath.startsWith("/v1/media/"))) {
+    if (mediaPath && (isLoopback || mediaPath.startsWith("/v1/media/") || mediaPath.startsWith("/v1/videos/"))) {
       if (base.startsWith("/")) {
         return mediaPath;
       }
@@ -214,7 +218,9 @@ export async function materializeImageUrl(input: {
 
   const rewritten = rewriteMediaUrl(input.rawUrl, input.baseUrl);
   log("info", "拉取媒体", { raw: input.rawUrl, rewritten });
-  const headers = new Headers({ Accept: "image/*,application/octet-stream;q=0.9,*/*;q=0.8" });
+  const headers = new Headers({
+    Accept: "image/*,video/*,application/octet-stream;q=0.9,*/*;q=0.8",
+  });
   const mediaKey = typeof input.apiKey === "string" ? input.apiKey.trim() : "";
   if (mediaKey) {
     headers.set("Authorization", `Bearer ${mediaKey}`);
@@ -781,9 +787,15 @@ export async function generateVideo(input: {
       rememberUpstreamOrigin(input.baseUrl);
 
       let display = rawUrl;
+      const rewritten = rewriteMediaUrl(rawUrl, input.baseUrl);
+      // 图片在 api.ts 的 needsMaterialize 是对改写后 URL 判断；视频必须同样，否则绝对媒体地址
+      // 既不走同源代理、也不 blob 化，<video src> 直连上游且带不了 Authorization → invalid_api_key。
       const needsMaterialize =
-        isSameOriginMediaPath(rawUrl) ||
-        /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rawUrl);
+        isSameOriginMediaPath(rewritten) ||
+        /^(blob|data):/i.test(rewritten) === false &&
+          (rewritten.includes("/v1/videos/") ||
+            rewritten.includes("/v1/media/") ||
+            /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(rewritten));
       if (needsMaterialize) {
         try {
           display = await materializeImageUrl({
@@ -794,14 +806,17 @@ export async function generateVideo(input: {
           });
         } catch (error) {
           log("warn", "视频 blob 化失败，回退直链（依赖 cookie 代理）", error);
-          display = rawUrl;
+          display = rewriteMediaUrl(rawUrl, input.baseUrl);
         }
+      } else {
+        display = rewritten;
       }
 
       log("ok", "视频生成完成", { requestId, duration: status.video?.duration });
       return {
         url: display,
-        openUrl: rawUrl.startsWith("blob:") || rawUrl.startsWith("data:") ? undefined : rawUrl,
+        // 打开也用改写后的同源路径（走 /v1 代理 + cookie 认证），blob 无法在新标签页打开。
+        openUrl: rewritten.startsWith("blob:") || rewritten.startsWith("data:") ? undefined : rewritten,
         duration: status.video?.duration,
       };
     }

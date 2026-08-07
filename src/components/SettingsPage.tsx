@@ -17,7 +17,6 @@ import {
   type UpdateCheckResult,
 } from "@/lib/buildInfo";
 import type { CommunityUser } from "@/lib/community/types";
-import { getImageModelCapability } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
   getMediaBase,
@@ -33,11 +32,7 @@ import {
 } from "@/lib/media/client";
 import { getMasterUsername } from "@/lib/runtimeConfig";
 import {
-  ASPECT_RATIOS,
   DEFAULT_SETTINGS,
-  RESOLUTIONS,
-  VIDEO_DURATIONS,
-  VIDEO_RESOLUTIONS,
   type StudioSettings,
   normalizeSettings,
   saveSettings,
@@ -298,10 +293,6 @@ export function SettingsPage({
 
   const apiKey = typeof draft.apiKey === "string" ? draft.apiKey : "";
   const baseUrl = typeof draft.baseUrl === "string" ? draft.baseUrl : "";
-  const modelCap = useMemo(
-    () => getImageModelCapability(typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model),
-    [draft.model],
-  );
 
   /** 视频模型候选：模型列表里 id 带 video 的 */
   const videoModelOptions = useMemo(() => models.filter((m) => /video/i.test(m.id)), [models]);
@@ -714,116 +705,6 @@ export function SettingsPage({
                       onPick={(next) => update("promptOptimizeModel", next)}
                     />
 
-                  </div>
-                </div>
-
-                <div className="studio-params-divider" role="separator" />
-
-                <div className="admin-block-label">默认设置</div>
-                <div className="admin-dual-cols">
-                  <div className="admin-dual-col">
-                    <div className="admin-block-label admin-block-label-sub">图片</div>
-                    <div className="field">
-                      <div className="label-row">
-                        <label>宽高比</label>
-                      </div>
-                      <div className="segmented">
-                        {ASPECT_RATIOS.map((ratio) => (
-                          <button
-                            key={`img-ar-${ratio}`}
-                            type="button"
-                            className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                            onClick={() => update("aspectRatio", ratio)}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="field">
-                      <div className="label-row">
-                        <label>分辨率</label>
-                      </div>
-                      <div className="segmented">
-                        {RESOLUTIONS.map((item) => {
-                          const allowed = modelCap.allowedResolutions.includes(item);
-                          return (
-                            <button
-                              key={`img-res-${item}`}
-                              type="button"
-                              className={`chip ${draft.resolution === item ? "active" : ""}`}
-                              disabled={!allowed}
-                              title={allowed ? item : `${draft.model} 不支持 ${item}`}
-                              onClick={() => {
-                                if (allowed) update("resolution", item);
-                              }}
-                            >
-                              {item}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="admin-dual-col">
-                    <div className="admin-block-label admin-block-label-sub">视频</div>
-                    <div className="field">
-                      <div className="label-row">
-                        <label>宽高比</label>
-                      </div>
-                      <div className="segmented">
-                        {ASPECT_RATIOS.map((ratio) => (
-                          <button
-                            key={`vid-ar-${ratio}`}
-                            type="button"
-                            className={`chip ${draft.videoAspectRatio === ratio ? "active" : ""}`}
-                            onClick={() => update("videoAspectRatio", ratio)}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="admin-fields-2">
-                      <div className="field">
-                        <div className="label-row">
-                          <label>分辨率</label>
-                        </div>
-                        <div className="segmented">
-                          {VIDEO_RESOLUTIONS.map((item) => (
-                            <button
-                              key={`vid-res-${item}`}
-                              type="button"
-                              className={`chip ${draft.videoResolution === item ? "active" : ""}`}
-                              onClick={() => update("videoResolution", item)}
-                            >
-                              {item}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="field">
-                        <div className="label-row">
-                          <label>时长</label>
-                        </div>
-                        <div className="segmented">
-                          {VIDEO_DURATIONS.map((item) => (
-                            <button
-                              key={`vid-dur-${item}`}
-                              type="button"
-                              className={`chip ${draft.videoDuration === item ? "active" : ""}`}
-                              onClick={() => update("videoDuration", item)}
-                            >
-                              {item}s
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>

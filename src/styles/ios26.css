@@ -2253,13 +2253,6 @@ a {
   cursor: not-allowed;
 }
 
-.admin-block-label-sub {
-  margin-top: 4px;
-  opacity: 0.85;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-
 .admin-selected-models-bar {
   margin-bottom: 2px;
 }
@@ -2321,10 +2314,6 @@ a {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-}
-
-.admin-model-picker-head .admin-block-label-sub {
-  margin: 0;
 }
 
 .admin-model-filter {

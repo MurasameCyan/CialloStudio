@@ -2887,6 +2887,8 @@ a {
   gap: 14px;
   width: 100%;
   box-sizing: border-box;
+  /* 参数行的 min-content 不再撑破外层卡片（chip 靠 flex-wrap 换行消化） */
+  min-width: 0;
 }
 
 /* 第一行：数量 | 并发 | 分辨率 | 时长
@@ -3152,13 +3154,6 @@ a {
   }
 }
 
-/* 第二行：宽高比独占整行 */
-.studio-params-row-aspect > .field {
-  flex: 1 1 100%;
-  width: 100%;
-  max-width: 100%;
-}
-
 .studio-params-row > .field {
   margin-bottom: 0;
   flex: 0 0 auto;
@@ -3208,6 +3203,27 @@ a {
 .studio-params-row .chip:disabled {
   opacity: 0.38;
   cursor: not-allowed;
+}
+
+/* 第二行：宽高比独占整行并允许换行。
+   必须放在 .studio-params-row > .field 之后：两者权重相同，靠顺序取胜。 */
+.studio-params-row-aspect > .field {
+  flex: 1 1 100%;
+  width: 100%;
+  max-width: 100%;
+}
+
+.studio-params-row-aspect .segmented {
+  width: 100%;
+  gap: 6px;
+}
+
+/* 图生图/视频会多出「源」共 8 个 chip，收窄内边距与字号才装得下一行 */
+.studio-params-row-aspect .chip {
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 @media (max-width: 560px) {

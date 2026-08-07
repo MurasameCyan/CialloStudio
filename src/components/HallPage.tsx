@@ -11,9 +11,15 @@ import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types"
 import { isVideoPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 
+/** 「原图 / 视频」按钮与提示文案随媒体类型走 */
+function mediaWord(post: Pick<GalleryPost, "kind"> | null | undefined): string {
+  return isVideoPost(post) ? "视频" : "原图";
+}
+
 function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "kind" | "mediaId" | "prompt">) {
-  const ok = openOriginalImageInNewTab(post, post.prompt?.trim() || "原图预览", isVideoPost(post));
-  if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
+  const word = mediaWord(post);
+  const ok = openOriginalImageInNewTab(post, post.prompt?.trim() || `${word}预览`, isVideoPost(post));
+  if (!ok) log("warn", `${word}地址不可用或弹窗被拦截`);
 }
 
 function CommentIcon() {
@@ -436,15 +442,15 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                       <button
                         type="button"
                         className="hall-chip"
-                        title="新标签打开原图"
-                        aria-label="原图"
+                        title={`新标签打开${mediaWord(post)}`}
+                        aria-label={mediaWord(post)}
                         disabled={!resolvePostImageUrl(post)}
                         onClick={(e) => {
                           e.stopPropagation();
                           openOriginalImage(post);
                         }}
                       >
-                        <span className="hall-chip-label">原图</span>
+                        <span className="hall-chip-label">{mediaWord(post)}</span>
                       </button>
                       {user && (user.id === post.authorId || user.role === "admin") ? (
                         <button
@@ -575,12 +581,12 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                   <button
                     type="button"
                     className="hall-chip"
-                    title="新标签打开原图"
-                    aria-label="原图"
+                    title={`新标签打开${mediaWord(active)}`}
+                    aria-label={mediaWord(active)}
                     disabled={!resolvePostImageUrl(active)}
                     onClick={() => openOriginalImage(active)}
                   >
-                    <span className="hall-chip-label">原图</span>
+                    <span className="hall-chip-label">{mediaWord(active)}</span>
                   </button>
                 </div>
               </div>
@@ -725,15 +731,16 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                   type="button"
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
+                    const word = mediaWord(active);
                     const ok = openOriginalImageInNewTab(
                       lightboxSrc,
-                      active.prompt?.trim() || "原图预览",
+                      active.prompt?.trim() || `${word}预览`,
                       isVideoPost(active),
                     );
-                    if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
+                    if (!ok) log("warn", `${word}地址不可用或弹窗被拦截`);
                   }}
                 >
-                  {isVideoPost(active) ? "打开视频" : "打开原图"}
+                  打开{mediaWord(active)}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxOpen(false)}>
                   关闭

@@ -204,6 +204,21 @@ export function rewriteMediaUrl(rawUrl: string, baseUrl: string): string {
 }
 
 /**
+ * <img>/<video> 直连这些地址会缺 Authorization / X-Ciallo-Upstream，必须 blob 化：
+ * 同源代理路径、内网地址，以及带 /v1/videos|/v1/media 的上游媒体地址。
+ * generateImage 用的是更窄的判定（公网 CDN 图直连即可，不必额外拉一遍）。
+ */
+export function needsMediaMaterialize(url: string): boolean {
+  if (!url || /^(blob|data):/i.test(url)) return false;
+  return (
+    isSameOriginMediaPath(url) ||
+    url.includes("/v1/videos/") ||
+    url.includes("/v1/media/") ||
+    /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0)(:\d+)?\//i.test(url)
+  );
+}
+
+/**
  * 通过可访问地址拉取图片并转为 blob: URL，彻底避开跨域/内网主机问题。
  */
 export async function materializeImageUrl(input: {
@@ -815,8 +830,8 @@ export async function generateVideo(input: {
       log("ok", "视频生成完成", { requestId, duration: status.video?.duration });
       return {
         url: display,
-        // 打开也用改写后的同源路径（走 /v1 代理 + cookie 认证），blob 无法在新标签页打开。
-        openUrl: rewritten.startsWith("blob:") || rewritten.startsWith("data:") ? undefined : rewritten,
+        // openUrl 保留 blob（供后续包装成 HTML 页打开）或同源路径，data: 则清空
+        openUrl: rewritten.startsWith("data:") ? undefined : display.startsWith("blob:") ? display : rewritten,
         duration: status.video?.duration,
       };
     }

@@ -38,6 +38,7 @@ export function fallbackPostImageUrl(post: PostImageFields, failedUrl: string): 
 export function openOriginalImageInNewTab(
   postOrUrl: PostImageFields | string,
   title = "原图预览",
+  video = false,
 ): boolean {
   const url =
     typeof postOrUrl === "string"
@@ -45,22 +46,26 @@ export function openOriginalImageInNewTab(
       : resolvePostImageUrl(postOrUrl);
   if (!url) return false;
 
-  // data:image 可直接开
-  if (/^data:image\//i.test(url)) {
+  // data: 可直接开
+  if (/^data:(image|video)\//i.test(url)) {
     const win = window.open(url, "_blank", "noopener,noreferrer");
     return Boolean(win);
   }
 
-  const safeSrc = url
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-  const safeTitle = String(title || "原图预览")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  const escape = (s: string) =>
+    s
+      .replace(/&/g, "&amp;")
+      .replace(/"/g, "&quot;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const safeSrc = escape(url);
+  const safeTitle = escape(String(title || (video ? "视频预览" : "原图预览")));
+  const failText = video ? "视频加载失败" : "原图加载失败";
+  const media = video
+    ? `<video src="${safeSrc}" controls autoplay loop playsinline
+    onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'err',textContent:'${failText}'}))"></video>`
+    : `<img src="${safeSrc}" alt="${safeTitle}" decoding="async"
+    onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'err',textContent:'${failText}'}))" />`;
 
   const html = `<!doctype html>
 <html lang="zh-CN">
@@ -71,13 +76,12 @@ export function openOriginalImageInNewTab(
   <style>
     html, body { margin: 0; min-height: 100%; background: #0b0b0f; color: #f5f5f7; }
     body { display: grid; place-items: center; min-height: 100dvh; }
-    img { max-width: min(100vw, 100%); max-height: 100dvh; width: auto; height: auto; object-fit: contain; }
+    img, video { max-width: min(100vw, 100%); max-height: 100dvh; width: auto; height: auto; object-fit: contain; }
     .err { font: 14px/1.5 system-ui, sans-serif; opacity: .8; padding: 24px; text-align: center; }
   </style>
 </head>
 <body>
-  <img src="${safeSrc}" alt="${safeTitle}" decoding="async"
-    onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'err',textContent:'原图加载失败'}))" />
+  ${media}
 </body>
 </html>`;
 

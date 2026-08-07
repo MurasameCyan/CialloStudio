@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ApiError, generateImage, generateVideo, rewriteMediaUrl } from "@/lib/api";
+import {
+  ApiError,
+  generateImage,
+  generateVideo,
+  materializeImageUrl,
+  needsMediaMaterialize,
+  rewriteMediaUrl,
+} from "@/lib/api";
 import { normalizeResolutionForModel, resolveGenerationTarget } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import {
@@ -194,6 +201,7 @@ export function useStudioQueue(
         : { ...job, imageUrl, openUrl };
     }),
   );
+  const rematerializeAttemptedRef = useRef(new Set<string>());
   const [running, setRunning] = useState(false);
   const [inFlight, setInFlight] = useState(0);
   const [serverMode, setServerMode] = useState(false);
@@ -270,6 +278,27 @@ export function useStudioQueue(
   useEffect(() => {
     saveJobs(jobs);
   }, [jobs]);
+
+  // 刷新后重新 blob 化：done 的媒体若是同源路径（非 blob/data），异步拉取转 blob
+  useEffect(() => {
+    const apiKey = settings.apiKey?.trim() || "";
+    const baseUrl = settings.baseUrl?.trim() || "";
+    if (!apiKey || !baseUrl) return;
+    jobs.forEach((job) => {
+      if (job.status !== "done" || !job.imageUrl || rematerializeAttemptedRef.current.has(job.id)) return;
+      // ponytail: 只对需认证的媒体重新 blob 化；data/blob/CDN 无需处理
+      if (!needsMediaMaterialize(job.imageUrl)) return;
+      rematerializeAttemptedRef.current.add(job.id);
+      materializeImageUrl({ rawUrl: job.imageUrl, baseUrl, apiKey })
+        .then((blobUrl) => {
+          // 只换 imageUrl；openUrl 保留原同源路径，否则 serializeJobs 会把两者一起丢掉
+          setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, imageUrl: blobUrl } : j)));
+        })
+        .catch((err) => {
+          log("warn", `重新 blob 化失败 ${job.id.slice(0, 8)}`, err instanceof Error ? err.message : String(err));
+        });
+    });
+  }, [jobs, settings.apiKey, settings.baseUrl]);
 
   const clearQueueNotice = useCallback(() => setQueueNotice(null), []);
 

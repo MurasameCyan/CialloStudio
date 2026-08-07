@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, ImagePlus, Sparkles, Video } from "lucide-re
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
+import { openOriginalImageInNewTab } from "@/lib/community/postImage";
 import {
   computeShareRemainSec,
   type ShareStatus,
@@ -36,6 +37,13 @@ import {
 } from "@/lib/studioQueue";
 import type { ServerQueueItem } from "@/hooks/useStudioQueue";
 import type { StudioMode } from "@/lib/studioMode";
+
+/** 新标签页打开媒体；复用大厅那套 blob HTML 包装（裸 GET 带不上 Authorization） */
+function openMediaInNewTab(url: string, isVideo: boolean): void {
+  if (!url) return;
+  const ok = openOriginalImageInNewTab(url, isVideo ? "视频预览" : "原图预览", isVideo);
+  if (!ok) log("warn", "媒体地址不可用或弹窗被拦截");
+}
 
 /** 创作台生成模式：文生图 / 图生图 / 视频，三选一 */
 type GenMode = "text" | "edit" | "video";
@@ -138,14 +146,20 @@ const StudioJobCard = memo(function StudioJobCard({
               />
             )}
             <div className="card-overlay">
-              <a
-                href={job.openUrl || src}
-                target="_blank"
-                rel="noreferrer"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {isVideo ? "打开视频" : "打开原图"}
-              </a>
+              {job.openUrl || src ? (
+                <button
+                  type="button"
+                  className="card-overlay-action"
+                  title={isVideo ? "新标签页播放" : "新标签页查看"}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // 优先 blob/data（已带认证）；openUrl 是裸同源路径，直连会 invalid_api_key
+                    openMediaInNewTab(src || job.openUrl || "", isVideo);
+                  }}
+                >
+                  {isVideo ? "打开视频" : "打开原图"}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="card-overlay-action"
@@ -1461,9 +1475,8 @@ export function StudioPage({
         ? previewJob.imageUrl
         : displayUrl(previewJob) || previewJob.openUrl)
     : undefined;
-  const previewOpenHref =
-    previewJob?.openUrl ||
-    (previewSrc && !previewSrc.startsWith("blob:") ? previewSrc : undefined);
+  // 优先 blob/data（已带认证）；openUrl 是裸同源路径，新标签直连会 invalid_api_key
+  const previewOpenHref = previewSrc || previewJob?.openUrl;
   const previewAlreadyShared = previewJob ? sharedJobIds.has(previewJob.id) : false;
   const previewShareBusy = previewJob ? sharingId === previewJob.id : false;
   const previewShareDisabled =
@@ -1549,14 +1562,13 @@ export function StudioPage({
           </div>
           <div className="studio-lightbox-actions">
             {previewOpenHref ? (
-              <a
+              <button
+                type="button"
                 className="btn btn-secondary btn-sm"
-                href={previewOpenHref}
-                target="_blank"
-                rel="noreferrer"
+                onClick={() => openMediaInNewTab(previewOpenHref, previewJob.kind === "video")}
               >
                 {previewJob.kind === "video" ? "打开视频" : "打开原图"}
-              </a>
+              </button>
             ) : null}
             {previewJob.kind === "video" ? null : (
               <button

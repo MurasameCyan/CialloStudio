@@ -3185,10 +3185,12 @@ a {
   max-width: 100%;
 }
 
-/* 同一卡片内所有 chip 同高同内边距（数量 / 并发 / 分辨率 / 时长 / 宽高比一致） */
+/* 同一卡片内所有 chip 同高同内边距（数量 / 并发 / 分辨率 / 时长 / 宽高比一致）。
+   min-width = height，「1」「源」这类单字符按钮是正圆，长标签才拉成胶囊。 */
 .studio-params-row .chip {
   min-height: 36px;
   height: 36px;
+  min-width: 36px;
   padding: 0 10px;
   display: inline-flex;
   align-items: center;

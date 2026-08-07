@@ -554,24 +554,27 @@ export function StudioPage({
     </div>
   );
 
-  /** 视频时长：仅视频模式出现 */
+  /** 时长：仅视频模式；竖线一并带上，图片模式下不会留下孤立分隔符 */
   const videoDurationField = videoMode ? (
-    <div className="field">
-      <label>时长</label>
-      <div className="segmented">
-        {VIDEO_DURATIONS.map((item) => (
-          <button
-            key={item}
-            type="button"
-            className={`chip ${draft.videoDuration === item ? "active" : ""}`}
-            title={`${item} 秒`}
-            onClick={() => setDraft({ videoDuration: item })}
-          >
-            {item}s
-          </button>
-        ))}
+    <>
+      <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+      <div className="field">
+        <label>时长</label>
+        <div className="segmented">
+          {VIDEO_DURATIONS.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={`chip ${draft.videoDuration === item ? "active" : ""}`}
+              title={`${item} 秒`}
+              onClick={() => setDraft({ videoDuration: item })}
+            >
+              {item}s
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   ) : null;
 
   const serverQueueActiveCount = serverQueue.filter(

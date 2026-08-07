@@ -355,7 +355,7 @@ export function AdminTaskQueuePanel({
         </button>
       </div>
 
-      <div className="admin-status-row user-admin-stats">
+      <div className="admin-status-row admin-task-stats">
         <div className="admin-status-card">
           <span className="admin-status-label">全部</span>
           <strong className="admin-status-value">{meta?.total ?? "—"}</strong>
@@ -373,10 +373,10 @@ export function AdminTaskQueuePanel({
           <strong className="admin-status-value">{(by?.failed || 0) + (by?.cancelled || 0)}</strong>
         </div>
         <div className="admin-status-card">
-          <span className="admin-status-label">全局并发</span>
+          <span className="admin-status-label">运行 / 上限</span>
           <strong
             className="admin-status-value"
-            title="当前 running / 全站顶棚（本页可改）"
+            title="当前 running / 全站顶棚（下方「并发上限」可改）"
           >
             {meta?.stats?.runningCount ?? 0}/
             {meta?.stats?.concurrencyLimit ?? globalConcurrency ?? "—"}
@@ -384,41 +384,7 @@ export function AdminTaskQueuePanel({
         </div>
       </div>
 
-      <div className="user-cooldown-card admin-task-global-card">
-        <div className="user-cooldown-head">
-          <div>
-            <div className="admin-block-label">全局并发（全站后台任务）</div>
-            <p className="footer-note" style={{ marginTop: 4 }}>
-              全站同时 running 的后台任务顶棚。上方 KPI 显示 当前/此值。默认 8，范围 1–32。当前生效：
-              {globalConcurrency}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={globalBusy || loading}
-            onClick={() => void saveGlobalConcurrency()}
-          >
-            {globalBusy ? "保存中…" : "保存"}
-          </button>
-        </div>
-        <div className="field" style={{ marginTop: 10, maxWidth: 220 }}>
-          <div className="label-row">
-            <label htmlFor="admin-qc-global">全局并发</label>
-          </div>
-          <input
-            id="admin-qc-global"
-            className="control"
-            type="number"
-            min={1}
-            max={32}
-            value={globalConcurrencyDraft}
-            onChange={(e) => setGlobalConcurrencyDraft(Number(e.target.value))}
-          />
-        </div>
-      </div>
-
-      <div className="user-admin-toolbar admin-task-toolbar">
+      <div className="admin-task-bar">
         <form
           className="admin-task-search"
           onSubmit={(e) => {
@@ -438,6 +404,31 @@ export function AdminTaskQueuePanel({
             搜索
           </button>
         </form>
+        {/* 全局并发顶棚：KPI 卡已显示 当前/上限，这里只留可改的那个数 */}
+        <div className="admin-task-concurrency">
+          <label htmlFor="admin-qc-global">并发上限</label>
+          <input
+            id="admin-qc-global"
+            className="control"
+            type="number"
+            min={1}
+            max={32}
+            value={globalConcurrencyDraft}
+            title={`全站同时 running 的后台任务顶棚，范围 1–32，默认 8。当前生效：${globalConcurrency}`}
+            onChange={(e) => setGlobalConcurrencyDraft(Number(e.target.value))}
+          />
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={globalBusy || loading}
+            onClick={() => void saveGlobalConcurrency()}
+          >
+            {globalBusy ? "保存中…" : "保存"}
+          </button>
+        </div>
+      </div>
+
+      <div className="admin-task-bar">
         <div className="segmented admin-task-status-seg" role="group" aria-label="状态筛选">
           {STATUS_FILTERS.map((f) => (
             <button
@@ -453,41 +444,40 @@ export function AdminTaskQueuePanel({
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="btn-row admin-task-bulk" style={{ marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          disabled={Boolean(bulkBusy) || activeCount === 0}
-          onClick={() => void handleBulk("cancel_all")}
-        >
-          {bulkBusy === "cancel_all" ? "取消中…" : "取消全部进行中"}
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          disabled={Boolean(bulkBusy) || ((by?.failed || 0) + (by?.cancelled || 0) === 0)}
-          onClick={() => void handleBulk("clear_failed")}
-        >
-          {bulkBusy === "clear_failed" ? "清理中…" : "清除失败/取消"}
-        </button>
-        <button
-          type="button"
-          className="btn btn-secondary btn-sm"
-          disabled={Boolean(bulkBusy) || (by?.done || 0) === 0}
-          onClick={() => void handleBulk("clear_done")}
-        >
-          {bulkBusy === "clear_done" ? "清理中…" : "清除已完成"}
-        </button>
-        <button
-          type="button"
-          className="btn btn-danger btn-sm"
-          disabled={Boolean(bulkBusy) || (meta?.total || 0) === 0}
-          onClick={() => void handleBulk("clear_all")}
-        >
-          {bulkBusy === "clear_all" ? "清理中…" : "清除全部"}
-        </button>
+        <div className="admin-task-bulk" role="group" aria-label="批量操作">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={Boolean(bulkBusy) || activeCount === 0}
+            onClick={() => void handleBulk("cancel_all")}
+          >
+            {bulkBusy === "cancel_all" ? "取消中…" : "取消全部进行中"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={Boolean(bulkBusy) || ((by?.failed || 0) + (by?.cancelled || 0) === 0)}
+            onClick={() => void handleBulk("clear_failed")}
+          >
+            {bulkBusy === "clear_failed" ? "清理中…" : "清除失败/取消"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={Boolean(bulkBusy) || (by?.done || 0) === 0}
+            onClick={() => void handleBulk("clear_done")}
+          >
+            {bulkBusy === "clear_done" ? "清理中…" : "清除已完成"}
+          </button>
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            disabled={Boolean(bulkBusy) || (meta?.total || 0) === 0}
+            onClick={() => void handleBulk("clear_all")}
+          >
+            {bulkBusy === "clear_all" ? "清理中…" : "清除全部"}
+          </button>
+        </div>
       </div>
 
       {error ? (

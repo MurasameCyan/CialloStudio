@@ -3897,27 +3897,86 @@ a {
   flex-wrap: nowrap;
 }
 
-/* 站长：全站后台任务 */
-.admin-task-toolbar {
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
-  align-items: start;
+/* 站长：全站后台任务。
+   两条控制条：① 搜索 + 并发上限 ② 状态筛选 + 批量操作。
+   左组撑开、右组贴边，行内元素统一 32px 高，避免高低参差。 */
+.admin-task-stats {
+  margin: 0;
+}
+
+/* 5 张 KPI（全部/进行中/完成/失败/全局并发）一行排完，不留半行空档。
+   必须包在 min-width 里：本规则位置晚于 .admin-status-row 的窄屏覆盖且同权重，
+   裸写会连 960/560 的收拢一起顶掉。 */
+@media (min-width: 961px) {
+  .admin-task-stats {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+.admin-task-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.admin-task-bar > :last-child {
+  margin-left: auto;
 }
 
 .admin-task-search {
   display: flex;
   gap: 8px;
-  min-width: 0;
   align-items: center;
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .admin-task-search .control {
   flex: 1;
   min-width: 0;
+  height: 32px;
+  min-height: 32px;
+}
+
+.admin-task-concurrency {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  background: var(--bg-soft-2);
+  border: 1px solid var(--separator);
+}
+
+.admin-task-concurrency label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.admin-task-concurrency .control {
+  width: 64px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0 8px;
+  text-align: center;
 }
 
 .admin-task-status-seg {
   flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 6px;
+  flex: 1 1 auto;
+}
+
+.admin-task-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
 }
 
 .admin-task-row {
@@ -4088,7 +4147,6 @@ a {
   background: var(--bg-soft);
 }
 
-.user-cooldown-head,
 .user-settings-head {
   display: flex;
   align-items: flex-start;
@@ -4343,12 +4401,14 @@ a {
     width: 100%;
   }
 
-  .admin-task-toolbar {
-    grid-template-columns: 1fr;
+  /* 窄屏：控制条各组占满整行，右组不再贴边 */
+  .admin-task-bar > :last-child {
+    margin-left: 0;
   }
 
-  .admin-task-status-seg {
-    justify-content: flex-start;
+  .admin-task-search,
+  .admin-task-concurrency {
+    flex: 1 1 100%;
   }
 
   .admin-task-row {

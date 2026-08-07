@@ -1868,6 +1868,7 @@ a {
 
 .admin-hero-top-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
@@ -1977,45 +1978,23 @@ a {
   margin-bottom: 8px;
 }
 
-/* 设置页：版本 SHA + 检查更新（对照 GitHub track ref HEAD） */
+/* 设置页：版本 SHA 药丸 + 检查更新 / GitHub 圆形按钮，与「控制台」标题同行右侧。
+   检测结果不再占一行文案，改为按钮 title 提示 + 图标着色。 */
 .build-version-row {
   position: relative;
   z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px 14px;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.45);
-  border: 1px solid var(--separator);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-@media (prefers-color-scheme: dark) {
-  .build-version-row {
-    background: rgba(255, 255, 255, 0.05);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
-}
-
-.build-version-meta {
+  flex: 0 0 auto;
   display: inline-flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 8px 10px;
-  min-width: 0;
-}
-
-.build-version-meta .admin-status-label {
-  display: inline;
-  margin-bottom: 0;
-  line-height: 1;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 999px;
+  background: var(--bg-soft-2);
+  border: 1px solid var(--separator);
 }
 
 .build-version-hash {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 760;
   letter-spacing: -0.02em;
   color: var(--text-primary);
@@ -2027,32 +2006,62 @@ a {
 }
 
 .build-version-ref {
-  margin: 0;
-}
-
-.build-version-check {
-  flex: 0 0 auto;
-  min-height: 36px;
-  height: 36px;
-  padding: 0 14px;
-}
-
-.build-version-status {
-  flex: 1 1 140px;
-  margin: 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--system-blue, #007aff);
+  text-decoration: none;
   white-space: nowrap;
 }
 
-.build-version-status-new {
-  color: var(--system-blue, #007aff);
-  font-weight: 650;
+/* 与 .studio-mode-btn 同款圆形图标按钮，这里固定为正圆 */
+.build-version-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
-.build-version-status-err {
+.build-version-icon:hover {
+  background: var(--bg-solid);
+  color: var(--text);
+}
+
+.build-version-icon:active {
+  transform: scale(0.94);
+}
+
+.build-version-icon:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.build-version-icon-new {
+  color: var(--system-blue, #007aff);
+}
+
+.build-version-icon-err {
   color: var(--system-red, #ff3b30);
+}
+
+.build-version-spin {
+  animation: build-version-spin 0.9s linear infinite;
+}
+
+@keyframes build-version-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .admin-status-value {

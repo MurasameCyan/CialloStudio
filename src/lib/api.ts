@@ -831,8 +831,8 @@ export async function generateVideo(input: {
       log("ok", "视频生成完成", { requestId, duration: status.video?.duration });
       return {
         url: display,
-        // openUrl 保留 blob（供后续包装成 HTML 页打开）或同源路径，data: 则清空
-        openUrl: rewritten.startsWith("data:") ? undefined : display.startsWith("blob:") ? display : rewritten,
+        // imageUrl 用 blob 播放；openUrl 必须保留非 blob 地址，刷新后才能重新拉取
+        openUrl: rewritten.startsWith("blob:") || rewritten.startsWith("data:") ? undefined : rewritten,
         duration: status.video?.duration,
       };
     }

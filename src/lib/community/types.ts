@@ -113,6 +113,8 @@ export type GalleryPost = {
   model?: string;
   aspectRatio?: string;
   resolution?: string;
+  /** 视频时长（秒），仅视频帖 */
+  duration?: number;
   caption?: string;
   likeCount: number;
   commentCount: number;
@@ -150,6 +152,8 @@ export type CreatePostInput = {
   model?: string;
   aspectRatio?: string;
   resolution?: string;
+  /** 视频时长（秒），仅视频帖 */
+  duration?: number;
   caption?: string;
 };
 
@@ -179,6 +183,14 @@ export type ApiErrorBody = {
 /** 只认 "video"，其余（含 undefined / 脏数据）都按图片处理 */
 export function normalizePostKind(value: unknown): PostKind {
   return value === "video" ? "video" : "image";
+}
+
+/** 仅视频帖保留正数时长；其余输入统一丢弃 */
+export function normalizeVideoDuration(kind: unknown, value: unknown): number | undefined {
+  const duration = Number(value);
+  return normalizePostKind(kind) === "video" && Number.isFinite(duration) && duration > 0
+    ? duration
+    : undefined;
 }
 
 export function isVideoPost(post: Pick<GalleryPost, "kind"> | null | undefined): boolean {

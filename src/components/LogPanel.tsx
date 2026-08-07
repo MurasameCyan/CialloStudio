@@ -30,7 +30,7 @@ export function LogPanel() {
           <p className="panel-desc admin-log-desc">
             {entries.length > 0
               ? `${entries.length} 条记录${errorCount > 0 ? ` · ${errorCount} 错误` : ""}`
-              : "连接与生图请求会出现在这里"}
+              : "连接与创作请求会出现在这里"}
           </p>
         </div>
         <div className="btn-row">
@@ -52,7 +52,7 @@ export function LogPanel() {
         entries.length === 0 ? (
           <div className="empty admin-log-empty">
             <span className="empty-title">暂无日志</span>
-            测试连接或去生图页生成后再回来。
+            测试连接或去创作页生成后再回来。
           </div>
         ) : (
           <div className="log-list">

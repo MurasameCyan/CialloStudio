@@ -212,7 +212,7 @@ export default function App() {
               className={`nav-pill ${tab === "studio" ? "active" : ""}`}
               onClick={() => setTab("studio")}
             >
-              生图
+              创作
             </button>
             <button
               type="button"
@@ -255,7 +255,7 @@ export default function App() {
             </div>
             <div className="bg-task-banner-actions">
               <button type="button" className="btn btn-secondary btn-sm" onClick={openStudio}>
-                回生图
+                回创作
               </button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={queue.stop}>
                 停止
@@ -264,7 +264,7 @@ export default function App() {
           </div>
         ) : null}
         {tab === "studio" ? (
-          <ErrorBoundary label="生图页">
+          <ErrorBoundary label="创作页">
             <StudioPage
               mode={studioMode}
               settings={settings}
@@ -339,7 +339,7 @@ export default function App() {
                   去大厅登录
                 </button>
                 <button type="button" className="btn btn-secondary" onClick={() => setTab("studio")}>
-                  返回生图
+                  返回创作
                 </button>
               </div>
             </section>

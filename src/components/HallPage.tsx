@@ -10,6 +10,7 @@ import {
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
 import { isVideoPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
+import { formatDuration } from "@/lib/mediaMeta";
 
 /** 「原图 / 视频」按钮与提示文案随媒体类型走 */
 function mediaWord(post: Pick<GalleryPost, "kind"> | null | undefined): string {
@@ -386,7 +387,7 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
         ) : posts.length === 0 ? (
           <div className="empty empty-compact">
             <span className="empty-title">暂无分享</span>
-            <p className="empty-text">在生图结果里点「分享到大厅」，或登录后从详情发布。</p>
+            <p className="empty-text">在创作结果里点「分享到大厅」，或登录后从详情发布。</p>
           </div>
         ) : (
           <>
@@ -555,7 +556,9 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             <div className="hall-meta">
               <span>{active.model || "—"}</span>
               <span>
-                {active.aspectRatio || ""} {active.resolution || ""}
+                {[active.aspectRatio, active.resolution, isVideoPost(active) ? formatDuration(active.duration) : undefined]
+                  .filter(Boolean)
+                  .join(" · ") || "—"}
               </span>
             </div>
 

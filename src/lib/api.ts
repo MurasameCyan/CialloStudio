@@ -501,7 +501,7 @@ export async function generateImage(input: {
   // 纯文生图仍走 /images/generations
   const path = hasRef ? "/images/edits" : "/images/generations";
 
-  log("info", hasRef ? "开始图+文编辑" : "开始生图", {
+  log("info", hasRef ? "开始图+文编辑" : "开始创作", {
     model: input.model,
     prompt: input.prompt,
     n: input.n ?? 1,
@@ -556,7 +556,7 @@ export async function generateImage(input: {
   });
 
   if (!isRecord(payload) || !Array.isArray(payload.data)) {
-    throw new ApiError(200, "生图响应格式无效", "invalid_response");
+    throw new ApiError(200, "创作响应格式无效", "invalid_response");
   }
 
   const images: ImageResult[] = [];
@@ -576,7 +576,7 @@ export async function generateImage(input: {
 
     if (typeof item.url === "string" && item.url.trim()) {
       const rewritten = rewriteMediaUrl(item.url, input.baseUrl);
-      log("info", "生图返回 URL", { raw: item.url, rewritten });
+      log("info", "创作返回 URL", { raw: item.url, rewritten });
       rememberUpstreamOrigin(input.baseUrl);
 
       // 同源 /v1/media 或内网地址：必须 blob 化，因为 <img> 带不了 X-Ciallo-Upstream
@@ -611,10 +611,10 @@ export async function generateImage(input: {
   }
 
   if (images.length === 0) {
-    throw new ApiError(200, "生图响应中没有图片", "invalid_response");
+    throw new ApiError(200, "创作响应中没有图片", "invalid_response");
   }
 
-  log("ok", `生图完成 ${images.length} 张`);
+  log("ok", `创作完成 ${images.length} 张`);
   return images;
 }
 

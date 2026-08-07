@@ -10,6 +10,7 @@ import {
   videoTier,
   formatDuration,
   describeMediaMeta,
+  resolutionMismatch,
 } from "../src/lib/mediaMeta.ts";
 
 // ——— 宽高比吸附 ———
@@ -44,7 +45,6 @@ assert.strictEqual(resolutionTier(512, 1024), "1k");
 assert.strictEqual(videoTier(640, 480), "480p");
 assert.strictEqual(videoTier(1280, 720), "720p");
 assert.strictEqual(videoTier(1920, 1080), "1080p");
-assert.strictEqual(videoTier(1280, 720), "720p");
 
 // ——— 时长 ———
 assert.strictEqual(formatDuration(6), "6s");
@@ -61,5 +61,11 @@ assert.deepStrictEqual(describeMediaMeta(undefined, false), []);
 
 const videoMeta = { width: 1280, height: 720, duration: 10.2 };
 assert.deepStrictEqual(describeMediaMeta(videoMeta, true), ["16:9", "1280×720 · 720p", "10s"]);
+
+// ——— 请求档位 vs 实际档位 ———
+assert.strictEqual(resolutionMismatch("2k", { width: 1024, height: 1024 }), true);
+assert.strictEqual(resolutionMismatch("2k", { width: 2048, height: 2048 }), false);
+assert.strictEqual(resolutionMismatch("720p", videoMeta), false, "视频档位暂不参与图片 1k/2k 告警");
+assert.strictEqual(resolutionMismatch(undefined, imgMeta), false);
 
 console.log("PASS: mediaMeta — 宽高比 / 分辨率 / 时长 / 档位");

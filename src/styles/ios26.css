@@ -4484,21 +4484,14 @@ a {
   flex: 0 0 auto;
 }
 
-.studio-lightbox-meta span {
+.studio-lightbox-prompt {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-/* 产物参数胶囊不吃上面那条省略号规则：只让 prompt 截断，参数整组保持完整 */
 .studio-lightbox-meta .card-specs {
   flex: 0 0 auto;
-  overflow: visible;
-}
-
-.studio-lightbox-meta .card-specs .card-spec {
-  overflow: visible;
-  text-overflow: clip;
 }
 
 .studio-lightbox-actions {

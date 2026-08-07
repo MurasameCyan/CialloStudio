@@ -398,9 +398,13 @@ export function useStudioQueue(
             status: "done",
             imageUrl,
             openUrl,
-            // 关页重开时本地 job 可能是重建的，kind 只能由服务端给
+            // 关页重开时本地 job 可能是重建的，这些参数只能由服务端给
             kind: task.kind === "video" ? "video" : item.kind,
             duration: task.duration ?? item.duration,
+            // 参数胶囊要拿它判「请求 2k 实际 1k」，缺了判据就静默失效。
+            // 服务端的值才是真正进上游请求体的那个，优先它
+            resolution: task.resolution ?? item.resolution,
+            aspectRatio: task.aspectRatio ?? item.aspectRatio,
             error: undefined,
             finishedAt: task.finishedAt || Date.now(),
             serverTaskId: task.id,
@@ -652,8 +656,8 @@ export function useStudioQueue(
                   prompt: t.prompt,
                   status: t.status === "queued" ? "queued" : "running",
                   createdAt: t.createdAt,
-                  resolution: undefined,
-                  aspectRatio: undefined,
+                  resolution: t.resolution,
+                  aspectRatio: t.aspectRatio,
                   kind: t.kind === "video" ? "video" : "image",
                   duration: t.duration,
                   serverTaskId: t.id,
@@ -776,7 +780,7 @@ export function useStudioQueue(
 
       log(
         "info",
-        `服务端入队：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} ${videoMode ? "生成" : "生图"} × ${concurrency} 并发 · 自动重试=${autoRetry ? "开" : "关"}`,
+        `服务端入队：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} 创作 × ${concurrency} 并发 · 自动重试=${autoRetry ? "开" : "关"}`,
         {
           kind: videoMode ? "video" : "image",
           concurrency,
@@ -931,7 +935,7 @@ export function useStudioQueue(
     const perPrompt = variants * concurrency;
     log(
       "info",
-      `${videoMode ? "并发生视频" : "并发生图"}开始：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} ${videoMode ? "生成" : "生图"} × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=浏览器`,
+      `并发创作开始：本次 ${batch.length} ${videoMode ? "条" : "张"} = ${currentPrompts.length} 条 prompt × ${variants} 创作 × ${concurrency} 并发 · worker=${effectiveWorkers} · ${appendResults ? "追加" : "替换"}模式 · 自动重试=${autoRetry ? "开" : "关"} · 后台=浏览器`,
       {
         concurrency,
         effectiveWorkers,
@@ -1012,7 +1016,7 @@ export function useStudioQueue(
                   duration: video.duration,
                   attempts: attempt,
                 });
-                return { imageUrl: video.url, openUrl: video.openUrl };
+                return { imageUrl: video.url, openUrl: video.openUrl, duration: video.duration };
               }
 
               const images = await generateImage({
@@ -1093,6 +1097,7 @@ export function useStudioQueue(
                 status: "done",
                 imageUrl: result.value.imageUrl,
                 openUrl: result.value.openUrl,
+                duration: result.value.duration ?? job.duration,
                 // 清掉重试 / 视频进度写入的临时提示
                 error: undefined,
                 finishedAt: Date.now(),
@@ -1125,7 +1130,7 @@ export function useStudioQueue(
       );
       log(
         "ok",
-        `${videoMode ? "并发生视频" : "并发生图"}结束：本批 ${batch.length} ${videoMode ? "条" : "张"} · 作品墙模式=${appendResults ? "追加" : "替换"}`,
+        `并发创作结束：本批 ${batch.length} ${videoMode ? "条" : "张"} · 作品墙模式=${appendResults ? "追加" : "替换"}`,
       );
     } finally {
       // 浏览器本地路径收尾；服务端轮询独立，勿清掉服务端 inFlight

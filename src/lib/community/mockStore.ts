@@ -30,6 +30,7 @@ import {
   normalizeQueuePolicy,
   normalizePostKind,
   normalizeShareCooldown,
+  normalizeVideoDuration,
   queueLimitForRole,
   shareCooldownForRole,
 } from "./types";
@@ -431,6 +432,7 @@ export const mockCommunity = {
       model: input.model,
       aspectRatio: input.aspectRatio,
       resolution: input.resolution,
+      duration: normalizeVideoDuration(input.kind, input.duration),
       caption: input.caption?.trim() || undefined,
       likeCount: 0,
       commentCount: 0,

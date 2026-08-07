@@ -1014,6 +1014,8 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
           code: "invalid_response",
         });
       }
+      const duration = Number(res.json?.video?.duration);
+      if (Number.isFinite(duration) && duration > 0) task.duration = duration;
       return url;
     }
   }
@@ -1094,7 +1096,7 @@ async function callUpstreamGenerate(task) {
 
   const data = res.json?.data;
   if (!Array.isArray(data) || data.length === 0) {
-    throw Object.assign(new Error("生图响应中没有图片"), {
+    throw Object.assign(new Error("创作响应中没有图片"), {
       status: 200,
       code: "invalid_response",
     });

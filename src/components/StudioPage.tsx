@@ -53,6 +53,37 @@ function openMediaInNewTab(url: string, isVideo: boolean): void {
 /** 创作台生成模式：文生图 / 图生图 / 视频，三选一 */
 type GenMode = "text" | "edit" | "video";
 
+const MediaMetaSpecs = memo(function MediaMetaSpecs({
+  meta,
+  isVideo,
+  requestedResolution,
+}: {
+  meta: MediaMeta | undefined;
+  isVideo: boolean;
+  requestedResolution?: string;
+}) {
+  const chips = describeMediaMeta(meta, isVideo);
+  const mismatch = resolutionMismatch(requestedResolution, meta);
+  if (chips.length === 0) return null;
+  return (
+    <span className="card-specs" aria-label="实际产物参数">
+      {chips.map((chip) => (
+        <span key={chip} className="card-spec">
+          {chip}
+        </span>
+      ))}
+      {mismatch ? (
+        <span
+          className="card-spec card-spec-warn"
+          title={`已请求 ${requestedResolution}，上游实际返回的尺寸对不上该档位`}
+        >
+          请求 {requestedResolution}
+        </span>
+      ) : null}
+    </span>
+  );
+});
+
 const StudioJobCard = memo(function StudioJobCard({
   job,
   selected,
@@ -80,13 +111,9 @@ const StudioJobCard = memo(function StudioJobCard({
 }) {
   const src = displayUrl(job);
   const isVideo = job.kind === "video";
-  // 实际产物参数从加载完成的媒体元素上量，换 src 就重量一次
-  const [meta, setMeta] = useState<MediaMeta | undefined>(undefined);
-  useEffect(() => {
-    setMeta(undefined);
-  }, [src]);
-  const metaChips = describeMediaMeta(meta, isVideo);
-  const resMismatch = resolutionMismatch(job.resolution, meta);
+  // 实际产物参数从加载完成的媒体元素上量，并绑定当前 src，避免换源时闪出旧参数
+  const [measured, setMeasured] = useState<{ src: string; meta: MediaMeta } | undefined>(undefined);
+  const meta = measured && measured.src === src ? measured.meta : undefined;
   const canSelect = job.status === "done" && Boolean(src || job.openUrl);
   const shareBusy = sharingId === job.id;
   const shareDisabled = alreadyShared || shareBusy || shareLocked;
@@ -149,10 +176,13 @@ const StudioJobCard = memo(function StudioJobCard({
                 onDoubleClick={(e) => e.stopPropagation()}
                 onLoadedMetadata={(e) => {
                   const el = e.currentTarget;
-                  setMeta({
-                    width: el.videoWidth,
-                    height: el.videoHeight,
-                    duration: Number.isFinite(el.duration) ? el.duration : job.duration,
+                  setMeasured({
+                    src: el.currentSrc || el.src,
+                    meta: {
+                      width: el.videoWidth,
+                      height: el.videoHeight,
+                      duration: Number.isFinite(el.duration) ? el.duration : job.duration,
+                    },
                   });
                 }}
               />
@@ -165,25 +195,25 @@ const StudioJobCard = memo(function StudioJobCard({
                 draggable={false}
                 onLoad={(e) => {
                   const el = e.currentTarget;
-                  setMeta({ width: el.naturalWidth, height: el.naturalHeight });
+                  setMeasured({
+                    src: el.currentSrc || el.src,
+                    meta: { width: el.naturalWidth, height: el.naturalHeight },
+                  });
                 }}
               />
             )}
             <div className="card-overlay">
-              {job.openUrl || src ? (
-                <button
-                  type="button"
-                  className="card-overlay-action"
-                  title={isVideo ? "新标签页播放" : "新标签页查看"}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // 优先 blob/data（已带认证）；openUrl 是裸同源路径，直连会 invalid_api_key
-                    openMediaInNewTab(src || job.openUrl || "", isVideo);
-                  }}
-                >
-                  {isVideo ? "打开视频" : "打开原图"}
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="card-overlay-action"
+                title={isVideo ? "新标签页播放" : "新标签页查看"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openMediaInNewTab(src, isVideo);
+                }}
+              >
+                {isVideo ? "打开视频" : "打开原图"}
+              </button>
               <button
                 type="button"
                 className="card-overlay-action"
@@ -248,23 +278,7 @@ const StudioJobCard = memo(function StudioJobCard({
           <strong>#{job.variant}</strong>
           {job.prompt}
         </div>
-        {metaChips.length ? (
-          <div className="card-specs" aria-label="实际产物参数">
-            {metaChips.map((chip) => (
-              <span key={chip} className="card-spec">
-                {chip}
-              </span>
-            ))}
-            {resMismatch ? (
-              <span
-                className="card-spec card-spec-warn"
-                title={`已请求 ${job.resolution}，上游实际返回的尺寸对不上该档位`}
-              >
-                请求 {job.resolution}
-              </span>
-            ) : null}
-          </div>
-        ) : null}
+        <MediaMetaSpecs meta={meta} isVideo={isVideo} requestedResolution={job.resolution} />
       </div>
     </article>
   );
@@ -432,7 +446,7 @@ export function StudioPage({
     <div className="studio-mode-switch" role="group" aria-label="高级">
       <button
         type="button"
-        className={`studio-mode-btn ${draft.autoRetry ? "active" : ""}`}
+        className="studio-mode-btn"
         aria-pressed={draft.autoRetry}
         aria-label="自动重试"
         data-tip="自动重试"
@@ -444,7 +458,7 @@ export function StudioPage({
       {canBackgroundTasks ? (
         <button
           type="button"
-          className={`studio-mode-btn ${draft.backgroundTasks ? "active" : ""}`}
+          className="studio-mode-btn"
           aria-pressed={draft.backgroundTasks}
           aria-label="后台任务"
           data-tip="后台任务"
@@ -725,8 +739,10 @@ export function StudioPage({
   /** 本会话已成功分享过的 job id，禁止重复点分享 */
   const [sharedJobIds, setSharedJobIds] = useState<Set<string>>(() => new Set());
   const [previewJob, setPreviewJob] = useState<StudioJob | null>(null);
-  /** 预览里量到的实际产物参数；切换作品时清空重量 */
-  const [previewMeta, setPreviewMeta] = useState<MediaMeta | undefined>(undefined);
+  /** 预览里量到的实际产物参数，绑定 job id，避免切换时闪出上一件作品的数据 */
+  const [measuredPreview, setMeasuredPreview] = useState<
+    { jobId: string; meta: MediaMeta } | undefined
+  >(undefined);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
@@ -848,11 +864,6 @@ export function StudioPage({
 
   const canPreviewPrev = previewIndex > 0;
   const canPreviewNext = previewIndex >= 0 && previewIndex < previewableJobs.length - 1;
-
-  // 换预览目标就丢掉上一张量到的尺寸，否则左右翻页时会短暂显示错的参数
-  useEffect(() => {
-    setPreviewMeta(undefined);
-  }, [previewJob?.id]);
 
   const stepPreview = useCallback(
     (delta: number) => {
@@ -1135,7 +1146,7 @@ export function StudioPage({
     if (!ep.baseUrl || !ep.apiKey) {
       setOptimizeNotice({
         ok: false,
-        text: "请先配置生图 API Base URL 与 Key",
+        text: "请先配置创作 API Base URL 与 Key",
       });
       openConfigOrLogin();
       return;
@@ -1385,7 +1396,8 @@ export function StudioPage({
         prompt: job.prompt,
         model: isVideo ? settings.videoModel : settings.model,
         aspectRatio: job.aspectRatio || draft.aspectRatio,
-        resolution: job.resolution || draft.resolution,
+        resolution: job.resolution || (isVideo ? draft.videoResolution : draft.resolution),
+        duration: isVideo ? job.duration : undefined,
       });
       log("ok", "已分享到大厅");
       setSharedJobIds((prev) => {
@@ -1431,8 +1443,10 @@ export function StudioPage({
   }, [
     draft.aspectRatio,
     draft.resolution,
+    draft.videoResolution,
     onNeedLogin,
     settings.model,
+    settings.videoModel,
     shareStatus,
     sharedJobIds,
   ]);
@@ -1511,23 +1525,14 @@ export function StudioPage({
       onToggle={handleToggleSelected}
       onPreview={handlePreviewJob}
       onUseAsReference={useJobAsReference}
-      onShare={(j) => {
-        void handleShareToHall(j);
-      }}
+      onShare={handleShareToHall}
     />
   );
 
-  // Prefer the same display source as the card thumbnail (blob/data first), then openUrl.
-  const previewSrc = previewJob
-    ? (typeof previewJob.imageUrl === "string" && previewJob.imageUrl
-        ? previewJob.imageUrl
-        : displayUrl(previewJob) || previewJob.openUrl)
-    : undefined;
-  // 优先 blob/data（已带认证）；openUrl 是裸同源路径，新标签直连会 invalid_api_key
-  const previewOpenHref = previewSrc || previewJob?.openUrl;
+  const previewSrc = displayUrl(previewJob);
   const previewIsVideo = previewJob?.kind === "video";
-  const previewMetaChips = describeMediaMeta(previewMeta, previewIsVideo);
-  const previewResMismatch = resolutionMismatch(previewJob?.resolution, previewMeta);
+  const previewMeta =
+    measuredPreview && measuredPreview.jobId === previewJob?.id ? measuredPreview.meta : undefined;
   const previewAlreadyShared = previewJob ? sharedJobIds.has(previewJob.id) : false;
   const previewShareBusy = previewJob ? sharingId === previewJob.id : false;
   const previewShareDisabled =
@@ -1596,10 +1601,13 @@ export function StudioPage({
               aria-label={previewJob.prompt || "视频预览"}
               onLoadedMetadata={(e) => {
                 const el = e.currentTarget;
-                setPreviewMeta({
-                  width: el.videoWidth,
-                  height: el.videoHeight,
-                  duration: Number.isFinite(el.duration) ? el.duration : previewJob.duration,
+                setMeasuredPreview({
+                  jobId: previewJob.id,
+                  meta: {
+                    width: el.videoWidth,
+                    height: el.videoHeight,
+                    duration: Number.isFinite(el.duration) ? el.duration : previewJob.duration,
+                  },
                 });
               }}
             />
@@ -1610,7 +1618,10 @@ export function StudioPage({
               decoding="async"
               onLoad={(e) => {
                 const el = e.currentTarget;
-                setPreviewMeta({ width: el.naturalWidth, height: el.naturalHeight });
+                setMeasuredPreview({
+                  jobId: previewJob.id,
+                  meta: { width: el.naturalWidth, height: el.naturalHeight },
+                });
               }}
             />
           )}
@@ -1621,35 +1632,21 @@ export function StudioPage({
               #{previewJob.variant}
               {previewIndex >= 0 ? ` · ${previewIndex + 1}/${previewableJobs.length}` : ""}
             </strong>
-            <span>{previewJob.prompt}</span>
-            {previewMetaChips.length ? (
-              <span className="card-specs" aria-label="实际产物参数">
-                {previewMetaChips.map((chip) => (
-                  <span key={chip} className="card-spec">
-                    {chip}
-                  </span>
-                ))}
-                {previewResMismatch ? (
-                  <span
-                    className="card-spec card-spec-warn"
-                    title={`已请求 ${previewJob.resolution}，上游实际返回的尺寸对不上该档位`}
-                  >
-                    请求 {previewJob.resolution}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
+            <span className="studio-lightbox-prompt">{previewJob.prompt}</span>
+            <MediaMetaSpecs
+              meta={previewMeta}
+              isVideo={previewIsVideo}
+              requestedResolution={previewJob.resolution}
+            />
           </div>
           <div className="studio-lightbox-actions">
-            {previewOpenHref ? (
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => openMediaInNewTab(previewOpenHref, previewJob.kind === "video")}
-              >
-                {previewJob.kind === "video" ? "打开视频" : "打开原图"}
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => openMediaInNewTab(previewSrc, previewJob.kind === "video")}
+            >
+              {previewJob.kind === "video" ? "打开视频" : "打开原图"}
+            </button>
             {previewJob.kind === "video" ? null : (
               <button
                 type="button"
@@ -1891,14 +1888,7 @@ export function StudioPage({
               >
                 {chatParamsOpen ? "收起参数" : "参数"}
               </button>
-              <div className="studio-toolbar-switches">
-                {genModeSwitch}
-                {advancedSwitch}
-              </div>
               <div className="btn-row">
-                <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
-                  停止
-                </button>
                 <button
                   type="button"
                   className="btn btn-primary"
@@ -1907,6 +1897,13 @@ export function StudioPage({
                 >
                   {generateButtonLabel("发送")}
                 </button>
+                <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
+                  停止
+                </button>
+              </div>
+              <div className="studio-toolbar-switches">
+                {genModeSwitch}
+                {advancedSwitch}
               </div>
             </div>
             {chatParamsOpen ? (
@@ -2004,7 +2001,7 @@ export function StudioPage({
                   type="button"
                   className={`chip ${draft.promptMode !== "block" ? "active" : ""}`}
                   disabled={optimizeBusy || running}
-                  title="每行一条 prompt，分别生图"
+                  title="每行一条 prompt，分别创作"
                   onClick={() => setDraft({ promptMode: "lines" })}
                 >
                   单行
@@ -2028,7 +2025,7 @@ export function StudioPage({
                   !optimizeEndpoint.model
                     ? "请先在设置页填写「提示词优化模型」"
                     : !optimizeEndpoint.apiKey || !optimizeEndpoint.baseUrl
-                      ? "请先配置生图 API"
+                      ? "请先配置创作 API"
                       : !draft.promptText.trim()
                         ? "请先输入提示词"
                         : "调用 chat 模型优化当前提示词"
@@ -2110,8 +2107,8 @@ export function StudioPage({
               className="stat-pill"
               title={
                 draft.promptMode === "block"
-                  ? `总数 = 1 × ${videoMode ? "生成" : "生图"}数量 × 并发数`
-                  : `总数 = Prompt 条数 × ${videoMode ? "生成" : "生图"}数量 × 并发数`
+                  ? `总数 = 1 × 创作数量 × 并发数`
+                  : `总数 = Prompt 条数 × 创作数量 × 并发数`
               }
             >
               {videoMode ? "总条数" : "总数"} <strong>{plannedJobs}</strong>

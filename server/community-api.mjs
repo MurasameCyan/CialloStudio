@@ -676,6 +676,7 @@ async function handle(req, res) {
       const cooldownSec = shareCooldownForRole(role, cfg);
       const remain = computeShareRemainSec(cooldownSec, me.lastShareAt);
       if (remain > 0) throw new Error(`分享冷却中，请 ${remain} 秒后再试`);
+      const duration = Number(body.duration);
       const post = {
         id: uid("post-"),
         authorId: me.id,
@@ -687,6 +688,7 @@ async function handle(req, res) {
         model: body.model,
         aspectRatio: body.aspectRatio,
         resolution: body.resolution,
+        duration: body.kind === "video" && Number.isFinite(duration) && duration > 0 ? duration : undefined,
         caption: body.caption ? String(body.caption).trim() : undefined,
         likeCount: 0,
         commentCount: 0,

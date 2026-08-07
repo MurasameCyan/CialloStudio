@@ -95,16 +95,19 @@ function HallPostImage({
     );
   }
 
-  // 两处调用都包在 <button> 里，controls 属于交互内容不能嵌套进 button，
-  // 这里只渲染静态首帧；播放在 lightbox（带 controls + autoplay）里进行
+  // 缩略图直接可播：不自动播放，交给用户点 controls
   if (isVideo) {
     return (
-      <>
-        <video src={src} muted playsInline preload="metadata" aria-label={alt} onError={onError} />
-        <span className="hall-video-badge" aria-hidden>
-          视频
-        </span>
-      </>
+      <video
+        src={src}
+        controls
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label={alt}
+        onError={onError}
+      />
     );
   }
 
@@ -384,9 +387,22 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             <div className="hall-grid">
               {posts.map((post) => (
                 <article key={post.id} className="hall-card">
-                  <button type="button" className="hall-media" onClick={() => void openPost(post)}>
+                  {/* 容器保持非交互：<video controls> 不能嵌套进 <button>，
+                      打开详情由下面独立的触发区负责 */}
+                  <div className="hall-media">
                     <HallPostImage key={post.id} post={post} alt={post.prompt} />
-                  </button>
+                    <button
+                      type="button"
+                      className={
+                        isVideoPost(post) ? "hall-media-open" : "hall-media-open hall-media-open-full"
+                      }
+                      title="查看详情"
+                      aria-label={`查看详情：${post.prompt?.trim() || (isVideoPost(post) ? "视频" : "图片")}`}
+                      onClick={() => void openPost(post)}
+                    >
+                      详情
+                    </button>
+                  </div>
                   <div className="hall-card-body">
                     <div className="hall-meta">
                       <strong>{post.authorName}</strong>
@@ -476,16 +492,21 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                 关闭
               </button>
             </div>
-            <button
-              type="button"
-              className="hall-drawer-media"
-              title="点击展开大图"
-              aria-label="展开大图"
-              disabled={!resolvePostImageUrl(active)}
-              onClick={() => openDetailLightbox(active)}
-            >
+            <div className="hall-drawer-media">
               <HallPostImage key={active.id} post={active} alt={active.prompt} />
-            </button>
+              <button
+                type="button"
+                className={
+                  isVideoPost(active) ? "hall-media-open" : "hall-media-open hall-media-open-full"
+                }
+                title="展开大图"
+                aria-label={`展开：${active.prompt?.trim() || (isVideoPost(active) ? "视频" : "大图")}`}
+                disabled={!resolvePostImageUrl(active)}
+                onClick={() => openDetailLightbox(active)}
+              >
+                展开
+              </button>
+            </div>
             <div className="hall-prompt-block">
               <div className="hall-prompt-head">
                 <span className="hall-prompt-label">提示词</span>

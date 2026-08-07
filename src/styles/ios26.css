@@ -3355,7 +3355,6 @@ a {
   padding: 0;
   border: 0;
   background: #0b0b0f;
-  cursor: pointer;
   aspect-ratio: 1;
   overflow: hidden;
 }
@@ -3370,23 +3369,54 @@ a {
   display: block;
 }
 
-/* 网格内视频只是静态首帧，用角标标明可播放 */
+/* 媒体容器非交互，打开详情用独立触发区（视频要留出 controls） */
 .hall-media,
 .hall-drawer-media {
   position: relative;
 }
 
-.hall-video-badge {
+.hall-media-open {
   position: absolute;
   right: 8px;
-  bottom: 8px;
-  padding: 2px 8px;
+  top: 8px;
+  z-index: 1;
+  padding: 3px 10px;
+  border: 0;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.62);
   color: #fff;
+  font: inherit;
   font-size: 11px;
-  line-height: 1.6;
-  pointer-events: none;
+  line-height: 1.7;
+  cursor: pointer;
+}
+
+.hall-media-open:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.78);
+}
+
+.hall-media-open:focus-visible {
+  outline: 2px solid var(--accent, #0a84ff);
+  outline-offset: 2px;
+}
+
+.hall-media-open:disabled {
+  cursor: default;
+  opacity: 0.72;
+}
+
+/* 图片没有 controls 要避让，整块可点，保持改动前的手感 */
+.hall-media-open-full {
+  inset: 0;
+  padding: 0;
+  border-radius: inherit;
+  background: transparent;
+  color: transparent;
+  cursor: zoom-in;
+}
+
+.hall-media-open-full:hover:not(:disabled) {
+  background: transparent;
 }
 
 .hall-media-placeholder {
@@ -3768,15 +3798,9 @@ a {
   overflow: hidden;
   aspect-ratio: 1;
   background: #0b0b0f;
-  cursor: zoom-in;
   color: inherit;
   font: inherit;
   text-align: left;
-}
-
-.hall-drawer-media:disabled {
-  cursor: default;
-  opacity: 0.72;
 }
 
 /* 详情大图叠在 drawer 之上 */

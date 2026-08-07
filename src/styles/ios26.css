@@ -3179,24 +3179,24 @@ a {
   flex-wrap: wrap;
   align-items: center;
   align-content: flex-start;
-  gap: 8px;
-  min-height: 40px;
+  gap: 6px;
+  min-height: 36px;
   width: max-content;
   max-width: 100%;
 }
 
-/* 同一卡片内所有 chip 同高同内边距（并发 / 分辨率一致） */
+/* 同一卡片内所有 chip 同高同内边距（数量 / 并发 / 分辨率 / 时长 / 宽高比一致） */
 .studio-params-row .chip {
-  min-height: 40px;
-  height: 40px;
-  padding: 0 14px;
+  min-height: 36px;
+  height: 36px;
+  padding: 0 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
   line-height: 1;
   flex: 0 0 auto;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -3215,15 +3215,6 @@ a {
 
 .studio-params-row-aspect .segmented {
   width: 100%;
-  gap: 6px;
-}
-
-/* 图生图/视频会多出「源」共 8 个 chip，收窄内边距与字号才装得下一行 */
-.studio-params-row-aspect .chip {
-  min-height: 36px;
-  height: 36px;
-  padding: 0 10px;
-  font-size: 12px;
 }
 
 @media (max-width: 560px) {

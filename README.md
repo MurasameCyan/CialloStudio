@@ -2,20 +2,59 @@
 
 来都来了，不点个 ⭐ 再走吗？
 
-轻量 **AI 生图前端**，对接任意 OpenAI 兼容图片接口（如 grok2api）。
+**为 grok 定制的 AI 生图 / 生视频前端**，经 OpenAI 兼容网关（`grok2api`）对接 xAI **Grok Imagine**。
+
+> 传输层是 OpenAI 兼容的，但默认模型 ID、分辨率档位、视频时长、图生图与视频的请求字段形状，都是按 grok2api 的**实际行为**写死的。换成别的上游能跑通鉴权和 `/models`，但生图参数大概率对不上，需要改代码。细节见 [grok 定制说明](#grok-定制说明)。
 
 ## 功能
 
 - **接口配置**：管理页填 API Base URL + API Key（浏览器 `localStorage`，不写进 `.env`）
 - **同源代理**：浏览器只访问 `/v1`，由 Vite / 容器内 Node 转发真实上游（免 CORS）
 - **自定义上游**：页面随时改网关；服务端 SSRF 防护 + 可选内网白名单
-- **生图**：多并发、结果墙、批量下载；数量 / 并发 / 分辨率 / 宽高比
+- **文生图**：多并发、结果墙、批量下载；数量 / 并发 / 分辨率 / 宽高比
+- **图生图**：上传参考图 + 提示词，走 `/images/edits`；宽高比可取「源」跟随参考图
+- **文生视频 / 图生视频**：`/videos/generations` 异步入队 + 轮询；参考图作首帧
 - **提示词**：单行（每行一张）/ 多行（整段一张）；清除、优化与回退
 - **提示词优化**：工作台一键优化（`chat/completions`），支持回退；可复用生图 API 或单独上游
 - **分享大厅**：登录后点赞 / 评论 / 分享；站长管用户池与冷却
 - **用户数据**：Docker volume 持久化（`/data/community.json`）
 - **后台任务（VIP/站长）**：服务端任务队列，关页可续跑；普通用户仍为浏览器队列
 - **图片存储（可选）**：Cloudflare Pages → Telegram（[docs/telegram-media-worker.md](docs/telegram-media-worker.md)）
+
+## grok 定制说明
+
+项目按 grok2api 的实际行为写死了这些地方，换上游需要改代码：
+
+**默认模型 ID**（`src/lib/settings.ts`）
+
+| 槽位 | 默认值 |
+| --- | --- |
+| 文生图 | `grok-imagine-image-lite` |
+| 图生图 | `grok-imagine-image-quality` |
+| 视频 | `grok-imagine-video` |
+| 提示词优化 | `grok-4.5` |
+
+这些只是**默认值**，管理页测试连接后从 `/models` 点选即可覆盖，不必改代码。
+
+**参数档位**（`src/lib/settings.ts`）
+
+| 项 | 取值 | 原因 |
+| --- | --- | --- |
+| 图片分辨率 | `1k` / `2k` | grok2api 不支持 4k：quality 会被拒，lite 直接忽略 |
+| 视频分辨率 | `480p` / `720p` / `1080p` | `/videos/generations` 支持范围 |
+| 视频时长 | `6` / `10` / `15` 秒 | 同上；其余值就近取整 |
+
+**接口形状**（`src/lib/api.ts`）
+
+- 有参考图 → `POST /images/edits`（字段 `image` / `images: { url }`）；纯文生图 → `POST /images/generations`
+- 视频 → `POST /videos/generations` 返回 `request_id`，异步轮询取结果
+- 模型能力表在 `src/lib/imageModels.ts`：按 ID 匹配 `imagine` / `quality` / `edit` 等关键词推断能力，未知 ID 一律按「支持 1k/2k」兜底
+
+**媒体地址改写**（`src/lib/api.ts`）
+
+grok2api 常返回内网地址（如 `http://127.0.0.1:8000/v1/media/...`）。前端会把它改写到当前 API base 或同源代理，否则浏览器会打到用户自己的 8000 端口。这是 grok2api 特有行为，其他上游一般不需要。
+
+**换用其他上游**：鉴权、`/models`、`/chat/completions`（提示词优化）都是标准 OpenAI 兼容形状，可直接用；生图部分则需按上游文档调整上面几处。
 
 ## 架构（Docker）
 
@@ -47,7 +86,7 @@ docker compose up -d --pull always --remove-orphans
 打开 `http://127.0.0.1:8080`：
 
 1. **大厅** → 站长账号登录（`.env` 用户名/密码）
-2. **管理** → 填 `https://你的网关/v1` + API Key → **测试连接** → 点选生图 / 优化模型 → 保存
+2. **管理** → 填 `https://你的网关/v1` + API Key → **测试连接** → 点选四个模型槽 → 保存
 3. **管理 → 用户池**（仅站长）：禁用 / 解禁 / 删除用户
 
 最小 `.env`：
@@ -101,20 +140,24 @@ npm run pack:media-worker:pages
 
 ## 设置页说明
 
-左右两列布局：
+管理页分三个分页：**接口设置** / **用户池**（仅站长）/ **后台任务**（仅站长）。
 
-| 左 · 生图 | 右 · 提示词优化 |
+「接口设置 → 接口与生成」是左右两列：
+
+| 左 · 接口 | 右 · 模型（四个槽） |
 | --- | --- |
-| 当前模型（点选更新） | 当前模型（点选更新） |
-| API Base URL / API Key | API Base URL / API Key（复用时只读同步左侧） |
-| 默认宽高比、分辨率 | 独立优化上游：复用生图 / 单独设定 |
-| 全局并发槽（**仅站长**） | 优化模型列表（测试连接后点选） |
-| 生图模型列表（测试连接后点选） | |
+| API Base URL / API Key | **文生图模型** |
+| 测试连接 / 保存 / 恢复默认 | **图生图模型**（留空 = 不启用） |
+| 连接结果提示 | **视频模型**（留空 = 不启用） |
+| | **提示词优化模型** |
 
-- **模型不可手输**，须先 **测试连接** 再点选 chip；标题右侧可 **筛选** 模型 ID
+- **模型不可手输**，须先 **测试连接** 从 `/models` 拉列表再点选 chip；标题右侧可 **筛选** 模型 ID
+- 槽位即开关：图生图 / 视频留空，工作台就不出现对应模式
+- 视频槽只列 ID 带 `video` 的模型，其余槽会把视频模型排除掉
 - 优化默认 **复用生图上游**；「单独设定」后可填独立 Base/Key
 - 工作台：**优化提示词** → 覆盖输入框；**回退** → 恢复优化前内容
-- **版本**：设置页顶部显示构建短 SHA；点 **检查更新** 对照 GitHub 跟踪分支 HEAD（默认 `beta`，仅用户点击时请求）
+- **全局并发**在「后台任务」分页（**仅站长**），控制全站同时 running 的服务端任务上限
+- **版本**：标题右侧药丸显示构建短 SHA；点刷新图标对照 GitHub 跟踪分支 HEAD（默认 `beta`，仅用户点击时请求）
 
 ## `.env` 变量
 
@@ -190,7 +233,7 @@ GET /api/upstream-check?url=http://127.0.0.1:8000/v1
 | --- | --- |
 | 游客 | 浏览大厅 |
 | 登录用户 | 点赞、评论、分享；设置页配接口与模型；工作台调并发 |
-| 站长 | 用户池、分享冷却、运行日志、媒体配置、**管理页全局并发槽** |
+| 站长 | 用户池、分享冷却、运行日志、媒体配置、**后台任务面板 + 全局并发上限** |
 
 站长 = `.env` 的 `CIALLO_MASTER_*`。
 
@@ -208,7 +251,7 @@ GET /api/upstream-check?url=http://127.0.0.1:8000/v1
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | `GET` | `/healthz` | 健康检查 |
-| `*` | `/v1/*` | 上游代理（`/models`、`/images/generations`、`/chat/completions` 等） |
+| `*` | `/v1/*` | 上游代理（`/models`、`/images/generations`、`/images/edits`、`/videos/generations`、`/chat/completions`、`/media/*`） |
 | `*` | `/api/community/*` | 社区 API |
 | `GET` | `/debug/upstream?url=` | 上游校验（可关） |
 

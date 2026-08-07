@@ -1027,14 +1027,6 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
-/* 请求档位与实际产物对不上：例如选了 2k 却只回 1k */
-.card-spec-warn {
-  background: color-mix(in srgb, var(--danger) 12%, transparent);
-  border-color: color-mix(in srgb, var(--danger) 38%, transparent);
-  color: var(--danger);
-  cursor: help;
-}
-
 .badge {
   position: absolute;
   top: 12px;

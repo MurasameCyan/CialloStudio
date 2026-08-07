@@ -401,8 +401,6 @@ export function useStudioQueue(
             // 关页重开时本地 job 可能是重建的，这些参数只能由服务端给
             kind: task.kind === "video" ? "video" : item.kind,
             duration: task.duration ?? item.duration,
-            // 参数胶囊要拿它判「请求 2k 实际 1k」，缺了判据就静默失效。
-            // 服务端的值才是真正进上游请求体的那个，优先它
             resolution: task.resolution ?? item.resolution,
             aspectRatio: task.aspectRatio ?? item.aspectRatio,
             error: undefined,

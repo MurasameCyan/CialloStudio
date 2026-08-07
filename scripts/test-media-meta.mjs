@@ -1,5 +1,5 @@
 /**
- * 实际产物参数标签：宽高比 / 分辨率 / 时长 / 分辨率档位一致性。
+ * 实际产物参数标签：宽高比 / 分辨率 / 时长。
  * Run: node --experimental-strip-types scripts/test-media-meta.mjs
  */
 import assert from "node:assert/strict";
@@ -10,7 +10,6 @@ import {
   videoTier,
   formatDuration,
   describeMediaMeta,
-  resolutionMismatch,
 } from "../src/lib/mediaMeta.ts";
 
 // ——— 宽高比吸附 ———
@@ -61,11 +60,5 @@ assert.deepStrictEqual(describeMediaMeta(undefined, false), []);
 
 const videoMeta = { width: 1280, height: 720, duration: 10.2 };
 assert.deepStrictEqual(describeMediaMeta(videoMeta, true), ["16:9", "1280×720 · 720p", "10s"]);
-
-// ——— 请求档位 vs 实际档位 ———
-assert.strictEqual(resolutionMismatch("2k", { width: 1024, height: 1024 }), true);
-assert.strictEqual(resolutionMismatch("2k", { width: 2048, height: 2048 }), false);
-assert.strictEqual(resolutionMismatch("720p", videoMeta), false, "视频档位暂不参与图片 1k/2k 告警");
-assert.strictEqual(resolutionMismatch(undefined, imgMeta), false);
 
 console.log("PASS: mediaMeta — 宽高比 / 分辨率 / 时长 / 档位");

@@ -13,11 +13,7 @@ import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability, isImageEditModel } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
-import {
-  describeMediaMeta,
-  resolutionMismatch,
-  type MediaMeta,
-} from "@/lib/mediaMeta";
+import { describeMediaMeta, type MediaMeta } from "@/lib/mediaMeta";
 import {
   loadPromptHistory,
   promptHistoryPreview,
@@ -56,14 +52,11 @@ type GenMode = "text" | "edit" | "video";
 const MediaMetaSpecs = memo(function MediaMetaSpecs({
   meta,
   isVideo,
-  requestedResolution,
 }: {
   meta: MediaMeta | undefined;
   isVideo: boolean;
-  requestedResolution?: string;
 }) {
   const chips = describeMediaMeta(meta, isVideo);
-  const mismatch = resolutionMismatch(requestedResolution, meta);
   if (chips.length === 0) return null;
   return (
     <span className="card-specs" aria-label="实际产物参数">
@@ -72,14 +65,6 @@ const MediaMetaSpecs = memo(function MediaMetaSpecs({
           {chip}
         </span>
       ))}
-      {mismatch ? (
-        <span
-          className="card-spec card-spec-warn"
-          title={`已请求 ${requestedResolution}，上游实际返回的尺寸对不上该档位`}
-        >
-          请求 {requestedResolution}
-        </span>
-      ) : null}
     </span>
   );
 });
@@ -278,7 +263,7 @@ const StudioJobCard = memo(function StudioJobCard({
           <strong>#{job.variant}</strong>
           {job.prompt}
         </div>
-        <MediaMetaSpecs meta={meta} isVideo={isVideo} requestedResolution={job.resolution} />
+        <MediaMetaSpecs meta={meta} isVideo={isVideo} />
       </div>
     </article>
   );
@@ -1633,11 +1618,7 @@ export function StudioPage({
               {previewIndex >= 0 ? ` · ${previewIndex + 1}/${previewableJobs.length}` : ""}
             </strong>
             <span className="studio-lightbox-prompt">{previewJob.prompt}</span>
-            <MediaMetaSpecs
-              meta={previewMeta}
-              isVideo={previewIsVideo}
-              requestedResolution={previewJob.resolution}
-            />
+            <MediaMetaSpecs meta={previewMeta} isVideo={previewIsVideo} />
           </div>
           <div className="studio-lightbox-actions">
             <button

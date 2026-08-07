@@ -2,8 +2,7 @@
  * 实际产物参数：宽高比 / 分辨率 / 时长。
  *
  * 「实际」= 从已加载的 <img>/<video> 元素量出来的真实尺寸，不是下单时选的参数。
- * 这样上游忽略了某个参数（例如选 2k 却回 1024×1024）在卡片上直接看得见，
- * 不用再去翻网络面板对请求体。
+ * 只展示媒体本身返回的参数，不混入下单时选择的参数。
  */
 
 /** 量出来的产物尺寸；duration 仅视频有 */
@@ -95,21 +94,6 @@ export function formatDuration(seconds: number | undefined): string | undefined 
   const min = Math.floor(total / 60);
   const sec = total % 60;
   return `${min}:${String(sec).padStart(2, "0")}`;
-}
-
-/**
- * 下单选的分辨率档位 vs 实际产物档位是否对不上。
- * 只在两边都能归一到 1k/2k 这类档位时才判，判不了就当没问题（不误报）。
- */
-export function resolutionMismatch(
-  requested: string | undefined,
-  meta: MediaMeta | undefined,
-): boolean {
-  if (!requested || !meta) return false;
-  const want = requested.trim().toLowerCase();
-  if (!/^\d+k$/.test(want)) return false;
-  const actual = resolutionTier(meta.width, meta.height);
-  return Boolean(actual) && actual !== want;
 }
 
 /**

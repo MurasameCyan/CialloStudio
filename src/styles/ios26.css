@@ -2869,7 +2869,7 @@ a {
   opacity: 0.9;
 }
 
-/* 竖向分隔：数量 | 并发 | 分辨率 等基础参数组 */
+/* 竖向分隔：行内参数组之间（数量 | 并发、分辨率 | 时长） */
 .studio-params-vsep {
   flex: 0 0 1px;
   width: 1px;
@@ -2891,8 +2891,7 @@ a {
   min-width: 0;
 }
 
-/* 第一行：数量 | 并发 | 分辨率 | 时长
-   按内容宽度排布，避免 0.8fr 空列导致「并发→分辨率」视觉间距偏大 */
+/* 每行按内容宽度排布，避免 fr 空列导致组间视觉间距偏大 */
 .studio-params-row {
   display: flex;
   flex-wrap: wrap;
@@ -3207,7 +3206,7 @@ a {
   cursor: not-allowed;
 }
 
-/* 第二行：宽高比独占整行并允许换行。
+/* 第三行：宽高比独占整行并允许换行。
    必须放在 .studio-params-row > .field 之后：两者权重相同，靠顺序取胜。 */
 .studio-params-row-aspect > .field {
   flex: 1 1 100%;

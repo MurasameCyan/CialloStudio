@@ -577,6 +577,56 @@ export function StudioPage({
     </>
   ) : null;
 
+  /**
+   * 参数区三行：数量|并发 / 分辨率|时长 / 宽高比。
+   * 控制台与对话模式共用同一份结构。
+   */
+  const paramsGrid = (
+    <div className="studio-params-grid">
+      <div className="studio-params-row">
+        <div className="field">
+          <label>数量</label>
+          <div className="segmented">
+            {VARIANT_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`chip ${draft.variants === n ? "active" : ""}`}
+                onClick={() => setDraft({ variants: n })}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
+        <div className="field">
+          <label>并发</label>
+          <div className="segmented">
+            {concurrencyOptions.map((n) => (
+              <button
+                key={n}
+                type="button"
+                className={`chip ${draft.concurrency === n ? "active" : ""}`}
+                onClick={() => setDraft({ concurrency: n })}
+                title={n > 2 ? `用户组并发上限 ${concurrencyCap}` : undefined}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="studio-params-divider" role="separator" />
+      <div className="studio-params-row">
+        {resolutionField}
+        {videoDurationField}
+      </div>
+      <div className="studio-params-divider" role="separator" />
+      <div className="studio-params-row studio-params-row-aspect">{aspectRatioField}</div>
+    </div>
+  );
+
   const serverQueueActiveCount = serverQueue.filter(
     (t) => t.status === "queued" || t.status === "running",
   ).length;
@@ -2013,50 +2063,7 @@ export function StudioPage({
                     <div className="studio-params-divider" role="separator" />
                   </>
                 ) : null}
-                <div className="studio-params-grid">
-                  <div className="studio-params-row">
-                    <div className="field">
-                      <label>数量</label>
-                      <div className="segmented">
-                        {VARIANT_OPTIONS.map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            className={`chip ${draft.variants === n ? "active" : ""}`}
-                            onClick={() => setDraft({ variants: n })}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    <div className="field">
-                      <label>并发</label>
-                      <div className="segmented">
-                        {concurrencyOptions.map((n) => (
-                          <button
-                            key={n}
-                            type="button"
-                            className={`chip ${draft.concurrency === n ? "active" : ""}`}
-                            onClick={() => setDraft({ concurrency: n })}
-                            title={n > 2 ? `用户组并发上限 ${concurrencyCap}` : undefined}
-                          >
-                            {n}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* 对话模式：并发与分辨率之间保留竖线；控制台不加 */}
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    {resolutionField}
-                    {videoDurationField}
-                  </div>
-                  <div className="studio-params-divider" role="separator" />
-                  <div className="studio-params-row studio-params-row-aspect">
-                    {aspectRatioField}
-                  </div>
-                </div>
+                {paramsGrid}
               </div>
             ) : null}
           </div>
@@ -2235,48 +2242,7 @@ export function StudioPage({
               </>
             ) : null}
 
-            <div className="studio-params-grid">
-              <div className="studio-params-row">
-                <div className="field">
-                  <label>数量</label>
-                  <div className="segmented">
-                    {VARIANT_OPTIONS.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className={`chip ${draft.variants === n ? "active" : ""}`}
-                        onClick={() => setDraft({ variants: n })}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                <div className="field">
-                  <label>并发</label>
-                  <div className="segmented">
-                    {concurrencyOptions.map((n) => (
-                      <button
-                        key={n}
-                        type="button"
-                        className={`chip ${draft.concurrency === n ? "active" : ""}`}
-                        onClick={() => setDraft({ concurrency: n })}
-                        title={n > 2 ? `用户组并发上限 ${concurrencyCap}` : undefined}
-                      >
-                        {n}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-                {resolutionField}
-                {videoDurationField}
-              </div>
-              <div className="studio-params-divider" role="separator" />
-              <div className="studio-params-row studio-params-row-aspect">
-                {aspectRatioField}
-              </div>
-            </div>
+            {paramsGrid}
           </div>
         </div>
       </section>

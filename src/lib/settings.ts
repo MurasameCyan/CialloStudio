@@ -161,6 +161,37 @@ export function resolvePromptOptimizeEndpoint(settings: StudioSettings): {
 }
 
 export const ASPECT_RATIOS = ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"] as const;
+/** 创作台内部值：按参考图比例生成；提交上游前必须解析为固定比例 */
+export const SOURCE_ASPECT_RATIO = "source" as const;
+
+/**
+ * 图生图和图生视频共同只支持固定比例，因此把参考图映射到最接近的一档。
+ * 对数距离能让横竖屏互为倒数时得到对称结果。
+ */
+export function closestAspectRatio(width: number, height: number): (typeof ASPECT_RATIOS)[number] | undefined {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return undefined;
+  }
+  const source = width / height;
+  return ASPECT_RATIOS.reduce((best, item) => {
+    const [w, h] = item.split(":").map(Number);
+    const [bestW, bestH] = best.split(":").map(Number);
+    return Math.abs(Math.log(source / (w / h))) < Math.abs(Math.log(source / (bestW / bestH)))
+      ? item
+      : best;
+  });
+}
+
+export function resolveGenerationAspectRatio(
+  selected: string,
+  referenceWidth?: number,
+  referenceHeight?: number,
+): string | undefined {
+  return selected === SOURCE_ASPECT_RATIO
+    ? closestAspectRatio(Number(referenceWidth), Number(referenceHeight))
+    : selected;
+}
+
 /** grok2api 图片接口实际只认 1k / 2k；4k 会被拒绝或被 lite 模型忽略 */
 export const RESOLUTIONS = ["1k", "2k"] as const;
 

@@ -18,6 +18,7 @@ import {
   clampConcurrency,
   normalizeVideoDuration,
   normalizeVideoResolution,
+  resolveGenerationAspectRatio,
   type StudioSettings,
 } from "@/lib/settings";
 import {
@@ -709,7 +710,14 @@ export function useStudioQueue(
     const variants = clampVariants(Number(currentDraft.variants));
     const appendResults = currentDraft.appendResults === true;
     const autoRetry = currentDraft.autoRetry === true;
-    const aspectRatio = currentDraft.aspectRatio;
+    const aspectRatio = resolveGenerationAspectRatio(
+      currentDraft.aspectRatio,
+      currentDraft.referenceImageWidth,
+      currentDraft.referenceImageHeight,
+    );
+    if (!aspectRatio) {
+      throw new ApiError(400, "参考图尚未读取完成，请稍后再试", "missing_reference_dimensions");
+    }
     // 管理页没配视频模型 = 没有视频能力，忽略草稿里的 videoMode
     const videoMode =
       Boolean(currentSettings.videoModel.trim()) && currentDraft.videoMode === true;

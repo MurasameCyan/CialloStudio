@@ -1058,6 +1058,7 @@ async function callUpstreamGenerate(task) {
       model: task.model,
       prompt: task.prompt,
       n: 1,
+      aspect_ratio: task.aspectRatio || "1:1",
       resolution,
       response_format: "url",
       image: { url: ref },

@@ -1,4 +1,9 @@
-import { clampConcurrency, normalizeVideoDuration, normalizeVideoResolution } from "./settings";
+import {
+  SOURCE_ASPECT_RATIO,
+  clampConcurrency,
+  normalizeVideoDuration,
+  normalizeVideoResolution,
+} from "./settings.ts";
 
 export type JobStatus = "queued" | "running" | "done" | "failed";
 
@@ -55,6 +60,9 @@ export type StudioDraft = {
   referenceImageUrl?: string;
   /** 参考图文件名，仅 UI 展示 */
   referenceImageName?: string;
+  /** 参考图原始像素尺寸，仅会话内用于解析「源」宽高比 */
+  referenceImageWidth?: number;
+  referenceImageHeight?: number;
   /**
    * true = 创作台切到「图生图」，显示参考图上传区。
    * 仅控制 UI；实际是否走 /images/edits 由「带没带参考图」决定。
@@ -287,7 +295,10 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
     const parsed = JSON.parse(raw) as Partial<StudioDraft>;
     return {
       promptText: typeof parsed.promptText === "string" ? parsed.promptText : defaults.promptText,
-      aspectRatio: typeof parsed.aspectRatio === "string" ? parsed.aspectRatio : defaults.aspectRatio,
+      aspectRatio:
+        typeof parsed.aspectRatio === "string" && parsed.aspectRatio !== SOURCE_ASPECT_RATIO
+          ? parsed.aspectRatio
+          : defaults.aspectRatio,
       resolution: typeof parsed.resolution === "string" ? parsed.resolution : defaults.resolution,
       variants: clampVariants(Number(parsed.variants ?? defaults.variants ?? DEFAULT_VARIANTS)),
       concurrency: clampConcurrency(Number(parsed.concurrency ?? defaults.concurrency)),
@@ -322,12 +333,20 @@ export function loadDraft(defaults: StudioDraft): StudioDraft {
 
 export function saveDraft(draft: StudioDraft): void {
   try {
-    // 参考图可能是数 MB 的 data URL，禁止持久化以免撑爆 localStorage
-    const { referenceImageUrl: _ref, referenceImageName: _name, ...rest } = draft;
+    // 参考图及其尺寸仅会话内有效，禁止持久化以免「源」在刷新后引用不存在的图片
+    const {
+      referenceImageUrl: _ref,
+      referenceImageName: _name,
+      referenceImageWidth: _width,
+      referenceImageHeight: _height,
+      aspectRatio,
+      ...rest
+    } = draft;
     localStorage.setItem(
       DRAFT_KEY,
       JSON.stringify({
         ...rest,
+        aspectRatio: aspectRatio === SOURCE_ASPECT_RATIO ? undefined : aspectRatio,
         variants: clampVariants(draft.variants),
         concurrency: clampConcurrency(draft.concurrency),
         appendResults: draft.appendResults === true,

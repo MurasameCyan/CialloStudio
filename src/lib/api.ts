@@ -522,13 +522,14 @@ export async function generateImage(input: {
     if (normalized.length === 0) {
       throw new ApiError(400, "参考图无效", "invalid_reference");
     }
-    // grok2api imageEditJSONRequest：不认 aspect_ratio / stream；resolution 仅 1k|2k
+    // grok2api /images/edits 支持 aspect_ratio；resolution 仅 1k|2k
     const resolutionRaw = String(input.resolution ?? "1k").trim().toLowerCase();
     const resolution = resolutionRaw === "2k" ? "2k" : "1k";
     body = {
       model: input.model,
       prompt: input.prompt,
       n: input.n ?? 1,
+      aspect_ratio: input.aspectRatio ?? "1:1",
       resolution,
       response_format: "url",
     };

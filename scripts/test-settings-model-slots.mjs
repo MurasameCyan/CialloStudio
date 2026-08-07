@@ -6,8 +6,11 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_SETTINGS,
+  SOURCE_ASPECT_RATIO,
+  closestAspectRatio,
   loadSettings,
   normalizeSettings,
+  resolveGenerationAspectRatio,
   resolvePromptOptimizeEndpoint,
 } from "../src/lib/settings.ts";
 import { getImageModelCapability, resolveGenerationTarget } from "../src/lib/imageModels.ts";
@@ -32,6 +35,18 @@ import { getImageModelCapability, resolveGenerationTarget } from "../src/lib/ima
   assert.equal(normalizeSettings({ videoResolution: "4K" }).videoResolution, "720p", "非法分辨率回落");
   assert.equal(normalizeSettings({ resolution: "4k" }).resolution, "1k", "图片分辨率只有 1k/2k");
   assert.equal(normalizeSettings({ resolution: "2k" }).resolution, "2k", "2k 是合法图片分辨率");
+}
+
+// —— 参考图“源”宽高比：映射到图生图/视频共同支持的最近档位 ——
+{
+  assert.equal(closestAspectRatio(1920, 1080), "16:9");
+  assert.equal(closestAspectRatio(1080, 1920), "9:16");
+  assert.equal(closestAspectRatio(1200, 1000), "4:3", "6:5 就近映射 4:3");
+  assert.equal(closestAspectRatio(1000, 1200), "3:4", "5:6 就近映射 3:4");
+  assert.equal(closestAspectRatio(2000, 1000), "16:9", "2:1 映射最接近的受支持比例");
+  assert.equal(closestAspectRatio(0, 1000), undefined, "无效尺寸不解析");
+  assert.equal(resolveGenerationAspectRatio(SOURCE_ASPECT_RATIO, 1500, 1000), "3:2");
+  assert.equal(resolveGenerationAspectRatio("1:1", 1920, 1080), "1:1", "手选比例保持不变");
 }
 
 // —— 未选择时的默认模型 ——

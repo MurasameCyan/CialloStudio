@@ -24,8 +24,10 @@ import {
 import {
   ASPECT_RATIOS,
   RESOLUTIONS,
+  SOURCE_ASPECT_RATIO,
   VIDEO_DURATIONS,
   VIDEO_RESOLUTIONS,
+  resolveGenerationAspectRatio,
   resolvePromptOptimizeEndpoint,
   type StudioSettings,
 } from "@/lib/settings";
@@ -48,6 +50,25 @@ function openMediaInNewTab(url: string, isVideo: boolean): void {
 
 /** 创作台生成模式：文生图 / 图生图 / 视频，三选一 */
 type GenMode = "text" | "edit" | "video";
+
+type ReferenceImageSize = { width: number; height: number };
+
+function measureReferenceImage(
+  src: string,
+  onSuccess: (size: ReferenceImageSize) => void,
+  onError?: () => void,
+): void {
+  const image = new window.Image();
+  image.onload = () => {
+    if (image.naturalWidth > 0 && image.naturalHeight > 0) {
+      onSuccess({ width: image.naturalWidth, height: image.naturalHeight });
+    } else {
+      onError?.();
+    }
+  };
+  image.onerror = () => onError?.();
+  image.src = src;
+}
 
 const MediaMetaSpecs = memo(function MediaMetaSpecs({
   meta,
@@ -356,6 +377,12 @@ export function StudioPage({
     !videoMode && (referenceForced || (imageEditEnabled && draft.imageEditMode === true));
   /** 创作台当前模式，三选一；下方参数区按它切换 */
   const genMode: GenMode = videoMode ? "video" : imageEditMode ? "edit" : "text";
+  const sourceAspectRatio = resolveGenerationAspectRatio(
+    SOURCE_ASPECT_RATIO,
+    draft.referenceImageWidth,
+    draft.referenceImageHeight,
+  );
+  const sourceRatioEnabled = Boolean(draft.referenceImageUrl && sourceAspectRatio);
 
   /**
    * 模式切换：只要图标，名字走 hover 提示（data-tip）。
@@ -370,7 +397,10 @@ export function StudioPage({
     setDraft({
       videoMode: false,
       imageEditMode: next === "edit",
-      aspectRatio: videoMode ? settings.aspectRatio : draft.aspectRatio,
+      aspectRatio:
+        videoMode || draft.aspectRatio === SOURCE_ASPECT_RATIO
+          ? settings.aspectRatio
+          : draft.aspectRatio,
     });
   };
 
@@ -453,6 +483,36 @@ export function StudioPage({
           <Server size={17} strokeWidth={2} aria-hidden />
         </button>
       ) : null}
+    </div>
+  );
+
+  /** 宽高比：图生图/图生视频有参考图时可按最接近的受支持源比例生成 */
+  const aspectRatioField = (
+    <div className="field">
+      <label>宽高比</label>
+      <div className="segmented">
+        {(imageEditMode || videoMode) ? (
+          <button
+            type="button"
+            className={`chip ${draft.aspectRatio === SOURCE_ASPECT_RATIO ? "active" : ""}`}
+            disabled={!sourceRatioEnabled}
+            title={sourceRatioEnabled ? `按参考图最接近的支持比例生成（${sourceAspectRatio}）` : "上传参考图后可用"}
+            onClick={() => setDraft({ aspectRatio: SOURCE_ASPECT_RATIO })}
+          >
+            源
+          </button>
+        ) : null}
+        {ASPECT_RATIOS.map((ratio) => (
+          <button
+            key={ratio}
+            type="button"
+            className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
+            onClick={() => setDraft({ aspectRatio: ratio })}
+          >
+            {ratio}
+          </button>
+        ))}
+      </div>
     </div>
   );
 
@@ -708,16 +768,32 @@ export function StudioPage({
     () => imageEditMode && !videoMode && referenceForced,
     [imageEditMode, videoMode, referenceForced],
   );
+  /** 只允许最后一次参考图选择提交，避免慢图片覆盖后选图片或“清除” */
+  const referenceLoadIdRef = useRef(0);
 
   // 切到文生图 / 视频时清掉参考图
   useEffect(() => {
     if (showReferencePicker) return;
     if (!draft.referenceImageUrl && !draft.referenceImageName) return;
-    setDraft({ referenceImageUrl: undefined, referenceImageName: undefined });
+    referenceLoadIdRef.current += 1;
+    setDraft({
+      referenceImageUrl: undefined,
+      referenceImageName: undefined,
+      referenceImageWidth: undefined,
+      referenceImageHeight: undefined,
+      aspectRatio: draft.aspectRatio === SOURCE_ASPECT_RATIO ? settings.aspectRatio : draft.aspectRatio,
+    });
     setReferenceError(null);
     if (referenceInputRef.current) referenceInputRef.current.value = "";
     if (referenceInputChatRef.current) referenceInputChatRef.current.value = "";
-  }, [showReferencePicker, draft.referenceImageUrl, draft.referenceImageName, setDraft]);
+  }, [
+    showReferencePicker,
+    draft.referenceImageUrl,
+    draft.referenceImageName,
+    draft.aspectRatio,
+    settings.aspectRatio,
+    setDraft,
+  ]);
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [downloading, setDownloading] = useState(false);
   const [sharingId, setSharingId] = useState<string | null>(null);
@@ -1192,7 +1268,14 @@ export function StudioPage({
   }
 
   function clearReferenceImage() {
-    setDraft({ referenceImageUrl: undefined, referenceImageName: undefined });
+    referenceLoadIdRef.current += 1;
+    setDraft({
+      referenceImageUrl: undefined,
+      referenceImageName: undefined,
+      referenceImageWidth: undefined,
+      referenceImageHeight: undefined,
+      aspectRatio: draft.aspectRatio === SOURCE_ASPECT_RATIO ? settings.aspectRatio : draft.aspectRatio,
+    });
     setReferenceError(null);
     if (referenceInputRef.current) referenceInputRef.current.value = "";
     if (referenceInputChatRef.current) referenceInputChatRef.current.value = "";
@@ -1211,20 +1294,41 @@ export function StudioPage({
       setReferenceError("图片超过 8MB，建议压缩后再试");
       return;
     }
+    const loadId = ++referenceLoadIdRef.current;
     const reader = new FileReader();
     reader.onload = () => {
+      if (loadId !== referenceLoadIdRef.current) return;
       const result = typeof reader.result === "string" ? reader.result : "";
       if (!result.startsWith("data:image/")) {
         setReferenceError("无法读取图片");
         return;
       }
-      setDraft({
-        referenceImageUrl: result,
-        referenceImageName: file.name || "reference.png",
-      });
-      log("ok", "已加载参考图", { name: file.name, size: file.size, type: file.type });
+      measureReferenceImage(
+        result,
+        ({ width, height }) => {
+          if (loadId !== referenceLoadIdRef.current) return;
+          setDraft({
+            referenceImageUrl: result,
+            referenceImageName: file.name || "reference.png",
+            referenceImageWidth: width,
+            referenceImageHeight: height,
+          });
+          log("ok", "已加载参考图", {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            width,
+            height,
+          });
+        },
+        () => {
+          if (loadId === referenceLoadIdRef.current) setReferenceError("无法读取图片尺寸");
+        },
+      );
     };
-    reader.onerror = () => setReferenceError("读取图片失败");
+    reader.onerror = () => {
+      if (loadId === referenceLoadIdRef.current) setReferenceError("读取图片失败");
+    };
     reader.readAsDataURL(file);
   }
 
@@ -1242,12 +1346,24 @@ export function StudioPage({
       setReferenceError("该结果没有可用图片地址");
       return;
     }
-    setDraft({
-      referenceImageUrl: src,
-      referenceImageName: `job-${job.id.slice(0, 8)}.jpg`,
-    });
+    const loadId = ++referenceLoadIdRef.current;
     setReferenceError(null);
-    log("ok", "已用结果图作为参考图", { jobId: job.id });
+    measureReferenceImage(
+      src,
+      ({ width, height }) => {
+        if (loadId !== referenceLoadIdRef.current) return;
+        setDraft({
+          referenceImageUrl: src,
+          referenceImageName: `job-${job.id.slice(0, 8)}.jpg`,
+          referenceImageWidth: width,
+          referenceImageHeight: height,
+        });
+        log("ok", "已用结果图作为参考图", { jobId: job.id, width, height });
+      },
+      () => {
+        if (loadId === referenceLoadIdRef.current) setReferenceError("无法读取该结果图的尺寸");
+      },
+    );
   }
 
   const referencePicker = (
@@ -1380,7 +1496,7 @@ export function StudioPage({
         mediaId,
         prompt: job.prompt,
         model: isVideo ? settings.videoModel : settings.model,
-        aspectRatio: job.aspectRatio || draft.aspectRatio,
+        aspectRatio: job.aspectRatio,
         resolution: job.resolution || (isVideo ? draft.videoResolution : draft.resolution),
         duration: isVideo ? job.duration : undefined,
       });
@@ -1426,7 +1542,6 @@ export function StudioPage({
       setSharingId(null);
     }
   }, [
-    draft.aspectRatio,
     draft.resolution,
     draft.videoResolution,
     onNeedLogin,
@@ -1936,21 +2051,7 @@ export function StudioPage({
                   </div>
                   <div className="studio-params-divider" role="separator" />
                   <div className="studio-params-row studio-params-row-aspect">
-                    <div className="field">
-                      <label>宽高比</label>
-                      <div className="segmented">
-                        {ASPECT_RATIOS.map((ratio) => (
-                          <button
-                            key={ratio}
-                            type="button"
-                            className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                            onClick={() => setDraft({ aspectRatio: ratio })}
-                          >
-                            {ratio}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                    {aspectRatioField}
                   </div>
                 </div>
               </div>
@@ -2170,21 +2271,7 @@ export function StudioPage({
               </div>
               <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">
-                <div className="field">
-                  <label>宽高比</label>
-                  <div className="segmented">
-                    {ASPECT_RATIOS.map((ratio) => (
-                      <button
-                        key={ratio}
-                        type="button"
-                        className={`chip ${draft.aspectRatio === ratio ? "active" : ""}`}
-                        onClick={() => setDraft({ aspectRatio: ratio })}
-                      >
-                        {ratio}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {aspectRatioField}
               </div>
             </div>
           </div>

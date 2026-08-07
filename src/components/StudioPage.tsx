@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronLeft, ChevronRight, ImagePlus, Sparkles, Video } from "lucide-react";
+import { ChevronLeft, ChevronRight, ImagePlus, RefreshCw, Server, Sparkles, Video } from "lucide-react";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -13,6 +13,11 @@ import { downloadJobs } from "@/lib/download";
 import { getImageModelCapability, isImageEditModel } from "@/lib/imageModels";
 import { log } from "@/lib/logger";
 import { isMediaConfigured, uploadMedia } from "@/lib/media/client";
+import {
+  describeMediaMeta,
+  resolutionMismatch,
+  type MediaMeta,
+} from "@/lib/mediaMeta";
 import {
   loadPromptHistory,
   promptHistoryPreview,
@@ -75,6 +80,13 @@ const StudioJobCard = memo(function StudioJobCard({
 }) {
   const src = displayUrl(job);
   const isVideo = job.kind === "video";
+  // 实际产物参数从加载完成的媒体元素上量，换 src 就重量一次
+  const [meta, setMeta] = useState<MediaMeta | undefined>(undefined);
+  useEffect(() => {
+    setMeta(undefined);
+  }, [src]);
+  const metaChips = describeMediaMeta(meta, isVideo);
+  const resMismatch = resolutionMismatch(job.resolution, meta);
   const canSelect = job.status === "done" && Boolean(src || job.openUrl);
   const shareBusy = sharingId === job.id;
   const shareDisabled = alreadyShared || shareBusy || shareLocked;
@@ -135,6 +147,14 @@ const StudioJobCard = memo(function StudioJobCard({
                 aria-label={`${job.prompt} #${job.variant}`}
                 onClick={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
+                onLoadedMetadata={(e) => {
+                  const el = e.currentTarget;
+                  setMeta({
+                    width: el.videoWidth,
+                    height: el.videoHeight,
+                    duration: Number.isFinite(el.duration) ? el.duration : job.duration,
+                  });
+                }}
               />
             ) : (
               <img
@@ -143,6 +163,10 @@ const StudioJobCard = memo(function StudioJobCard({
                 loading="lazy"
                 decoding="async"
                 draggable={false}
+                onLoad={(e) => {
+                  const el = e.currentTarget;
+                  setMeta({ width: el.naturalWidth, height: el.naturalHeight });
+                }}
               />
             )}
             <div className="card-overlay">
@@ -223,8 +247,24 @@ const StudioJobCard = memo(function StudioJobCard({
         <div className="card-meta">
           <strong>#{job.variant}</strong>
           {job.prompt}
-          {job.resolution ? ` · ${job.resolution}` : ""}
         </div>
+        {metaChips.length ? (
+          <div className="card-specs" aria-label="实际产物参数">
+            {metaChips.map((chip) => (
+              <span key={chip} className="card-spec">
+                {chip}
+              </span>
+            ))}
+            {resMismatch ? (
+              <span
+                className="card-spec card-spec-warn"
+                title={`已请求 ${job.resolution}，上游实际返回的尺寸对不上该档位`}
+              >
+                请求 {job.resolution}
+              </span>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );
@@ -387,32 +427,33 @@ export function StudioPage({
   // resolutionField 是立即构造的 JSX，里面的 .map() 当场就读 modelCap，
   // 所以必须声明在它之前，否则 TDZ。
   const modelCap = useMemo(() => getImageModelCapability(activeImageModel), [activeImageModel]);
-  /** 高级：内联在分辨率右侧，不单独占行 */
-  const advancedField = (
-    <div className="field studio-advanced-field">
-      <label>高级</label>
-      <div className="studio-advanced-toggles" role="group" aria-label="高级">
+  /** 高级开关：与模式切换器同风格的图标按钮，并排在「开始生成 · 停止」右侧 */
+  const advancedSwitch = (
+    <div className="studio-mode-switch" role="group" aria-label="高级">
+      <button
+        type="button"
+        className={`studio-mode-btn ${draft.autoRetry ? "active" : ""}`}
+        aria-pressed={draft.autoRetry}
+        aria-label="自动重试"
+        data-tip="自动重试"
+        title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
+        onClick={() => setDraft({ autoRetry: !draft.autoRetry })}
+      >
+        <RefreshCw size={17} strokeWidth={2} aria-hidden />
+      </button>
+      {canBackgroundTasks ? (
         <button
           type="button"
-          className={`chip studio-toggle-chip ${draft.autoRetry ? "active" : ""}`}
-          aria-pressed={draft.autoRetry}
-          title="开启后，失败的子任务会自动重试，直到生成成功或你点击停止"
-          onClick={() => setDraft({ autoRetry: !draft.autoRetry })}
+          className={`studio-mode-btn ${draft.backgroundTasks ? "active" : ""}`}
+          aria-pressed={draft.backgroundTasks}
+          aria-label="后台任务"
+          data-tip="后台任务"
+          title="提交到服务端队列，关浏览器也可续跑；点生成直接入队且不锁按钮"
+          onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
         >
-          自动重试
+          <Server size={17} strokeWidth={2} aria-hidden />
         </button>
-        {canBackgroundTasks ? (
-          <button
-            type="button"
-            className={`chip studio-toggle-chip ${draft.backgroundTasks ? "active" : ""}`}
-            aria-pressed={draft.backgroundTasks}
-            title="提交到服务端队列，关浏览器也可续跑；点生成直接入队且不锁按钮"
-            onClick={() => setDraft({ backgroundTasks: !draft.backgroundTasks })}
-          >
-            后台任务
-          </button>
-        ) : null}
-      </div>
+      ) : null}
     </div>
   );
 
@@ -684,6 +725,8 @@ export function StudioPage({
   /** 本会话已成功分享过的 job id，禁止重复点分享 */
   const [sharedJobIds, setSharedJobIds] = useState<Set<string>>(() => new Set());
   const [previewJob, setPreviewJob] = useState<StudioJob | null>(null);
+  /** 预览里量到的实际产物参数；切换作品时清空重量 */
+  const [previewMeta, setPreviewMeta] = useState<MediaMeta | undefined>(undefined);
   const [shareStatus, setShareStatus] = useState<ShareStatus | null>(null);
   /** 仅在用户点过「分享到大厅」后展示冷却/结果条，默认不占位 */
   const [shareUiRevealed, setShareUiRevealed] = useState(false);
@@ -805,6 +848,11 @@ export function StudioPage({
 
   const canPreviewPrev = previewIndex > 0;
   const canPreviewNext = previewIndex >= 0 && previewIndex < previewableJobs.length - 1;
+
+  // 换预览目标就丢掉上一张量到的尺寸，否则左右翻页时会短暂显示错的参数
+  useEffect(() => {
+    setPreviewMeta(undefined);
+  }, [previewJob?.id]);
 
   const stepPreview = useCallback(
     (delta: number) => {
@@ -1477,6 +1525,9 @@ export function StudioPage({
     : undefined;
   // 优先 blob/data（已带认证）；openUrl 是裸同源路径，新标签直连会 invalid_api_key
   const previewOpenHref = previewSrc || previewJob?.openUrl;
+  const previewIsVideo = previewJob?.kind === "video";
+  const previewMetaChips = describeMediaMeta(previewMeta, previewIsVideo);
+  const previewResMismatch = resolutionMismatch(previewJob?.resolution, previewMeta);
   const previewAlreadyShared = previewJob ? sharedJobIds.has(previewJob.id) : false;
   const previewShareBusy = previewJob ? sharingId === previewJob.id : false;
   const previewShareDisabled =
@@ -1543,12 +1594,24 @@ export function StudioPage({
               loop
               playsInline
               aria-label={previewJob.prompt || "视频预览"}
+              onLoadedMetadata={(e) => {
+                const el = e.currentTarget;
+                setPreviewMeta({
+                  width: el.videoWidth,
+                  height: el.videoHeight,
+                  duration: Number.isFinite(el.duration) ? el.duration : previewJob.duration,
+                });
+              }}
             />
           ) : (
             <img
               src={previewSrc}
               alt={previewJob.prompt || "大图预览"}
               decoding="async"
+              onLoad={(e) => {
+                const el = e.currentTarget;
+                setPreviewMeta({ width: el.naturalWidth, height: el.naturalHeight });
+              }}
             />
           )}
         </div>
@@ -1559,6 +1622,23 @@ export function StudioPage({
               {previewIndex >= 0 ? ` · ${previewIndex + 1}/${previewableJobs.length}` : ""}
             </strong>
             <span>{previewJob.prompt}</span>
+            {previewMetaChips.length ? (
+              <span className="card-specs" aria-label="实际产物参数">
+                {previewMetaChips.map((chip) => (
+                  <span key={chip} className="card-spec">
+                    {chip}
+                  </span>
+                ))}
+                {previewResMismatch ? (
+                  <span
+                    className="card-spec card-spec-warn"
+                    title={`已请求 ${previewJob.resolution}，上游实际返回的尺寸对不上该档位`}
+                  >
+                    请求 {previewJob.resolution}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
           </div>
           <div className="studio-lightbox-actions">
             {previewOpenHref ? (
@@ -1811,8 +1891,11 @@ export function StudioPage({
               >
                 {chatParamsOpen ? "收起参数" : "参数"}
               </button>
-              {genModeSwitch}
-              <div className="btn-row" style={{ marginLeft: "auto" }}>
+              <div className="studio-toolbar-switches">
+                {genModeSwitch}
+                {advancedSwitch}
+              </div>
+              <div className="btn-row">
                 <button type="button" className="btn btn-secondary" disabled={!stopEnabled} onClick={onStop}>
                   停止
                 </button>
@@ -1872,8 +1955,6 @@ export function StudioPage({
                     <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
                     {resolutionField}
                     {videoDurationField}
-                    <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                    {advancedField}
                   </div>
                   <div className="studio-params-divider" role="separator" />
                   <div className="studio-params-row studio-params-row-aspect">
@@ -2055,7 +2136,10 @@ export function StudioPage({
                   停止
                 </button>
               </div>
-              {genModeSwitch}
+              <div className="studio-toolbar-switches">
+                {genModeSwitch}
+                {advancedSwitch}
+              </div>
             </div>
 
             {queueNoticeBanner}
@@ -2105,8 +2189,6 @@ export function StudioPage({
                 </div>
                 {resolutionField}
                 {videoDurationField}
-                <div className="studio-params-vsep" role="separator" aria-orientation="vertical" />
-                {advancedField}
               </div>
               <div className="studio-params-divider" role="separator" />
               <div className="studio-params-row studio-params-row-aspect">

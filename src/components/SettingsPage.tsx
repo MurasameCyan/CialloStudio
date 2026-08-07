@@ -297,8 +297,6 @@ export function SettingsPage({
 
   const apiKey = typeof draft.apiKey === "string" ? draft.apiKey : "";
   const baseUrl = typeof draft.baseUrl === "string" ? draft.baseUrl : "";
-  const hasKey = Boolean(apiKey.trim());
-  const requestBase = resolveBrowserApiBase(baseUrl);
   const modelCap = useMemo(
     () => getImageModelCapability(typeof draft.model === "string" ? draft.model : DEFAULT_SETTINGS.model),
     [draft.model],
@@ -451,30 +449,6 @@ export function SettingsPage({
     }
   }
 
-  const connectionStatusRow = (
-    <div className="admin-status-row">
-      <div className="admin-status-card">
-        <span className="admin-status-label">连接</span>
-        <strong className="admin-status-value">
-          <span className={`live-dot ${hasKey ? "" : "off"}`} />
-          {hasKey ? "已配置 Key" : "未配置"}
-        </strong>
-      </div>
-      <div className="admin-status-card">
-        <span className="admin-status-label">模型</span>
-        <strong className="admin-status-value mono-tight" title={draft.model}>
-          {draft.model || "—"}
-        </strong>
-      </div>
-      <div className="admin-status-card">
-        <span className="admin-status-label">请求通道</span>
-        <strong className="admin-status-value mono-tight" title={requestBase}>
-          {requestBase}
-        </strong>
-      </div>
-    </div>
-  );
-
   const updateStatusText = (() => {
     if (updateBusy) return "检查中…";
     if (!updateResult) return "";
@@ -592,9 +566,7 @@ export function SettingsPage({
           <p className="panel-desc admin-users-hint">
             管理全站服务端后台队列：查看进度、取消进行中、清理历史记录。
           </p>
-        ) : (
-          connectionStatusRow
-        )}
+        ) : null}
       </section>
 
       {isStationMaster && section === "users" ? (

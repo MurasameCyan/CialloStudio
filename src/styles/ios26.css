@@ -1882,7 +1882,8 @@ a {
   position: relative;
   z-index: 2;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* 接口设置 / 用户池 / 后台任务 三个分页等宽同行 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   padding: 6px;
   border-radius: 18px;
@@ -2363,6 +2364,17 @@ a {
 @media (max-width: 560px) {
   .admin-fields-2 {
     grid-template-columns: 1fr;
+  }
+
+  /* 三个分页同行：窄屏收窄内边距与字号，「接口设置」才不会折成两行 */
+  .admin-section-switch {
+    gap: 6px;
+    padding: 4px;
+  }
+
+  .admin-section-switch-btn {
+    padding: 10px 6px;
+    font-size: 14px;
   }
 }
 

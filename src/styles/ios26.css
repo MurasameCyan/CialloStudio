@@ -67,6 +67,43 @@ body,
   min-height: 100%;
 }
 
+/* 滚动条常驻占位：页面内容长短切换时视口宽度恒定，居中的 .app-shell 不再横向跳动。
+   Windows 是实体滚动条（约 15px），这个抖动最明显；macOS 覆盖式滚动条本就不占位。
+   Safari < 18.2 不支持 scrollbar-gutter，会静默退回原行为，不会坏。 */
+html {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: var(--text-tertiary) transparent;
+}
+
+/* WebKit 不认 scrollbar-width/color，单独给一套；细、半透明、跟随明暗主题。
+   已显式隐藏自身滚动条的容器（.textarea / .prompt-history-list / .log-list /
+   .hall-drawer）都是类名限定的规则，权重更高，不受这里影响。 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  /* 透明边框 + content-box 裁剪：轨道留 10px 便于命中，滑块只显示中间 4px */
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 999px;
+  background-color: var(--text-tertiary);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--text-secondary);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
 body {
   min-height: 100dvh;
   color: var(--text);

@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "lint": "tsc -b --pretty false",
     "test:upstream-guard": "node scripts/test-upstream-guard.mjs",
-    "test:unit": "node scripts/test-upstream-guard.mjs && node scripts/test-run-pool.mjs && node scripts/test-expand-jobs.mjs && node scripts/test-build-info.mjs && node scripts/test-media-root-base.mjs && node --experimental-strip-types --no-warnings scripts/test-settings-model-slots.mjs",
+    "test:unit": "node scripts/test-upstream-guard.mjs && node scripts/test-run-pool.mjs && node scripts/test-expand-jobs.mjs && node scripts/test-build-info.mjs && node scripts/test-media-root-base.mjs && node scripts/test-display-url.mjs && node --experimental-strip-types --no-warnings scripts/test-settings-model-slots.mjs",
     "pack:media-worker:pages": "node scripts/pack-media-worker-pages.mjs"
   },
   "dependencies": {

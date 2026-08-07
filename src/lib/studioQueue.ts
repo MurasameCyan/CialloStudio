@@ -347,9 +347,9 @@ export function saveDraft(draft: StudioDraft): void {
 
 export function displayUrl(job: StudioJob | null | undefined): string | undefined {
   if (!job) return undefined;
-  if (typeof job.imageUrl === "string" && job.imageUrl && !job.imageUrl.startsWith("blob:")) {
-    return job.imageUrl;
-  }
+  // imageUrl 优先（blob/data 已携带认证；其他格式也可直接用）
+  if (typeof job.imageUrl === "string" && job.imageUrl) return job.imageUrl;
+  // openUrl 仅兜底（<img>/<video> 无法带头，依赖 cookie 代理但无 API key）
   if (typeof job.openUrl === "string" && job.openUrl) return job.openUrl;
-  return typeof job.imageUrl === "string" ? job.imageUrl : undefined;
+  return undefined;
 }

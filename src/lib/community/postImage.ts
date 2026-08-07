@@ -1,7 +1,9 @@
 import { getMediaBase } from "@/lib/media/client";
+import type { PostKind } from "./types";
 
 export type PostImageFields = {
   imageUrl?: string;
+  kind?: PostKind;
   mediaId?: string;
 };
 

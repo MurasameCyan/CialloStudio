@@ -208,6 +208,11 @@ async function blobFromSource(source: string | Blob): Promise<Blob> {
 
 function guessName(blob: Blob): string {
   const t = blob.type || "";
+  if (t.startsWith("video/")) {
+    if (t.includes("webm")) return "video.webm";
+    if (t.includes("quicktime")) return "video.mov";
+    return "video.mp4";
+  }
   if (t.includes("png")) return "image.png";
   if (t.includes("webp")) return "image.webp";
   if (t.includes("gif")) return "image.gif";

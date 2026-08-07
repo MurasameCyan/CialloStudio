@@ -8,10 +8,11 @@ import {
   resolvePostImageUrl,
 } from "@/lib/community/postImage";
 import type { Comment, CommunityUser, GalleryPost } from "@/lib/community/types";
+import { isVideoPost } from "@/lib/community/types";
 import { log } from "@/lib/logger";
 
-function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "mediaId" | "prompt">) {
-  const ok = openOriginalImageInNewTab(post, post.prompt?.trim() || "原图预览");
+function openOriginalImage(post: Pick<GalleryPost, "imageUrl" | "kind" | "mediaId" | "prompt">) {
+  const ok = openOriginalImageInNewTab(post, post.prompt?.trim() || "原图预览", isVideoPost(post));
   if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
 }
 
@@ -64,40 +65,50 @@ function HallPostImage({
   post,
   alt,
 }: {
-  post: Pick<GalleryPost, "imageUrl" | "mediaId" | "prompt">;
+  post: Pick<GalleryPost, "imageUrl" | "kind" | "mediaId" | "prompt">;
   alt: string;
 }) {
   const initial = resolvePostImageUrl(post);
   const [src, setSrc] = useState(initial);
   const [failed, setFailed] = useState(!initial);
   const [triedFallback, setTriedFallback] = useState(false);
+  const isVideo = isVideoPost(post);
+
+  // imageUrl 挂了再试一次 mediaBase+mediaId，两条都不行才显示占位
+  const onError = () => {
+    if (!triedFallback) {
+      const next = fallbackPostImageUrl(post, src);
+      setTriedFallback(true);
+      if (next) {
+        setSrc(next);
+        return;
+      }
+    }
+    setFailed(true);
+  };
 
   if (failed || !src) {
     return (
-      <div className="hall-media-placeholder" role="img" aria-label="图不可用">
-        图不可用
+      <div className="hall-media-placeholder" role="img" aria-label={isVideo ? "视频不可用" : "图不可用"}>
+        {isVideo ? "视频不可用" : "图不可用"}
       </div>
     );
   }
 
-  return (
-    <img
-      src={src}
-      alt={alt}
-      loading="lazy"
-      onError={() => {
-        if (!triedFallback) {
-          const next = fallbackPostImageUrl(post, src);
-          setTriedFallback(true);
-          if (next) {
-            setSrc(next);
-            return;
-          }
-        }
-        setFailed(true);
-      }}
-    />
-  );
+  // 两处调用都包在 <button> 里，controls 属于交互内容不能嵌套进 button，
+  // 这里只渲染静态首帧；播放在 lightbox（带 controls + autoplay）里进行
+  if (isVideo) {
+    return (
+      <>
+        <video src={src} muted playsInline preload="metadata" aria-label={alt} onError={onError} />
+        <span className="hall-video-badge" aria-hidden>
+          视频
+        </span>
+      </>
+    );
+  }
+
+  return <img src={src} alt={alt} loading="lazy" onError={onError} />;
 }
 
 export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props) {
@@ -666,7 +677,19 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
             onClick={(e) => e.stopPropagation()}
           >
             <div className="studio-lightbox-media">
-              <img src={lightboxSrc} alt={active.prompt || "大图预览"} decoding="async" />
+              {isVideoPost(active) ? (
+                <video
+                  src={lightboxSrc}
+                  controls
+                  autoPlay
+                  loop
+                  playsInline
+                  preload="metadata"
+                  aria-label={active.prompt || "视频预览"}
+                />
+              ) : (
+                <img src={lightboxSrc} alt={active.prompt || "大图预览"} decoding="async" />
+              )}
             </div>
             <div className="studio-lightbox-bottom">
               <div className="studio-lightbox-meta" title={active.prompt}>
@@ -684,11 +707,12 @@ export function HallPage({ user, loading, onLogin, onRegister, onLogout }: Props
                     const ok = openOriginalImageInNewTab(
                       lightboxSrc,
                       active.prompt?.trim() || "原图预览",
+                      isVideoPost(active),
                     );
                     if (!ok) log("warn", "原图地址不可用或弹窗被拦截");
                   }}
                 >
-                  打开原图
+                  {isVideoPost(active) ? "打开视频" : "打开原图"}
                 </button>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLightboxOpen(false)}>
                   关闭

@@ -681,6 +681,7 @@ async function handle(req, res) {
         authorId: me.id,
         authorName: me.displayName,
         imageUrl: String(body.imageUrl).trim(),
+        kind: body.kind === "video" ? "video" : "image",
         mediaId: body.mediaId,
         prompt: String(body.prompt || "").trim() || "(无 prompt)",
         model: body.model,

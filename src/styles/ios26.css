@@ -3361,11 +3361,32 @@ a {
 }
 
 .hall-media img,
-.hall-drawer-media img {
+.hall-media video,
+.hall-drawer-media img,
+.hall-drawer-media video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+/* 网格内视频只是静态首帧，用角标标明可播放 */
+.hall-media,
+.hall-drawer-media {
+  position: relative;
+}
+
+.hall-video-badge {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  font-size: 11px;
+  line-height: 1.6;
+  pointer-events: none;
 }
 
 .hall-media-placeholder {

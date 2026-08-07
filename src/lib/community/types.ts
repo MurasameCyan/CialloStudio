@@ -96,12 +96,17 @@ export type AuthSession = {
   user: CommunityUser;
 };
 
+/** 大厅媒体类型；旧帖无此字段，一律按 image 处理 */
+export type PostKind = "image" | "video";
+
 export type GalleryPost = {
   id: string;
   authorId: string;
   authorName: string;
   /** 展示用图片 URL（mock 可用 data URL / 外部 URL；生产为 CF Worker 媒体 URL） */
   imageUrl: string;
+  /** 媒体类型；缺省=image（兼容加字段前的存量帖） */
+  kind?: PostKind;
   /** 后端/Worker 侧媒体 id，可选 */
   mediaId?: string;
   prompt: string;
@@ -139,6 +144,7 @@ export type ListPostsResult = {
 
 export type CreatePostInput = {
   imageUrl: string;
+  kind?: PostKind;
   mediaId?: string;
   prompt: string;
   model?: string;
@@ -169,6 +175,15 @@ export type ApiErrorBody = {
     message: string;
   };
 };
+
+/** 只认 "video"，其余（含 undefined / 脏数据）都按图片处理 */
+export function normalizePostKind(value: unknown): PostKind {
+  return value === "video" ? "video" : "image";
+}
+
+export function isVideoPost(post: Pick<GalleryPost, "kind"> | null | undefined): boolean {
+  return normalizePostKind(post?.kind) === "video";
+}
 
 export function roleLabel(role: UserRole): string {
   if (role === "admin") return "站长";

@@ -184,21 +184,18 @@ const StudioJobCard = memo(function StudioJobCard({
                   作参考
                 </button>
               ) : null}
-              {/* 大厅只渲染 <img>，视频不提供分享入口 */}
-              {isVideo ? null : (
-                <button
-                  type="button"
-                  className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
-                  disabled={shareDisabled}
-                  title={shareTitle}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!alreadyShared) onShare(job);
-                  }}
-                >
-                  {shareLabel}
-                </button>
-              )}
+              <button
+                type="button"
+                className={`btn btn-sm ${alreadyShared ? "btn-shared" : "btn-primary"}`}
+                disabled={shareDisabled}
+                title={shareTitle}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!alreadyShared) onShare(job);
+                }}
+              >
+                {shareLabel}
+              </button>
             </div>
           </>
         ) : job.status === "failed" ? (
@@ -1316,13 +1313,15 @@ export function StudioPage({
         return;
       }
 
+      const isVideo = job.kind === "video";
+
       // 配置了 CF Worker 时：先上传到 Telegram 存图，再把稳定 URL 写入大厅
       let imageUrl = src;
       let mediaId: string | undefined;
       if (isMediaConfigured()) {
         log("info", "分享：上传到媒体 Worker（Telegram）…");
         const uploaded = await uploadMedia(src, {
-          filename: `ciallo-${job.id.slice(0, 10)}.jpg`,
+          filename: `ciallo-${job.id.slice(0, 10)}.${isVideo ? "mp4" : "jpg"}`,
         });
         imageUrl = uploaded.url;
         mediaId = uploaded.mediaId;
@@ -1333,9 +1332,10 @@ export function StudioPage({
 
       await communityApi.createPost({
         imageUrl,
+        kind: isVideo ? "video" : "image",
         mediaId,
         prompt: job.prompt,
-        model: settings.model,
+        model: isVideo ? settings.videoModel : settings.model,
         aspectRatio: job.aspectRatio || draft.aspectRatio,
         resolution: job.resolution || draft.resolution,
       });

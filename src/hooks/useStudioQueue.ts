@@ -135,16 +135,20 @@ function isAbortError(error: unknown): boolean {
   );
 }
 
-/** 配置类错误重试无意义；其余（网络/5xx/空图）可自动重试 */
-function isAutoRetryableError(error: unknown): boolean {
+/**
+ * 配置类 / 确定性错误重试无意义；其余（网络、5xx、审核抖动、空图、视频 failed）可自动重试。
+ * 判定须与服务端 task-queue.mjs 的 isRetryableError 保持一致，否则同一次失败在
+ * 本地和后台队列会有两种结果。
+ */
+export function isAutoRetryableError(error: unknown): boolean {
   if (isAbortError(error)) return false;
   if (error instanceof ApiError) {
     // 显式终态优先：上游带自己的 code 时，靠 code 名字判断会漏
     if (error.terminal) return false;
     if (error.code === "missing_reference_image" || error.code === "missing_api_key") return false;
     if (error.code === "missing_video_model" || error.code === "empty_prompt") return false;
-    if (error.code === "video_failed") return false;
-    if (error.status === 401 || error.status === 403) return false;
+    // 400 是确定性请求错误（参数不合法 / 提示词过长）：同一 payload 重试必然同样失败
+    if (error.status === 400 || error.status === 401 || error.status === 403) return false;
   }
   return true;
 }

@@ -518,9 +518,10 @@ async function drainQueue() {
   }
 }
 
+/** 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致 */
 function isRetryableError(err) {
   if (!err) return true;
-  // 显式终态优先（如上游把视频判为 failed，无论它带什么 code）
+  // 显式终态优先（调用方可对确定性失败标记 terminal，无论它带什么 code）
   if (err.terminal === true) return false;
   const status = Number(err.status || err.statusCode || 0);
   if (status === 401 || status === 403 || status === 400 || status === 499) return false;
@@ -529,9 +530,7 @@ function isRetryableError(err) {
     code === "missing_reference_image" ||
     code === "missing_api_key" ||
     code === "upstream_blocked" ||
-    code === "aborted" ||
-    // 上游未带 code 时的视频失败兜底（带 code 的走 err.terminal）
-    code === "video_failed"
+    code === "aborted"
   ) {
     return false;
   }
@@ -998,12 +997,11 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
 
     const status = String(res.json?.status || "").trim();
     if (status === "failed") {
+      // 不标 terminal：入队成功后才 failed 的多是审核/基建抖动，重试常能过。
+      // 与浏览器本地路径（src/lib/api.ts 的 generateVideo）保持同一套判定。
       throw Object.assign(new Error(res.json?.error?.message || "视频生成失败"), {
         status: 200,
         code: res.json?.error?.code || "video_failed",
-        // 上游判定 failed 即终态（多为审核拒绝），重试只会重复扣额度。
-        // 用独立标记而非 code：上游会带自己的 code，靠 code 名字判断会漏。
-        terminal: true,
       });
     }
     if (status === "done") {

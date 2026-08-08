@@ -786,12 +786,13 @@ export async function generateVideo(input: {
     input.onProgress?.(status.progress);
 
     if (status.status === "failed") {
+      // 不标 terminal：入队成功后才 failed 的多是审核/基建抖动，grok 审核是概率性的，
+      // 同一提示词重试常能过。与图片路径（"响应中没有图片" 同样可重试）保持一致，
+      // 是否继续由自动重试开关和停止按钮决定。
       throw new ApiError(
         200,
         status.error?.message || "视频生成失败",
         status.error?.code || "video_failed",
-        // 上游判 failed 即终态（多为审核拒绝），重试只会重复扣额度
-        true,
       );
     }
 

@@ -13,5 +13,6 @@ window.__CIALLO_RUNTIME__ = {
   communityApiBase: "/api/community",
   buildId: "",
   githubRepo: "MurasameCyan/CialloStudio",
-  trackRef: "beta"
+  trackRef: "beta",
+  promptTemplatesUrl: ""
 };

@@ -3,6 +3,9 @@ import { createPortal } from "react-dom";
 import {
   buildTemplatePrompt,
   countTemplateItems,
+  fetchDefaultTemplateLibrary,
+  hasTriedDefaultLibrary,
+  markTriedDefaultLibrary,
   normalizeTemplateLibrary,
   randomTemplateSelection,
   saveTemplateLibrary,
@@ -10,6 +13,7 @@ import {
   type TemplateLibrary,
   type TemplateSelection,
 } from "@/lib/promptTemplates";
+import { getPromptTemplatesUrl } from "@/lib/runtimeConfig";
 
 type Props = {
   open: boolean;
@@ -32,7 +36,10 @@ export function PromptTemplateDialog({
   const [manageOpen, setManageOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [loadingDefault, setLoadingDefault] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
+  /** 同一次挂载内只拉一次；localStorage 标记跨刷新，这个 ref 防 StrictMode 双跑 */
+  const fetchOnceRef = useRef(false);
 
   const total = countTemplateItems(library);
   const preview = useMemo(() => buildTemplatePrompt(library, selection), [library, selection]);
@@ -58,6 +65,43 @@ export function PromptTemplateDialog({
     if (!ids.length) setActiveCat(null);
     else if (!activeCat || !ids.includes(activeCat)) setActiveCat(ids[0]!);
   }, [library, activeCat]);
+
+  /**
+   * 首次打开且本地词库为空时，从站长配置的地址拉一次默认词库。
+   * 只在「空」时拉：用户自己导入过就不碰，清空过也不会被灌回来（靠 FETCHED 标记）。
+   */
+  useEffect(() => {
+    if (!open || library.categories.length || fetchOnceRef.current) return;
+    const url = getPromptTemplatesUrl();
+    if (!url || hasTriedDefaultLibrary()) return;
+
+    fetchOnceRef.current = true;
+    let alive = true;
+    setLoadingDefault(true);
+    void fetchDefaultTemplateLibrary(url).then((res) => {
+      if (!alive) return;
+      setLoadingDefault(false);
+      if (res.ok) {
+        markTriedDefaultLibrary();
+        saveTemplateLibrary(res.library);
+        onLibraryChange(res.library);
+        setNotice({
+          ok: true,
+          text: `已载入默认词库 ${res.library.categories.length} 个分类 / ${countTemplateItems(res.library)} 条`,
+        });
+        return;
+      }
+      // 地址/内容问题重试无意义，打标记不再烦用户；网络问题留着下次打开再试
+      // （弹窗关闭时组件不卸载，所以要手动放开这道闸，否则得刷新页面才会重试）
+      if (res.definitive) markTriedDefaultLibrary();
+      else fetchOnceRef.current = false;
+      setNotice({ ok: false, text: `默认词库加载失败：${res.error}` });
+    });
+
+    return () => {
+      alive = false;
+    };
+  }, [open, library.categories.length, onLibraryChange]);
 
   if (!open) return null;
 
@@ -265,9 +309,16 @@ export function PromptTemplateDialog({
             </div>
           </div>
         ) : (
-          <div className="tpl-empty">
-            词库还是空的。点右上角「词库」导入 JSON，或用{" "}
-            <code>node scripts/convert-prompt-library.mjs &lt;词库.html&gt; out.json</code> 从本地词库生成。
+          <div className="tpl-empty" aria-busy={loadingDefault}>
+            {loadingDefault ? (
+              "正在获取站长配置的默认词库…"
+            ) : (
+              <>
+                词库还是空的。点右上角「词库」导入 JSON，或用{" "}
+                <code>node scripts/convert-prompt-library.mjs &lt;词库.html&gt; out.json</code>{" "}
+                从本地词库生成。
+              </>
+            )}
           </div>
         )}
 

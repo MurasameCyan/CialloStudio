@@ -3,10 +3,14 @@
  *
  * 内容不内置：分类与条目由用户自己维护，存在 localStorage，可 JSON 导入导出
  * （见 scripts/convert-prompt-library.mjs，可把本地词库 HTML 转成导入用 JSON）。
+ * 站长可在 .env 配 CIALLO_PROMPT_TEMPLATES_URL 提供默认词库，用户首次打开
+ * 且本地为空时自动拉取一次（见 fetchDefaultTemplateLibrary）。
  * 这里只管存储与组装，UI 只负责勾选。
  */
 
 const STORAGE_KEY = "ciallo-studio.prompt-templates.v1";
+/** 记录「已尝试过自动拉取默认词库」，避免用户主动清空后又被灌回来 */
+const FETCHED_KEY = "ciallo-studio.prompt-templates.fetched.v1";
 const SEPARATOR = ", ";
 
 /** 导入是信任边界：用户粘贴的 JSON 要限幅，否则一次大 paste 就撑爆 localStorage 配额 */
@@ -120,6 +124,103 @@ export function saveTemplateLibrary(library: TemplateLibrary): void {
 
 export function countTemplateItems(library: TemplateLibrary): number {
   return library.categories.reduce((sum, cat) => sum + cat.items.length, 0);
+}
+
+export function hasTriedDefaultLibrary(): boolean {
+  try {
+    return localStorage.getItem(FETCHED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markTriedDefaultLibrary(): void {
+  try {
+    localStorage.setItem(FETCHED_KEY, "1");
+  } catch {
+    /* ignore quota */
+  }
+}
+
+/** 拉取失败的分类：definitive=配置/内容问题，重试无意义；transient=网络问题，下次可再试 */
+export type DefaultLibraryResult =
+  | { ok: true; library: TemplateLibrary }
+  | { ok: false; error: string; definitive: boolean };
+
+/** 站长提供的默认词库是外部输入，限幅后再交给 normalize */
+const MAX_FETCH_BYTES = 512 * 1024;
+const FETCH_TIMEOUT_MS = 8000;
+
+/**
+ * 从站长配置的 URL 拉取默认词库。
+ * 不写 localStorage，也不打标记——调用方决定要不要落盘（见 PromptTemplateDialog）。
+ */
+export async function fetchDefaultTemplateLibrary(
+  url: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<DefaultLibraryResult> {
+  const target = url.trim();
+  if (!target) return { ok: false, error: "未配置默认词库地址", definitive: true };
+
+  let resp: Response;
+  try {
+    resp = await fetchImpl(target, {
+      headers: { Accept: "application/json" },
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
+  } catch (exc) {
+    // 网络/超时/CORS：可能是临时的，留给下次打开重试
+    return {
+      ok: false,
+      error: exc instanceof Error ? exc.message : String(exc),
+      definitive: false,
+    };
+  }
+
+  if (!resp.ok) {
+    // 4xx 是地址写错，5xx 可能是服务端临时故障
+    return { ok: false, error: `HTTP ${resp.status}`, definitive: resp.status < 500 };
+  }
+
+  // 相对路径写错时 nginx 的 try_files 会回 index.html 且带 200，必须靠类型识破
+  const type = resp.headers.get("content-type") || "";
+  if (type && !/json|text\/plain/i.test(type)) {
+    return { ok: false, error: `返回的不是 JSON（${type.split(";")[0]}）`, definitive: true };
+  }
+
+  const declared = Number(resp.headers.get("content-length") || "");
+  if (Number.isFinite(declared) && declared > MAX_FETCH_BYTES) {
+    return { ok: false, error: "默认词库超过 512 KB", definitive: true };
+  }
+
+  let text: string;
+  try {
+    text = await resp.text();
+  } catch (exc) {
+    return {
+      ok: false,
+      error: exc instanceof Error ? exc.message : String(exc),
+      definitive: false,
+    };
+  }
+  // ponytail: 分块响应没有 content-length，只能读完再判；上限内网小文件足够，
+  //   真要防超大响应得改用 ReadableStream 边读边计数。
+  if (text.length > MAX_FETCH_BYTES) {
+    return { ok: false, error: "默认词库超过 512 KB", definitive: true };
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    return { ok: false, error: "默认词库不是合法 JSON", definitive: true };
+  }
+
+  const library = normalizeTemplateLibrary(parsed);
+  if (!library.categories.length) {
+    return { ok: false, error: "默认词库没有有效条目", definitive: true };
+  }
+  return { ok: true, library };
 }
 
 /** 单选分类替换旧值，多选分类累加；取消后清掉空数组，保持勾选状态干净 */

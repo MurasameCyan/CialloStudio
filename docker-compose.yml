@@ -7,6 +7,12 @@ services:
     pull_policy: always
     ports:
       - "${CIALLO_PORT:-8080}:8080"
+    # 与上游 API（如 grok2api）跑在同一台机器时，可加入同一个 Docker 网络，
+    # 直接用容器名互访（http://grok2api:8000/v1），上游就不必对宿主机暴露端口。
+    # 要用的话：本块和文件末尾的顶层 networks 必须一起解注释，否则 compose 报错。
+    # 同时把该 origin 加进 CIALLO_UPSTREAM_ALLOWLIST，否则会被上游白名单拦掉。
+    # networks:
+    #   - ai-internal
     environment:
       # 站长账号（.env）。密码明文仅容器环境；前端只拿 sha256
       CIALLO_MASTER_USERNAME: ${CIALLO_MASTER_USERNAME:-admin}
@@ -23,10 +29,14 @@ services:
       CIALLO_DATA_DIR: /data
       CIALLO_COMMUNITY_MODE: ${CIALLO_COMMUNITY_MODE:-http}
       CIALLO_COMMUNITY_API_BASE: ${CIALLO_COMMUNITY_API_BASE:-/api/community}
+      # 创作台「模板」默认词库地址（空 = 用户自己导入）。见 .env.example
+      CIALLO_PROMPT_TEMPLATES_URL: ${CIALLO_PROMPT_TEMPLATES_URL:-}
       TZ: ${TZ:-Asia/Shanghai}
     volumes:
       # 用户 / 帖子 / 会话 / 冷却配置 保存在此 volume
       - ciallo-data:/data
+      # 自带默认词库时解开这行，并设 CIALLO_PROMPT_TEMPLATES_URL=/prompt-templates.json
+      # - ./prompt-templates.json:/usr/share/nginx/html/prompt-templates.json:ro
     restart: unless-stopped
     init: true
     stop_grace_period: 15s
@@ -42,3 +52,11 @@ services:
 volumes:
   ciallo-data:
     name: ciallo-studio-data
+
+# 与服务里的 networks 成对使用，见上方说明。
+# external: true 表示这个网络由外部创建、compose 不负责创建也不删除，
+# 所以解注释前先建好：docker network create ai-internal
+# （通常这个网络已经由上游 API 那份 compose 建好了，直接接入即可）
+# networks:
+#   ai-internal:
+#     external: true

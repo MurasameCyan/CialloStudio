@@ -21,6 +21,8 @@ export type CialloRuntime = {
   githubRepo: string;
   /** 跟踪分支（默认 beta） */
   trackRef: string;
+  /** 默认提示词词库 URL；空 = 不自动拉取，用户自己导入 */
+  promptTemplatesUrl: string;
 };
 
 declare global {
@@ -61,6 +63,8 @@ function readRuntime(): CialloRuntime {
       : "MurasameCyan/CialloStudio";
   const trackRef =
     typeof raw?.trackRef === "string" && raw.trackRef.trim() ? raw.trackRef.trim() : "beta";
+  const promptTemplatesUrl =
+    typeof raw?.promptTemplatesUrl === "string" ? raw.promptTemplatesUrl.trim() : "";
   return {
     masterUsername: username || (hash ? "admin" : ""),
     masterPasswordSha256: hash,
@@ -73,7 +77,13 @@ function readRuntime(): CialloRuntime {
     buildId,
     githubRepo,
     trackRef,
+    promptTemplatesUrl,
   };
+}
+
+/** 站长配置的默认词库地址（空 = 未配置） */
+export function getPromptTemplatesUrl(): string {
+  return readRuntime().promptTemplatesUrl;
 }
 
 /** env / runtime-config 注入的社区模式（默认 http） */

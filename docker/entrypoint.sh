@@ -85,6 +85,13 @@ fi
 BUILD_ID_JS="$(printf '%s' "$BUILD_ID" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 TRACK_REF_JS="$(printf '%s' "$TRACK_REF" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 GITHUB_REPO_JS="$(printf '%s' "$GITHUB_REPO" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+
+# 默认提示词词库地址（空 = 不自动拉取，用户自己在弹窗里导入）
+PROMPT_TEMPLATES_URL="$(printf '%s' "${CIALLO_PROMPT_TEMPLATES_URL:-}" | tr -d '\r')"
+PROMPT_TEMPLATES_URL_JS="$(printf '%s' "$PROMPT_TEMPLATES_URL" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+if [ -n "$PROMPT_TEMPLATES_URL" ]; then
+  echo "[ciallo] prompt templates default: ${PROMPT_TEMPLATES_URL}"
+fi
 if [ -n "$BUILD_ID" ]; then
   echo "[ciallo] build: ${BUILD_ID} track=${TRACK_REF} repo=${GITHUB_REPO}"
 else
@@ -105,7 +112,8 @@ window.__CIALLO_RUNTIME__ = {
   communityApiBase: "${COMMUNITY_API_BASE_JS}",
   buildId: "${BUILD_ID_JS}",
   githubRepo: "${GITHUB_REPO_JS}",
-  trackRef: "${TRACK_REF_JS}"
+  trackRef: "${TRACK_REF_JS}",
+  promptTemplatesUrl: "${PROMPT_TEMPLATES_URL_JS}"
 };
 EOF
 

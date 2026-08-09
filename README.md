@@ -178,9 +178,29 @@ npm run pack:media-worker:pages
 | `CIALLO_BUILD_ID` | 构建时写入 | 版本 SHA（CI/`docker build --build-arg`） |
 | `CIALLO_TRACK_REF` | `beta` | 版本检测跟踪分支 |
 | `CIALLO_GITHUB_REPO` | `MurasameCyan/CialloStudio` | 版本检测仓库 |
+| `CIALLO_PROMPT_TEMPLATES_URL` | 空 | 创作台「模板」默认词库地址（见下） |
 | `TZ` | `Asia/Shanghai` | 时区 |
 
 见 [`.env.example`](.env.example)。
+
+### 默认提示词词库
+
+`CIALLO_PROMPT_TEMPLATES_URL` 给创作台的「模板」弹窗预置一份词库：用户**首次打开且本地词库为空**时拉取一次，存进浏览器 localStorage，之后归用户自己维护——改了这个地址也不会覆盖用户已有的词库。
+
+推荐用同源相对路径（不受 CORS 限制），把 JSON 挂进 nginx 根目录：
+
+```yaml
+volumes:
+  - ./prompt-templates.json:/usr/share/nginx/html/prompt-templates.json:ro
+```
+
+```env
+CIALLO_PROMPT_TEMPLATES_URL=/prompt-templates.json
+```
+
+JSON 用 `node scripts/convert-prompt-library.mjs <词库.html> out.json` 生成，或从弹窗里「导出」一份。上限 512 KB、40 分类、500 条。
+
+地址写错时不会静默失败：路径不存在会被 nginx 回落成 `index.html`，前端按 content-type 判定为「返回的不是 JSON」并在弹窗里提示。这类确定性错误只提示一次，网络超时则下次打开还会重试。
 
 ### 用户数据 volume
 

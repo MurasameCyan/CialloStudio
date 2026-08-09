@@ -4929,6 +4929,16 @@ a {
   text-align: center;
 }
 
+.tpl-empty-actions {
+  margin-top: 12px;
+}
+
+.tpl-empty-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
 .tpl-preview {
   flex: 0 0 auto;
   display: flex;

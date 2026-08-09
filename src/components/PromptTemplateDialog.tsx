@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   buildTemplatePrompt,
@@ -38,8 +38,9 @@ export function PromptTemplateDialog({
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [loadingDefault, setLoadingDefault] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
-  /** 同一次挂载内只拉一次；localStorage 标记跨刷新，这个 ref 防 StrictMode 双跑 */
+  /** 同一次挂载内只自动拉一次；localStorage 标记跨刷新，这个 ref 防 StrictMode 双跑 */
   const fetchOnceRef = useRef(false);
+  const mountedRef = useRef(true);
 
   const total = countTemplateItems(library);
   const preview = useMemo(() => buildTemplatePrompt(library, selection), [library, selection]);
@@ -67,45 +68,59 @@ export function PromptTemplateDialog({
   }, [library, activeCat]);
 
   /**
-   * 首次打开且本地词库为空时，从站长配置的地址拉一次默认词库。
-   * 只在「空」时拉：用户自己导入过就不碰，清空过也不会被灌回来（靠 FETCHED 标记）。
+   * 拉取站长配置的默认词库。自动路径（首次打开且本地为空）尊重 FETCHED 标记，
+   * 失败后不再反复烦用户；手动路径（空态按钮）无视标记，站长改好配置能立刻重试。
    */
-  useEffect(() => {
-    if (!open || library.categories.length || fetchOnceRef.current) return;
-    const url = getPromptTemplatesUrl();
-    if (!url || hasTriedDefaultLibrary()) return;
-
-    fetchOnceRef.current = true;
-    let alive = true;
-    setLoadingDefault(true);
-    void fetchDefaultTemplateLibrary(url).then((res) => {
-      if (!alive) return;
+  const loadDefault = useCallback(
+    async (manual: boolean) => {
+      const url = getPromptTemplatesUrl();
+      if (!url) {
+        if (manual) setNotice({ ok: false, text: "站长未配置默认词库地址" });
+        return;
+      }
+      setLoadingDefault(true);
+      const res = await fetchDefaultTemplateLibrary(url);
+      if (!mountedRef.current) return;
       setLoadingDefault(false);
       if (res.ok) {
         markTriedDefaultLibrary();
         saveTemplateLibrary(res.library);
         onLibraryChange(res.library);
+        setSelection({});
         setNotice({
           ok: true,
           text: `已载入默认词库 ${res.library.categories.length} 个分类 / ${countTemplateItems(res.library)} 条`,
         });
         return;
       }
-      // 地址/内容问题重试无意义，打标记不再烦用户；网络问题留着下次打开再试
+      // 地址/内容问题重试无意义，打标记不再自动重试；网络问题留着下次打开再试
       // （弹窗关闭时组件不卸载，所以要手动放开这道闸，否则得刷新页面才会重试）
       if (res.definitive) markTriedDefaultLibrary();
       else fetchOnceRef.current = false;
       setNotice({ ok: false, text: `默认词库加载失败：${res.error}` });
-    });
+    },
+    [onLibraryChange],
+  );
 
+  useEffect(() => {
+    mountedRef.current = true;
     return () => {
-      alive = false;
+      mountedRef.current = false;
     };
-  }, [open, library.categories.length, onLibraryChange]);
+  }, []);
+
+  /** 首次打开且本地词库为空时自动拉一次；用户导入过或主动清空过都不碰 */
+  useEffect(() => {
+    if (!open || library.categories.length || fetchOnceRef.current) return;
+    if (!getPromptTemplatesUrl() || hasTriedDefaultLibrary()) return;
+    fetchOnceRef.current = true;
+    void loadDefault(false);
+  }, [open, library.categories.length, loadDefault]);
 
   if (!open) return null;
 
   const current = library.categories.find((c) => c.id === activeCat) ?? null;
+  const defaultUrl = getPromptTemplatesUrl();
 
   function applyImport(raw: string) {
     const text = raw.trim();
@@ -317,6 +332,18 @@ export function PromptTemplateDialog({
                 词库还是空的。点右上角「词库」导入 JSON，或用{" "}
                 <code>node scripts/convert-prompt-library.mjs &lt;词库.html&gt; out.json</code>{" "}
                 从本地词库生成。
+                {/* 站长配了地址却拉失败时，打了标记就不会再自动拉，得留个手动入口 */}
+                {defaultUrl ? (
+                  <div className="tpl-empty-actions">
+                    <button type="button" className="hall-chip" onClick={() => void loadDefault(true)}>
+                      载入默认词库
+                    </button>
+                  </div>
+                ) : (
+                  <div className="tpl-empty-hint">
+                    站长未配置默认词库（<code>CIALLO_PROMPT_TEMPLATES_URL</code>），只能手动导入。
+                  </div>
+                )}
               </>
             )}
           </div>

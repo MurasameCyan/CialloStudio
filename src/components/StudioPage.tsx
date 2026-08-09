@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, ImagePlus, RefreshCw, Server, Sparkles, Video } from "lucide-react";
+import { PromptTemplateDialog } from "@/components/PromptTemplateDialog";
 import { ShareCooldownBanner, isShareCooling } from "@/components/ShareCooldownBanner";
 import { ApiError, optimizePromptText } from "@/lib/api";
 import { communityApi } from "@/lib/community/client";
@@ -21,6 +22,11 @@ import {
   savePromptHistory,
   type PromptHistoryItem,
 } from "@/lib/promptHistory";
+import {
+  EMPTY_TEMPLATE_LIBRARY,
+  loadTemplateLibrary,
+  type TemplateLibrary,
+} from "@/lib/promptTemplates";
 import {
   ASPECT_RATIOS,
   RESOLUTIONS,
@@ -878,6 +884,15 @@ export function StudioPage({
   const historyWrapRef = useRef<HTMLDivElement | null>(null);
   const historyPanelRef = useRef<HTMLDivElement | null>(null);
   const [optimizeNotice, setOptimizeNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  const [templateOpen, setTemplateOpen] = useState(false);
+  /** 词库存 localStorage，首次打开前不需要，但懒加载一次比每次开弹窗都读更省 */
+  const [templateLibrary, setTemplateLibrary] = useState<TemplateLibrary>(() => {
+    try {
+      return loadTemplateLibrary();
+    } catch {
+      return EMPTY_TEMPLATE_LIBRARY;
+    }
+  });
   /** 作品墙：仅展示 status=done 的卡片 */
   const [successOnly, setSuccessOnly] = useState(() => {
     try {
@@ -1320,6 +1335,37 @@ export function StudioPage({
     log("info", "已清空提示词");
   }
 
+  /** 覆盖会丢掉原内容，所以额外记进历史（追加不会丢，原文还在拼接结果里） */
+  function handleApplyTemplate(text: string, mode: "replace" | "append") {
+    const current = draft.promptText;
+    const hadText = current.trim().length > 0;
+    if (mode === "replace" && hadText) rememberPrompt(current);
+    setDraft({
+      promptText:
+        mode === "replace" || !hadText ? text : `${current.replace(/\s+$/, "")}, ${text}`,
+    });
+    // 复用「优化」的回退栈：应用模板后点「回退」即可还原
+    setPromptBeforeOptimize(hadText ? current : null);
+    setOptimizeNotice({
+      ok: true,
+      text: `${mode === "replace" ? "已写入" : "已追加"}模板内容${hadText ? " · 可点「回退」恢复" : ""}`,
+    });
+    log("info", "已应用提示词模板", { mode, length: text.length });
+  }
+
+  const templateButton = (
+    <button
+      type="button"
+      className="hall-chip"
+      disabled={optimizeBusy || running}
+      title="从模板词库拼提示词"
+      aria-haspopup="dialog"
+      onClick={() => setTemplateOpen(true)}
+    >
+      模板
+    </button>
+  );
+
   function clearReferenceImage() {
     referenceLoadIdRef.current += 1;
     setDraft({
@@ -1653,7 +1699,26 @@ export function StudioPage({
     return order.map((prompt) => ({ prompt, jobs: map.get(prompt)! }));
   }, [wallJobs]);
 
-  const [chatParamsOpen, setChatParamsOpen] = useState(false);
+  /** 参数区展开状态本地记忆，与作品墙筛选同一套范式 */
+  const [chatParamsOpen, setChatParamsOpen] = useState(() => {
+    try {
+      return localStorage.getItem("ciallo.studio.paramsOpen") === "1";
+    } catch {
+      return false;
+    }
+  });
+
+  function toggleChatParams() {
+    setChatParamsOpen((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("ciallo.studio.paramsOpen", next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   const handleToggleSelected = useCallback((id: string) => {
     setSelected((prev) => {
@@ -1975,6 +2040,7 @@ export function StudioPage({
                   >
                     <span className="prompt-action-label">{optimizeBusy ? "优化中" : "优化"}</span>
                   </button>
+                  {templateButton}
                   <button
                     type="button"
                     className="hall-chip"
@@ -2032,7 +2098,7 @@ export function StudioPage({
               <button
                 type="button"
                 className="hall-chip"
-                onClick={() => setChatParamsOpen((v) => !v)}
+                onClick={toggleChatParams}
                 aria-expanded={chatParamsOpen}
               >
                 {chatParamsOpen ? "收起参数" : "参数"}
@@ -2126,6 +2192,7 @@ export function StudioPage({
               >
                 <span className="prompt-action-label">{optimizeBusy ? "优化中" : "优化"}</span>
               </button>
+              {templateButton}
               <button
                 type="button"
                 className="hall-chip"
@@ -2363,6 +2430,13 @@ export function StudioPage({
         )}
       </section>
       {previewLightbox}
+      <PromptTemplateDialog
+        open={templateOpen}
+        library={templateLibrary}
+        onLibraryChange={setTemplateLibrary}
+        onApply={handleApplyTemplate}
+        onClose={() => setTemplateOpen(false)}
+      />
     </div>
   );
 }

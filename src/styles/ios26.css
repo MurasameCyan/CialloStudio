@@ -4685,3 +4685,346 @@ a {
     max-height: min(64dvh, 680px);
   }
 }
+
+/* ── 提示词模板弹窗 ── 复用 .studio-lightbox-backdrop 做遮罩，只定义面板内部 */
+.tpl-dialog {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  width: min(880px, 100%);
+  max-height: min(92dvh, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--radius-lg);
+  border: var(--hairline);
+  background: var(--bg-solid);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.tpl-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.tpl-title {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tpl-title strong {
+  font-size: 16px;
+  letter-spacing: -0.01em;
+}
+
+.tpl-sub {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpl-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.tpl-chip-on {
+  color: var(--accent);
+  border-color: rgba(0, 113, 227, 0.28);
+  background: var(--accent-soft);
+}
+
+/* 词库管理：默认收起，展开后才占高度 */
+.tpl-manage {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-radius: var(--radius-md);
+  border: var(--hairline);
+  background: var(--bg-soft-2);
+}
+
+.tpl-manage-label,
+.tpl-manage-hint {
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.tpl-manage-label code,
+.tpl-manage-hint code,
+.tpl-empty code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--bg-soft);
+  font-size: 0.92em;
+}
+
+.tpl-manage-input {
+  resize: vertical;
+  min-height: 76px;
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size: 12px;
+}
+
+.tpl-manage-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tpl-manage-hint {
+  flex: 1 1 12em;
+  min-width: 0;
+}
+
+/* 文件选择：原生 input 藏进 chip，保留键盘可达（不用 display:none） */
+.tpl-file {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.tpl-file input[type="file"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+/* 分类列 + 条目区：仅条目区滚动，分类列跟随内容 */
+.tpl-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(120px, 168px) 1fr;
+  gap: 12px;
+}
+
+.tpl-cats {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: var(--hairline);
+  background: var(--bg-soft-2);
+  overflow-y: auto;
+}
+
+.tpl-cat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 620;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease);
+}
+
+.tpl-cat:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.tpl-cat.active {
+  background: var(--accent-soft);
+  border-color: rgba(0, 113, 227, 0.22);
+  color: var(--accent);
+}
+
+.tpl-cat-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-cat-count {
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.72;
+}
+
+.tpl-items {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.tpl-items-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex: 0 0 auto;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.tpl-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tpl-items-grid {
+  flex: 1 1 auto;
+  min-height: 96px;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 8px;
+  padding: 2px;
+  overflow-y: auto;
+}
+
+.tpl-item {
+  max-width: 100%;
+  padding: 7px 12px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-empty {
+  flex: 0 0 auto;
+  padding: 20px 16px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--separator);
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.7;
+  text-align: center;
+}
+
+.tpl-preview {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: var(--hairline);
+  background: var(--bg-soft-2);
+}
+
+.tpl-preview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+
+.tpl-preview-count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 预览可能很长：限高滚动，不把按钮行顶出弹窗 */
+.tpl-preview-text {
+  max-height: 84px;
+  overflow-y: auto;
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.tpl-preview-text:empty::before {
+  content: "";
+}
+
+.tpl-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+}
+
+.tpl-notice {
+  min-width: 0;
+  flex: 1 1 8em;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.tpl-notice.ok {
+  color: var(--success);
+}
+
+.tpl-notice.bad {
+  color: var(--danger);
+}
+
+.tpl-foot-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .tpl-dialog {
+    width: 100%;
+    max-height: 94dvh;
+    padding: 12px;
+  }
+
+  /* 窄屏改上下排布：分类横向滚动，条目区拿走剩余高度 */
+  .tpl-body {
+    grid-template-columns: 1fr;
+  }
+
+  .tpl-cats {
+    flex-direction: row;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+
+  .tpl-cat {
+    flex: 0 0 auto;
+  }
+
+  .tpl-foot-actions {
+    justify-content: flex-start;
+  }
+}

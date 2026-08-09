@@ -15,6 +15,10 @@ import {
   saveTemplateLibrary,
   toggleTemplateSelection,
 } from "../src/lib/promptTemplates.ts";
+import {
+  DEFAULT_PROMPT_TEMPLATES_URL,
+  getPromptTemplatesSource,
+} from "../src/lib/runtimeConfig.ts";
 
 const store = new Map();
 globalThis.localStorage = {
@@ -201,5 +205,43 @@ assert.equal(store.size, 0, "fetch 不应自行落盘");
 assert.equal(hasTriedDefaultLibrary(), false, "初始未尝试");
 markTriedDefaultLibrary();
 assert.equal(hasTriedDefaultLibrary(), true, "标记后应为已尝试");
+
+// --- 词库来源：约定路径兜底 vs 站长显式覆盖 ---
+// 这个路径是对站长的部署承诺（挂到这里即生效，见 README / docker-compose），
+// 改了就得同步文档，所以钉住字面值而不是拿常量自比。
+assert.equal(DEFAULT_PROMPT_TEMPLATES_URL, "/prompt-templates.json", "约定路径不可随意改名");
+// explicit 决定拉不到时的态度：显式配了就报错（配错要让站长知道），
+// 走约定路径则静默（这站点本来就可以不提供词库）。
+globalThis.window = {};
+assert.deepEqual(
+  getPromptTemplatesSource(),
+  { url: DEFAULT_PROMPT_TEMPLATES_URL, explicit: false },
+  "未注入 runtime → 约定路径且非显式",
+);
+
+globalThis.window.__CIALLO_RUNTIME__ = {};
+assert.equal(getPromptTemplatesSource().explicit, false, "runtime 无该字段 → 非显式");
+globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: "" };
+assert.equal(getPromptTemplatesSource().explicit, false, "空串 → 非显式");
+// entrypoint 注入的值可能带空白，trim 后仍是空就不算配置
+globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: "   " };
+assert.deepEqual(
+  getPromptTemplatesSource(),
+  { url: DEFAULT_PROMPT_TEMPLATES_URL, explicit: false },
+  "纯空白 → 视作未配置",
+);
+globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: 42 };
+assert.equal(getPromptTemplatesSource().explicit, false, "非字符串 → 非显式");
+
+globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: "https://cdn.example/lib.json" };
+assert.deepEqual(
+  getPromptTemplatesSource(),
+  { url: "https://cdn.example/lib.json", explicit: true },
+  "配了地址 → 显式覆盖",
+);
+// 显式配成与约定路径同值也算显式：站长写了就该收到错误提示
+globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: DEFAULT_PROMPT_TEMPLATES_URL };
+assert.equal(getPromptTemplatesSource().explicit, true, "显式配约定路径仍算显式");
+delete globalThis.window;
 
 console.log("prompt templates ok");

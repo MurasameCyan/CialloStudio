@@ -21,9 +21,15 @@ export type CialloRuntime = {
   githubRepo: string;
   /** 跟踪分支（默认 beta） */
   trackRef: string;
-  /** 默认提示词词库 URL；空 = 不自动拉取，用户自己导入 */
+  /** 默认提示词词库 URL；空 = 用约定路径 DEFAULT_PROMPT_TEMPLATES_URL */
   promptTemplatesUrl: string;
 };
+
+/**
+ * 默认词库的约定路径。挂到 nginx 根目录即生效，不必再设环境变量——
+ * 原先两步缺一步就静默失败，这是当时最常踩的坑。
+ */
+export const DEFAULT_PROMPT_TEMPLATES_URL = "/prompt-templates.json";
 
 declare global {
   interface Window {
@@ -81,9 +87,21 @@ function readRuntime(): CialloRuntime {
   };
 }
 
-/** 站长配置的默认词库地址（空 = 未配置） */
-export function getPromptTemplatesUrl(): string {
-  return readRuntime().promptTemplatesUrl;
+/** 默认词库来源 */
+export type PromptTemplatesSource = {
+  url: string;
+  /**
+   * true = 站长显式配了地址，拉不到就是配错了，要报错让他知道；
+   * false = 走约定路径的探测，拉不到只说明没提供词库，不该当成故障吓用户。
+   */
+  explicit: boolean;
+};
+
+export function getPromptTemplatesSource(): PromptTemplatesSource {
+  const configured = readRuntime().promptTemplatesUrl;
+  return configured
+    ? { url: configured, explicit: true }
+    : { url: DEFAULT_PROMPT_TEMPLATES_URL, explicit: false };
 }
 
 /** env / runtime-config 注入的社区模式（默认 http） */

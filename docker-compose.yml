@@ -35,7 +35,7 @@ services:
     volumes:
       # 用户 / 帖子 / 会话 / 冷却配置 保存在此 volume
       - ciallo-data:/data
-      # 自带默认词库时解开这行，并设 CIALLO_PROMPT_TEMPLATES_URL=/prompt-templates.json
+      # 自带默认词库时解开这行即生效（挂到约定路径，不用再设环境变量）
       # - ./prompt-templates.json:/usr/share/nginx/html/prompt-templates.json:ro
     restart: unless-stopped
     init: true

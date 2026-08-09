@@ -178,29 +178,27 @@ npm run pack:media-worker:pages
 | `CIALLO_BUILD_ID` | 构建时写入 | 版本 SHA（CI/`docker build --build-arg`） |
 | `CIALLO_TRACK_REF` | `beta` | 版本检测跟踪分支 |
 | `CIALLO_GITHUB_REPO` | `MurasameCyan/CialloStudio` | 版本检测仓库 |
-| `CIALLO_PROMPT_TEMPLATES_URL` | 空 | 创作台「模板」默认词库地址（见下） |
+| `CIALLO_PROMPT_TEMPLATES_URL` | 空 = 用 `/prompt-templates.json` | 默认词库放在别处时才需要（见下） |
 | `TZ` | `Asia/Shanghai` | 时区 |
 
 见 [`.env.example`](.env.example)。
 
 ### 默认提示词词库
 
-`CIALLO_PROMPT_TEMPLATES_URL` 给创作台的「模板」弹窗预置一份词库：用户**首次打开且本地词库为空**时拉取一次，存进浏览器 localStorage，之后归用户自己维护——改了这个地址也不会覆盖用户已有的词库。
+可以给创作台的「模板」弹窗预置一份词库：用户**首次打开且本地词库为空**时拉取一次，存进浏览器 localStorage，之后归用户自己维护——之后换了词库也不会覆盖用户已有的。
 
-推荐用同源相对路径（不受 CORS 限制），把 JSON 挂进 nginx 根目录：
+把 JSON 挂到约定路径 `/prompt-templates.json` 即生效，不用配环境变量：
 
 ```yaml
 volumes:
   - ./prompt-templates.json:/usr/share/nginx/html/prompt-templates.json:ro
 ```
 
-```env
-CIALLO_PROMPT_TEMPLATES_URL=/prompt-templates.json
-```
-
 JSON 用 `node scripts/convert-prompt-library.mjs <词库.html> out.json` 生成，或从弹窗里「导出」一份。上限 512 KB、40 分类、500 条。
 
-地址写错时不会静默失败：路径不存在会被 nginx 回落成 `index.html`，前端按 content-type 判定为「返回的不是 JSON」并在弹窗里提示。这类确定性错误只提示一次，网络超时则下次打开还会重试。
+不挂也没关系：探测不到就当这个站点不提供词库，弹窗只在空态提一句挂载路径，不报错。
+
+词库放在别处时才需要 `CIALLO_PROMPT_TEMPLATES_URL`（外部地址须允许跨域）。显式配了地址就当成站长的承诺，拉不到会在弹窗里报错：路径不存在会被 nginx 回落成 `index.html`，前端按 content-type 判定为「返回的不是 JSON」。这类确定性错误只提示一次，网络超时则下次打开还会重试。
 
 ### 用户数据 volume
 

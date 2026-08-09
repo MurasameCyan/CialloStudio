@@ -3,8 +3,9 @@
  *
  * 内容不内置：分类与条目由用户自己维护，存在 localStorage，可 JSON 导入导出
  * （见 scripts/convert-prompt-library.mjs，可把本地词库 HTML 转成导入用 JSON）。
- * 站长可在 .env 配 CIALLO_PROMPT_TEMPLATES_URL 提供默认词库，用户首次打开
- * 且本地为空时自动拉取一次（见 fetchDefaultTemplateLibrary）。
+ * 站长把 JSON 挂到 /prompt-templates.json 即可提供默认词库（或用
+ * CIALLO_PROMPT_TEMPLATES_URL 指到别处），用户首次打开且本地为空时自动
+ * 拉取一次（见 fetchDefaultTemplateLibrary 与 getPromptTemplatesSource）。
  * 这里只管存储与组装，UI 只负责勾选。
  */
 

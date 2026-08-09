@@ -13,7 +13,7 @@ import {
   type TemplateLibrary,
   type TemplateSelection,
 } from "@/lib/promptTemplates";
-import { getPromptTemplatesUrl } from "@/lib/runtimeConfig";
+import { DEFAULT_PROMPT_TEMPLATES_URL, getPromptTemplatesSource } from "@/lib/runtimeConfig";
 
 type Props = {
   open: boolean;
@@ -37,6 +37,8 @@ export function PromptTemplateDialog({
   const [importText, setImportText] = useState("");
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const [loadingDefault, setLoadingDefault] = useState(false);
+  /** 约定路径探测不到词库：这部署就是没提供，空态不必给重试按钮 */
+  const [implicitMissing, setImplicitMissing] = useState(false);
   const closeRef = useRef<HTMLButtonElement>(null);
   /** 同一次挂载内只自动拉一次；localStorage 标记跨刷新，这个 ref 防 StrictMode 双跑 */
   const fetchOnceRef = useRef(false);
@@ -73,11 +75,7 @@ export function PromptTemplateDialog({
    */
   const loadDefault = useCallback(
     async (manual: boolean) => {
-      const url = getPromptTemplatesUrl();
-      if (!url) {
-        if (manual) setNotice({ ok: false, text: "站长未配置默认词库地址" });
-        return;
-      }
+      const { url, explicit } = getPromptTemplatesSource();
       setLoadingDefault(true);
       const res = await fetchDefaultTemplateLibrary(url);
       if (!mountedRef.current) return;
@@ -93,6 +91,14 @@ export function PromptTemplateDialog({
         });
         return;
       }
+
+      // 走约定路径的自动探测拉不到，只说明站长没提供词库，不是故障，不该弹错误。
+      // 也不打 FETCHED 标记——站长以后挂上文件，用户下次进来就能自动拿到。
+      if (!explicit && !manual && res.definitive) {
+        setImplicitMissing(true);
+        return;
+      }
+
       // 地址/内容问题重试无意义，打标记不再自动重试；网络问题留着下次打开再试
       // （弹窗关闭时组件不卸载，所以要手动放开这道闸，否则得刷新页面才会重试）
       if (res.definitive) markTriedDefaultLibrary();
@@ -112,7 +118,7 @@ export function PromptTemplateDialog({
   /** 首次打开且本地词库为空时自动拉一次；用户导入过或主动清空过都不碰 */
   useEffect(() => {
     if (!open || library.categories.length || fetchOnceRef.current) return;
-    if (!getPromptTemplatesUrl() || hasTriedDefaultLibrary()) return;
+    if (hasTriedDefaultLibrary()) return;
     fetchOnceRef.current = true;
     void loadDefault(false);
   }, [open, library.categories.length, loadDefault]);
@@ -120,7 +126,6 @@ export function PromptTemplateDialog({
   if (!open) return null;
 
   const current = library.categories.find((c) => c.id === activeCat) ?? null;
-  const defaultUrl = getPromptTemplatesUrl();
 
   function applyImport(raw: string) {
     const text = raw.trim();
@@ -326,22 +331,24 @@ export function PromptTemplateDialog({
         ) : (
           <div className="tpl-empty" aria-busy={loadingDefault}>
             {loadingDefault ? (
-              "正在获取站长配置的默认词库…"
+              "正在获取默认词库…"
             ) : (
               <>
                 词库还是空的。点右上角「词库」导入 JSON，或用{" "}
                 <code>node scripts/convert-prompt-library.mjs &lt;词库.html&gt; out.json</code>{" "}
                 从本地词库生成。
-                {/* 站长配了地址却拉失败时，打了标记就不会再自动拉，得留个手动入口 */}
-                {defaultUrl ? (
+                {/* 探测不到就别给按钮，点了必然还是失败；其余情况留手动入口，
+                    因为 definitive 失败打了标记后自动路径不会再跑 */}
+                {implicitMissing ? (
+                  <div className="tpl-empty-hint">
+                    这个站点没有提供默认词库。站长可把 JSON 挂到{" "}
+                    <code>{DEFAULT_PROMPT_TEMPLATES_URL}</code> 即自动生效。
+                  </div>
+                ) : (
                   <div className="tpl-empty-actions">
                     <button type="button" className="hall-chip" onClick={() => void loadDefault(true)}>
                       载入默认词库
                     </button>
-                  </div>
-                ) : (
-                  <div className="tpl-empty-hint">
-                    站长未配置默认词库（<code>CIALLO_PROMPT_TEMPLATES_URL</code>），只能手动导入。
                   </div>
                 )}
               </>

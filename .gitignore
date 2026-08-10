@@ -43,3 +43,9 @@ docker-compose.override.yml
 
 uploads/
 
+# 本地调试产物：UI 预览截图等临时文件
+.tmp-*
+
+# Agent 工作区（git worktree），不进版本库
+.claude/worktrees/
+

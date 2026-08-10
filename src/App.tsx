@@ -158,54 +158,58 @@ export default function App() {
   }, [tab, isLoggedIn, community.loading]);
 
   return (
-    <div className="app-shell">
-      <header className="glass-bar">
+    <div className={`app-shell app-shell-${tab}`}>
+      <header className="glass-bar app-header">
         <div className="brand">
           <div className="brand-mark" aria-hidden />
           <div className="brand-text">
-            <div className="brand-kicker">Studio</div>
-            <div className="brand-title">Ciallo</div>
+            <div className="brand-kicker">Creative engine</div>
+            <div className="brand-title">Ciallo Studio</div>
           </div>
         </div>
 
         <div className="header-right">
-          <div
-            className={`connection-chip ${backgroundTasksActive ? "connection-chip-bg" : ""}`}
-            title={
-              backgroundTasksActive
-                ? `${serverBackground ? "服务端" : "浏览器"}后台任务 · 完成 ${queue.stats.done}/${queue.stats.total} · 失败 ${queue.stats.failed}`
-                : ready
-                  ? "API Key 已配置"
-                  : "尚未配置 API Key"
-            }
-          >
-            <span className={`live-dot ${ready || backgroundTasksActive ? "" : "off"}`} />
-            {backgroundTasksActive
-              ? `${serverBackground ? "服" : "后"} ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`
-              : queue.running
-                ? "生成中"
-                : community.user
-                  ? community.user.displayName
+          <div className="header-status">
+            <div
+              className={`connection-chip ${backgroundTasksActive ? "connection-chip-bg" : ""}`}
+              title={
+                backgroundTasksActive
+                  ? `${serverBackground ? "服务端" : "浏览器"}后台任务 · 完成 ${queue.stats.done}/${queue.stats.total} · 失败 ${queue.stats.failed}`
                   : ready
-                    ? "Ready"
-                    : "Setup"}
+                    ? "API Key 已配置"
+                    : "尚未配置 API Key"
+              }
+            >
+              <span className={`live-dot ${ready || backgroundTasksActive ? "" : "off"}`} />
+              {backgroundTasksActive
+                ? `${serverBackground ? "服" : "后"} ${queue.stats.done + queue.stats.failed}/${queue.stats.total}`
+                : queue.running
+                  ? "生成中"
+                  : community.user
+                    ? community.user.displayName
+                    : ready
+                      ? "Ready"
+                      : "Setup"}
+            </div>
           </div>
-          {tab === "studio" ? (
-            <StudioModeSwitch
-              mode={studioMode}
-              onChange={(mode) => {
-                saveStudioMode(mode);
-                setStudioMode(mode);
+          <div className="header-controls">
+            {tab === "studio" ? (
+              <StudioModeSwitch
+                mode={studioMode}
+                onChange={(mode) => {
+                  saveStudioMode(mode);
+                  setStudioMode(mode);
+                }}
+              />
+            ) : null}
+            <ThemeToggle
+              theme={theme}
+              onChange={(next) => {
+                saveTheme(next);
+                setTheme(next);
               }}
             />
-          ) : null}
-          <ThemeToggle
-            theme={theme}
-            onChange={(next) => {
-              saveTheme(next);
-              setTheme(next);
-            }}
-          />
+          </div>
           <nav className="nav-pills" aria-label="主导航">
             <button
               type="button"

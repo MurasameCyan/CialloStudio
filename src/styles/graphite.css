@@ -354,3 +354,1551 @@ html[data-theme="light"] .chip.active {
   color: var(--accent);
   border-color: color-mix(in srgb, var(--accent) 35%, transparent);
 }
+
+/* Graphite shell — shared chrome for 创作 / 大厅 / 管理.
+   Tokens + header + background live here so all three tabs read as one product;
+   per-page layout lives in the blocks below. */
+.app-shell-studio,
+.app-shell-hall,
+.app-shell-settings {
+  --studio-ink: #090b10;
+  --studio-panel: rgba(18, 21, 29, 0.9);
+  --studio-panel-strong: #151922;
+  --studio-line: rgba(255, 255, 255, 0.09);
+  --studio-line-soft: rgba(255, 255, 255, 0.055);
+  --studio-glow: rgba(91, 109, 255, 0.2);
+  --studio-accent: #7c86ff;
+  --studio-accent-hot: #a5a9ff;
+  --studio-cyan: #5ce1e6;
+  --page-inline: clamp(14px, 2vw, 30px);
+  max-width: 1720px;
+  gap: 14px;
+  padding-top: calc(12px + var(--safe-top));
+}
+
+html[data-theme="light"] .app-shell-studio,
+html[data-theme="light"] .app-shell-hall,
+html[data-theme="light"] .app-shell-settings {
+  --studio-ink: #edf0f6;
+  --studio-panel: rgba(255, 255, 255, 0.88);
+  --studio-panel-strong: #ffffff;
+  --studio-line: rgba(15, 23, 42, 0.11);
+  --studio-line-soft: rgba(15, 23, 42, 0.065);
+  --studio-glow: rgba(76, 92, 225, 0.12);
+  --studio-accent: #515fd7;
+  --studio-accent-hot: #303fae;
+  --studio-cyan: #168d9b;
+}
+
+html[data-theme="dark"] body:has(.app-shell-studio),
+html[data-theme="dark"] body:has(.app-shell-hall),
+html[data-theme="dark"] body:has(.app-shell-settings) {
+  background:
+    radial-gradient(900px 560px at 45% -14%, rgba(104, 114, 255, 0.16), transparent 63%),
+    radial-gradient(620px 520px at 100% 35%, rgba(48, 201, 210, 0.07), transparent 68%),
+    linear-gradient(145deg, #0e1118 0%, #090b10 52%, #0c0f16 100%);
+}
+
+html[data-theme="light"] body:has(.app-shell-studio),
+html[data-theme="light"] body:has(.app-shell-hall),
+html[data-theme="light"] body:has(.app-shell-settings) {
+  background:
+    radial-gradient(900px 560px at 45% -14%, rgba(96, 109, 232, 0.12), transparent 63%),
+    linear-gradient(145deg, #f8f9fc 0%, #edf0f6 58%, #f4f6fb 100%);
+}
+
+.app-shell-studio::before,
+.app-shell-hall::before,
+.app-shell-settings::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.32;
+  background-image:
+    linear-gradient(var(--studio-line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--studio-line-soft) 1px, transparent 1px);
+  background-size: 52px 52px;
+  mask-image: linear-gradient(to bottom, black, transparent 72%);
+}
+
+/* Header: brand, status, preferences, navigation form distinct groups. */
+.app-shell-studio .app-header,
+.app-shell-hall .app-header,
+.app-shell-settings .app-header {
+  min-height: 62px;
+  padding: 8px 9px 8px 12px;
+  border: 1px solid var(--studio-line);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--studio-panel-strong) 88%, transparent);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.22);
+}
+
+.app-shell-studio .brand,
+.app-shell-hall .brand,
+.app-shell-settings .brand {
+  gap: 10px;
+}
+
+.app-shell-studio .brand-mark,
+.app-shell-hall .brand-mark,
+.app-shell-settings .brand-mark {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.3), transparent 42%),
+    linear-gradient(145deg, var(--studio-accent-hot), #5b6cf1 55%, var(--studio-cyan));
+  box-shadow: 0 8px 28px var(--studio-glow);
+}
+
+.app-shell-studio .brand-mark::before,
+.app-shell-hall .brand-mark::before,
+.app-shell-settings .brand-mark::before {
+  inset: 1px;
+  border-radius: 11px;
+}
+
+.app-shell-studio .brand-mark::after,
+.app-shell-hall .brand-mark::after,
+.app-shell-settings .brand-mark::after {
+  inset: 10px;
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.16);
+}
+
+.app-shell-studio .brand-kicker,
+.app-shell-hall .brand-kicker,
+.app-shell-settings .brand-kicker {
+  margin-bottom: 3px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.18em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.app-shell-studio .brand-title,
+.app-shell-hall .brand-title,
+.app-shell-settings .brand-title {
+  background: none;
+  color: var(--text);
+  font-size: 17px;
+  font-weight: 720;
+  letter-spacing: -0.025em;
+}
+
+.app-shell-studio .header-right,
+.app-shell-hall .header-right,
+.app-shell-settings .header-right,
+.app-shell-studio .header-controls,
+.app-shell-hall .header-controls,
+.app-shell-settings .header-controls,
+.app-shell-studio .header-status,
+.app-shell-hall .header-status,
+.app-shell-settings .header-status {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.app-shell-studio .header-right,
+.app-shell-hall .header-right,
+.app-shell-settings .header-right {
+  gap: 8px;
+}
+
+.app-shell-studio .header-controls,
+.app-shell-hall .header-controls,
+.app-shell-settings .header-controls {
+  gap: 6px;
+  padding: 0 8px;
+  border-left: 1px solid var(--studio-line);
+  border-right: 1px solid var(--studio-line);
+}
+
+.app-shell-studio .connection-chip,
+.app-shell-hall .connection-chip,
+.app-shell-settings .connection-chip {
+  min-height: 34px;
+  padding: 0 11px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
+
+.app-shell-studio .live-dot,
+.app-shell-hall .live-dot,
+.app-shell-settings .live-dot {
+  width: 7px;
+  height: 7px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 13%, transparent);
+}
+
+.app-shell-studio .studio-view-switch,
+.app-shell-hall .studio-view-switch,
+.app-shell-settings .studio-view-switch,
+.app-shell-studio .theme-toggle-btn,
+.app-shell-hall .theme-toggle-btn,
+.app-shell-settings .theme-toggle-btn {
+  min-height: 34px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+}
+
+.app-shell-studio .studio-view-switch,
+.app-shell-hall .studio-view-switch,
+.app-shell-settings .studio-view-switch {
+  padding: 2px;
+}
+
+.app-shell-studio .studio-view-switch .studio-mode-tab,
+.app-shell-hall .studio-view-switch .studio-mode-tab,
+.app-shell-settings .studio-view-switch .studio-mode-tab {
+  padding: 7px 11px;
+  border-radius: 7px;
+  font-size: 11px;
+}
+
+.app-shell-studio .studio-view-switch .studio-mode-tab.active,
+.app-shell-hall .studio-view-switch .studio-mode-tab.active,
+.app-shell-settings .studio-view-switch .studio-mode-tab.active {
+  background: var(--bg-soft);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--studio-line);
+}
+
+.app-shell-studio .theme-toggle-btn,
+.app-shell-hall .theme-toggle-btn,
+.app-shell-settings .theme-toggle-btn {
+  padding: 0 9px;
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.app-shell-studio .nav-pills,
+.app-shell-hall .nav-pills,
+.app-shell-settings .nav-pills {
+  gap: 2px;
+  padding: 3px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--bg-soft-2);
+  box-shadow: inset 0 0 0 1px var(--studio-line-soft);
+}
+
+.app-shell-studio .nav-pill,
+.app-shell-hall .nav-pill,
+.app-shell-settings .nav-pill {
+  padding: 8px 13px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 660;
+}
+
+.app-shell-studio .nav-pill.active,
+.app-shell-hall .nav-pill.active,
+.app-shell-settings .nav-pill.active,
+html[data-theme="dark"] .app-shell-studio .nav-pill.active,
+html[data-theme="dark"] .app-shell-hall .nav-pill.active,
+html[data-theme="dark"] .app-shell-settings .nav-pill.active,
+html[data-theme="light"] .app-shell-studio .nav-pill.active,
+html[data-theme="light"] .app-shell-hall .nav-pill.active,
+html[data-theme="light"] .app-shell-settings .nav-pill.active {
+  background: var(--studio-panel-strong);
+  color: var(--text);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.14), inset 0 0 0 1px var(--studio-line);
+}
+
+/* Console: a compact command deck beside a spacious output canvas. */
+.app-shell-studio .studio-console-layout {
+  grid-template-columns: minmax(350px, 410px) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
+.app-shell-studio .studio-workbench > .panel {
+  border: 1px solid var(--studio-line);
+  border-radius: 20px;
+  background: var(--studio-panel);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2);
+}
+
+.app-shell-studio .studio-workbench > .panel::before {
+  background: linear-gradient(90deg, transparent 5%, rgba(255, 255, 255, 0.14), transparent 95%);
+}
+
+.app-shell-studio .studio-composer-panel {
+  padding: 18px;
+}
+
+.app-shell-studio .studio-console-head {
+  margin-bottom: 18px;
+}
+
+.app-shell-studio .panel-kicker {
+  color: var(--studio-accent-hot);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.app-shell-studio .studio-wall-title {
+  margin-top: 5px;
+  color: var(--text);
+  font-size: clamp(19px, 1.6vw, 25px);
+  font-weight: 690;
+  letter-spacing: -0.035em;
+}
+
+.app-shell-studio .studio-composer-panel > .field {
+  margin: 0;
+}
+
+.app-shell-studio .prompt-label-row-actions-only {
+  margin-bottom: 9px;
+}
+
+.app-shell-studio .prompt-label-row-actions-only .prompt-optimize-actions {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.app-shell-studio .prompt-mode-segmented {
+  margin-right: 3px;
+  padding-right: 8px;
+  border-right: 1px solid var(--studio-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+.app-shell-studio .prompt-optimize-actions .chip,
+.app-shell-studio .prompt-optimize-actions .hall-chip {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.app-shell-studio .prompt-optimize-actions .chip:hover,
+.app-shell-studio .prompt-optimize-actions .hall-chip:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.app-shell-studio .prompt-optimize-actions .chip.active,
+.app-shell-studio .prompt-optimize-btn {
+  background: var(--bg-soft);
+  color: var(--text);
+  border-color: var(--studio-line);
+}
+
+.app-shell-studio .prompt-history-count {
+  background: transparent;
+  color: var(--text-tertiary);
+}
+
+.app-shell-studio .studio-composer-panel .textarea {
+  min-height: 150px;
+  padding: 15px 16px;
+  border: 1px solid var(--studio-line);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--studio-ink) 48%, transparent);
+  box-shadow: inset 0 1px 12px rgba(0, 0, 0, 0.13);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.65;
+  resize: vertical;
+}
+
+html[data-theme="light"] .app-shell-studio .studio-composer-panel .textarea {
+  background: rgba(245, 247, 251, 0.88);
+  box-shadow: inset 0 1px 4px rgba(15, 23, 42, 0.04);
+}
+
+.app-shell-studio .studio-composer-panel .textarea:focus {
+  border-color: color-mix(in srgb, var(--studio-accent) 56%, transparent);
+  outline: 3px solid color-mix(in srgb, var(--studio-accent) 12%, transparent);
+}
+
+.app-shell-studio .composer-stats {
+  gap: 4px;
+  margin-top: 10px;
+}
+
+.app-shell-studio .composer-stats .stat-pill {
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.app-shell-studio .composer-stats .stat-pill strong {
+  color: var(--text-secondary);
+}
+
+.app-shell-studio .studio-options {
+  margin-top: 13px;
+}
+
+.app-shell-studio .option-block-studio {
+  gap: 13px;
+  padding: 13px;
+  border: 1px solid var(--studio-line-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--studio-panel-strong) 42%, transparent);
+}
+
+.app-shell-studio .studio-primary-actions {
+  flex-wrap: nowrap;
+}
+
+.app-shell-studio .studio-toolbar-actions {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+}
+
+.app-shell-studio .studio-toolbar .btn {
+  min-height: 38px;
+  height: 38px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.app-shell-studio .studio-toolbar-actions .btn-primary {
+  flex: 1 1 auto;
+  background: linear-gradient(135deg, var(--studio-accent) 0%, #6572eb 60%, #526ad9 100%);
+  box-shadow: 0 10px 30px color-mix(in srgb, var(--studio-accent) 24%, transparent);
+}
+
+.app-shell-studio .studio-toolbar-actions .btn-secondary {
+  flex: 0 0 auto;
+  border-color: var(--studio-line);
+  background: transparent;
+}
+
+.app-shell-studio .studio-toolbar-switches {
+  gap: 5px;
+  flex-wrap: nowrap;
+}
+
+.app-shell-studio .studio-generation-switch,
+.app-shell-studio .studio-advanced-switch {
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--studio-line);
+  border-radius: 9px;
+  background: transparent;
+}
+
+.app-shell-studio .studio-mode-btn {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 7px;
+}
+
+.app-shell-studio .studio-mode-btn[aria-pressed="true"] {
+  background: var(--bg-soft);
+  color: var(--studio-accent-hot);
+  box-shadow: none;
+}
+
+.app-shell-studio .studio-params-grid {
+  gap: 11px;
+}
+
+.app-shell-studio .studio-params-divider {
+  background: var(--studio-line-soft);
+}
+
+.app-shell-studio .studio-params-row {
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+.app-shell-studio .studio-params-row > .field {
+  gap: 5px;
+  grid-template-rows: 16px auto;
+}
+
+.app-shell-studio .studio-params-row > .field > label {
+  height: 16px;
+  color: var(--text-tertiary);
+  font-size: 9px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  line-height: 16px;
+  text-transform: uppercase;
+}
+
+.app-shell-studio .studio-params-row .segmented {
+  gap: 4px;
+  min-height: 30px;
+}
+
+.app-shell-studio .studio-params-row .chip {
+  min-width: 30px;
+  min-height: 30px;
+  height: 30px;
+  padding: 0 8px;
+  border-color: transparent;
+  border-radius: 7px;
+  background: var(--bg-soft-2);
+  font-size: 10.5px;
+}
+
+.app-shell-studio .studio-params-row .chip.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 16%, transparent);
+  color: var(--studio-accent-hot);
+}
+
+.app-shell-studio .studio-params-vsep {
+  min-height: 48px;
+  background: var(--studio-line-soft);
+}
+
+.app-shell-studio .reference-picker-preview,
+.app-shell-studio .reference-picker-drop {
+  border-radius: 11px;
+  border-color: var(--studio-line);
+  background: var(--bg-soft-2);
+}
+
+/* Canvas: toolbar floats above a neutral gallery surface. */
+.app-shell-studio .studio-canvas {
+  min-height: 700px;
+  padding: 18px;
+  overflow: hidden;
+  background:
+    radial-gradient(500px 280px at 70% 0%, var(--studio-glow), transparent 72%),
+    var(--studio-panel);
+}
+
+.app-shell-studio .studio-canvas > .results-toolbar,
+.app-shell-studio .studio-chat-header > .results-toolbar {
+  align-items: center;
+  min-height: 44px;
+  margin-bottom: 14px;
+}
+
+.app-shell-studio .studio-canvas .results-toolbar-actions {
+  gap: 5px;
+}
+
+.app-shell-studio .studio-canvas .gallery-filter-chip,
+.app-shell-studio .studio-canvas .results-toolbar-actions .studio-stat-chip,
+.app-shell-studio .studio-canvas .results-toolbar-actions .studio-queue-chip {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border-color: var(--studio-line-soft);
+  border-radius: 7px;
+  background: var(--bg-soft-2);
+  font-size: 10px;
+}
+
+.app-shell-studio .studio-canvas .results-toolbar-actions .studio-wall-stat-chips {
+  gap: 4px;
+  margin-right: 5px;
+}
+
+.app-shell-studio .studio-stat-chip-count {
+  min-width: 1.25em;
+  height: 1.25em;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--studio-accent-hot);
+  font-size: 10px;
+}
+
+.app-shell-studio .studio-canvas .results-toolbar-actions .btn-danger {
+  min-height: 30px;
+  height: 30px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+
+.app-shell-studio .studio-canvas .results-toolbar-actions .btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+  color: var(--danger);
+}
+
+.app-shell-studio .studio-canvas .progress-track {
+  height: 3px;
+  margin: 0 0 10px;
+  border: 0;
+  background: var(--studio-line-soft);
+}
+
+.app-shell-studio .studio-canvas .progress-fill {
+  background: linear-gradient(90deg, var(--studio-accent), var(--studio-cyan));
+  box-shadow: 0 0 14px var(--studio-glow);
+}
+
+.app-shell-studio .studio-canvas .selection-bar {
+  min-height: 40px;
+  margin-bottom: 12px;
+  padding: 7px 9px;
+  border: 1px solid var(--studio-line-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--studio-panel-strong) 38%, transparent);
+  box-shadow: none;
+}
+
+.app-shell-studio .studio-canvas .selection-bar .btn {
+  min-height: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 10px;
+}
+
+.app-shell-studio .studio-canvas .gallery {
+  grid-template-columns: repeat(auto-fill, minmax(min(210px, 100%), 1fr));
+  gap: 10px;
+}
+
+.app-shell-studio .studio-canvas .card {
+  min-height: 0;
+  border: 1px solid var(--studio-line-soft);
+  border-radius: 13px;
+  background: var(--studio-panel-strong);
+  box-shadow: none;
+  transform: translateZ(0);
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.app-shell-studio .studio-canvas .card:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 38%, transparent);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.24);
+  transform: translateY(-2px);
+}
+
+.app-shell-studio .studio-canvas .card.selected {
+  outline: none;
+  border-color: var(--studio-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--studio-accent) 14%, transparent);
+}
+
+.app-shell-studio .studio-canvas .card img {
+  transition: transform 0.3s ease;
+}
+
+.app-shell-studio .studio-canvas .card-body {
+  gap: 6px;
+  padding: 9px 10px 11px;
+}
+
+.app-shell-studio .studio-canvas .card-meta {
+  font-size: 11px;
+  line-height: 1.42;
+}
+
+.app-shell-studio .studio-canvas .card-specs {
+  gap: 4px;
+}
+
+.app-shell-studio .studio-canvas .card-spec {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--bg-soft-2);
+  font-size: 9px;
+}
+
+.app-shell-studio .studio-canvas .badge {
+  top: 9px;
+  left: 9px;
+  padding: 4px 7px;
+  border-radius: 6px;
+  font-size: 9px;
+}
+
+.app-shell-studio .studio-canvas .card-check {
+  top: 9px;
+  right: 9px;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.app-shell-studio .studio-canvas .gallery-empty {
+  min-height: 500px;
+  border: 1px dashed var(--studio-line);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at center, var(--studio-glow), transparent 40%),
+    repeating-linear-gradient(0deg, transparent 0 39px, var(--studio-line-soft) 40px),
+    repeating-linear-gradient(90deg, transparent 0 39px, var(--studio-line-soft) 40px);
+}
+
+.app-shell-studio .studio-canvas .gallery-empty .empty-icon {
+  width: 58px;
+  height: 58px;
+  border-color: color-mix(in srgb, var(--studio-accent) 22%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 8%, transparent);
+}
+
+.app-shell-studio .studio-canvas .empty-title {
+  font-size: 15px;
+}
+
+.app-shell-studio .studio-canvas .empty-text {
+  max-width: 38ch;
+  color: var(--text-tertiary);
+}
+
+/* Chat shares the same workstation language without changing its flow. */
+.app-shell-studio .studio-chat-layout {
+  height: calc(100dvh - 100px);
+  max-height: calc(100dvh - 100px);
+}
+
+.app-shell-studio .studio-chat-card {
+  padding: 16px 18px;
+}
+
+.app-shell-studio .studio-chat-stream {
+  padding: 14px 8px 18px;
+}
+
+.app-shell-studio .studio-chat-user {
+  border-radius: 12px 12px 3px 12px;
+  background: linear-gradient(135deg, var(--studio-accent), #5b6ee1);
+  box-shadow: 0 8px 24px var(--studio-glow);
+}
+
+.app-shell-studio .studio-chat-composer {
+  padding: 12px;
+  border: 1px solid var(--studio-line);
+  border-radius: 14px;
+  background: var(--studio-panel-strong);
+}
+
+.app-shell-studio .studio-chat-composer .textarea {
+  border-color: var(--studio-line-soft);
+  border-radius: 10px;
+  background: var(--bg-soft-2);
+}
+
+@media (max-width: 1180px) {
+  .app-shell-studio .studio-console-layout {
+    grid-template-columns: minmax(330px, 380px) minmax(0, 1fr);
+  }
+
+  .app-shell-studio .app-header {
+    align-items: flex-start;
+  }
+
+  .app-shell-studio .header-right {
+    row-gap: 6px;
+  }
+
+  .app-shell-studio .header-status {
+    display: none;
+  }
+}
+
+@media (max-width: 940px) {
+  .app-shell-studio {
+    padding-top: calc(8px + var(--safe-top));
+  }
+
+  .app-shell-studio .studio-console-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell-studio .studio-composer-panel,
+  .app-shell-studio .studio-canvas {
+    min-height: 0;
+  }
+
+  .app-shell-studio .studio-composer-panel .textarea {
+    min-height: 120px;
+  }
+
+  .app-shell-studio .studio-canvas .gallery-empty {
+    min-height: 340px;
+  }
+
+  .app-shell-studio .studio-chat-layout {
+    height: auto;
+    max-height: none;
+    min-height: calc(100dvh - 120px);
+  }
+
+  .app-shell-studio .studio-chat-card {
+    min-height: calc(100dvh - 120px);
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell-studio .app-header {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 8px;
+  }
+
+  .app-shell-studio .brand,
+  .app-shell-studio .header-right,
+  .app-shell-studio .header-controls,
+  .app-shell-studio .nav-pills,
+  .app-shell-studio .studio-workbench,
+  .app-shell-studio .studio-workbench > *,
+  .app-shell-studio .studio-toolbar,
+  .app-shell-studio .studio-toolbar-actions,
+  .app-shell-studio .studio-toolbar-switches,
+  .app-shell-studio .studio-params-grid {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .app-shell-studio .header-right {
+    display: contents;
+  }
+
+  .app-shell-studio .header-controls {
+    justify-self: end;
+    flex-wrap: wrap;
+    padding: 0;
+    border: 0;
+  }
+
+  .app-shell-studio .nav-pills {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .app-shell-studio .nav-pill {
+    flex: 1 1 0;
+    padding-inline: 8px;
+  }
+
+  .app-shell-studio .studio-canvas .results-toolbar {
+    align-items: flex-start;
+  }
+
+  .app-shell-studio .studio-canvas .results-toolbar-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .app-shell-studio .studio-canvas .results-toolbar-actions .studio-wall-stat-chips {
+    margin-right: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell-studio {
+    --page-inline: 8px;
+    gap: 8px;
+    padding-bottom: calc(10px + var(--safe-bottom));
+  }
+
+  .app-shell-studio .app-header,
+  .app-shell-studio .studio-workbench > .panel {
+    border-radius: 14px;
+  }
+
+  .app-shell-studio .brand-text {
+    display: none;
+  }
+
+  .app-shell-studio .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .app-shell-studio .theme-toggle-btn span {
+    display: none;
+  }
+
+  .app-shell-studio .studio-view-switch .studio-mode-tab {
+    padding-inline: 8px;
+  }
+
+  .app-shell-studio .studio-composer-panel,
+  .app-shell-studio .studio-canvas,
+  .app-shell-studio .studio-chat-card {
+    padding: 13px;
+  }
+
+  .app-shell-studio .studio-primary-actions,
+  .app-shell-studio .studio-toolbar-actions {
+    flex-wrap: wrap;
+  }
+
+  .app-shell-studio .studio-toolbar-switches {
+    width: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+
+  .app-shell-studio .studio-params-row > .field {
+    flex: 0 1 auto;
+    width: auto;
+  }
+
+  .app-shell-studio .studio-params-row .segmented {
+    width: auto;
+  }
+
+  .app-shell-studio .studio-params-row-aspect > .field,
+  .app-shell-studio .studio-params-row-aspect .segmented {
+    width: 100%;
+  }
+
+  .app-shell-studio .studio-params-row .chip {
+    min-width: 29px;
+    height: 29px;
+    min-height: 29px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .app-shell-studio .studio-canvas .gallery {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .app-shell-studio .studio-canvas .card-overlay {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    gap: 6px;
+    padding: 8px;
+    opacity: 1;
+    background: var(--bg-soft-2);
+    border-top: 1px solid var(--studio-line-soft);
+  }
+
+  .app-shell-studio .studio-canvas .card-overlay a,
+  .app-shell-studio .studio-canvas .card-overlay .card-overlay-action {
+    flex: 1 1 auto;
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .app-shell-studio .studio-canvas .card-overlay .btn {
+    min-height: 32px;
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .app-shell-studio .studio-canvas .card-body {
+    padding: 7px 8px 9px;
+  }
+
+  .app-shell-studio .studio-canvas .selection-bar {
+    align-items: flex-start;
+  }
+
+  .app-shell-studio .studio-canvas .gallery-empty {
+    min-height: 280px;
+  }
+}
+
+@media (hover: none), (pointer: coarse) {
+  .app-shell-studio .studio-canvas .card-overlay {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+/* ============================================================
+   大厅 (Hall) — 作品优先的展示墙
+   复用创作台的 studio-* token，与创作台读作同一个产品。
+   ============================================================ */
+
+.app-shell-hall .page,
+.app-shell-settings .page {
+  max-width: 1240px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* 带 html[data-theme] 前缀是为了压过 :81 的 `html[data-theme] .panel`——
+   那条特异性 0-1-1-1，不加前缀的 `.app-shell-settings .panel`(0-0-2-0) 打不过它，
+   背景会被 var(--bg-elevated) 吃掉。 */
+html[data-theme] .app-shell-hall .panel,
+html[data-theme] .app-shell-settings .panel {
+  border: 1px solid var(--studio-line);
+  border-radius: 20px;
+  background: var(--studio-panel);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2);
+}
+
+.app-shell-hall .panel::before,
+.app-shell-settings .panel::before {
+  background: linear-gradient(90deg, transparent 5%, rgba(255, 255, 255, 0.14), transparent 95%);
+}
+
+.app-shell-hall .panel-kicker,
+.app-shell-settings .panel-kicker {
+  color: var(--studio-accent-hot);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.app-shell-hall .panel-title,
+.app-shell-settings .panel-title {
+  font-size: 19px;
+  font-weight: 750;
+  letter-spacing: -0.015em;
+}
+
+.app-shell-hall .panel-desc,
+.app-shell-settings .panel-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.app-shell-hall .hall-head {
+  padding-bottom: 14px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--studio-line-soft);
+}
+
+.app-shell-hall .hall-search .control {
+  border-radius: 11px;
+  border: 1px solid var(--studio-line);
+  background: var(--bg-soft-2);
+}
+
+.app-shell-hall .hall-search .control:focus {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--studio-glow);
+  outline: none;
+}
+
+/* 作品墙：更密的网格，让内容而非留白主导 */
+.app-shell-hall .hall-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.app-shell-hall .hall-card {
+  border: 1px solid var(--studio-line-soft);
+  border-radius: 14px;
+  background: var(--studio-panel-strong);
+  box-shadow: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.app-shell-hall .hall-card:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 38%, transparent);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+  transform: translateY(-2px);
+}
+
+.app-shell-hall .hall-card-body {
+  padding: 11px 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.app-shell-hall .hall-meta {
+  font-size: 10.5px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.01em;
+}
+
+.app-shell-hall .hall-meta strong {
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.app-shell-hall .hall-prompt {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.app-shell-hall .hall-chip {
+  border-radius: 8px;
+  border: 1px solid var(--studio-line-soft);
+  background: var(--bg-soft-2);
+  font-size: 11px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.app-shell-hall .hall-chip:hover {
+  border-color: color-mix(in srgb, var(--studio-accent) 34%, transparent);
+}
+
+.app-shell-hall .hall-chip.active {
+  border-color: color-mix(in srgb, var(--studio-accent) 46%, transparent);
+  background: color-mix(in srgb, var(--studio-accent) 15%, transparent);
+  color: var(--studio-accent-hot);
+}
+
+.app-shell-hall .hall-drawer {
+  border: 1px solid var(--studio-line);
+  border-radius: 20px;
+  background: var(--studio-panel-strong);
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.42);
+}
+
+.app-shell-hall .hall-composer-input {
+  border-radius: 11px;
+  border: 1px solid var(--studio-line);
+  background: var(--bg-soft-2);
+}
+
+/* 大厅 / 管理：把 ios26 胶囊按钮收敛成 Graphite 小方角风格 */
+.app-shell-hall .btn,
+.app-shell-settings .btn {
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.app-shell-hall .btn-sm,
+.app-shell-settings .btn-sm {
+  min-height: 30px;
+  padding: 0 11px;
+  font-size: 11px;
+}
+
+.app-shell-hall .btn-primary,
+.app-shell-settings .btn-primary {
+  background: linear-gradient(135deg, var(--studio-accent) 0%, #6572eb 60%, #526ad9 100%);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--studio-accent) 28%, transparent);
+  color: #fff;
+  border: none;
+}
+
+.app-shell-hall .btn-primary:hover:not(:disabled),
+.app-shell-settings .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--studio-accent) 36%, transparent);
+  transform: translateY(-1px);
+}
+
+.app-shell-hall .btn-secondary,
+.app-shell-settings .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--studio-line);
+  color: var(--text-secondary);
+}
+
+.app-shell-hall .btn-secondary:hover:not(:disabled),
+.app-shell-settings .btn-secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--studio-accent) 40%, transparent);
+  color: var(--text);
+}
+
+.app-shell-hall .btn-ghost,
+.app-shell-settings .btn-ghost {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding-inline: 8px;
+}
+
+.app-shell-hall .btn-ghost:hover,
+.app-shell-settings .btn-ghost:hover {
+  color: var(--studio-accent-hot);
+}
+
+.app-shell-hall .btn-danger,
+.app-shell-settings .btn-danger {
+  background: rgba(255, 69, 58, 0.12);
+  border: 1px solid rgba(255, 69, 58, 0.22);
+  color: var(--danger, #ff453a);
+}
+
+/* ============================================================
+   管理 (Settings) — 密集但分组清晰的配置台
+   ============================================================ */
+
+/* 同上：必须压过 :81 的 html[data-theme] .panel，.admin-hero 也带 .panel class */
+html[data-theme] .app-shell-settings .admin-hero {
+  border: 1px solid var(--studio-line);
+  border-radius: 20px;
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--studio-accent) 9%, transparent), transparent 58%),
+    var(--studio-panel-strong);
+}
+
+.app-shell-settings .admin-section {
+  border: 1px solid var(--studio-line-soft);
+  border-radius: 14px;
+  background: var(--bg-soft-2);
+}
+
+.app-shell-settings .admin-section-title,
+.app-shell-settings .section-card-title {
+  font-size: 12px;
+  font-weight: 750;
+  letter-spacing: 0.01em;
+  color: var(--text);
+}
+
+.app-shell-settings .admin-block-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--studio-accent-hot);
+}
+
+.app-shell-settings .field .control,
+.app-shell-settings .admin-form-panel .control {
+  border-radius: 10px;
+  border: 1px solid var(--studio-line);
+  background: var(--studio-ink);
+  font-size: 12px;
+}
+
+.app-shell-settings .field .control:focus,
+.app-shell-settings .admin-form-panel .control:focus {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--studio-glow);
+  outline: none;
+}
+
+.app-shell-settings .label-row {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.app-shell-settings .segmented {
+  border-radius: 9px;
+  border: 1px solid var(--studio-line);
+  background: var(--bg-soft-2);
+  padding: 2px;
+}
+
+.app-shell-settings .mono,
+.app-shell-settings .mono-tight {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+/* 大厅 / 管理的移动端收敛，与创作台同断点 */
+@media (max-width: 720px) {
+  .app-shell-hall .hall-grid {
+    grid-template-columns: repeat(auto-fill, minmax(min(160px, 100%), 1fr));
+    gap: 10px;
+  }
+
+  .app-shell-hall .hall-head {
+    padding-bottom: 11px;
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell-hall .hall-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-shell-hall .hall-card-body,
+  .app-shell-settings .admin-section {
+    padding: 10px;
+  }
+
+  .app-shell-hall .panel-title,
+  .app-shell-settings .panel-title {
+    font-size: 17px;
+  }
+}
+
+/* ============================================================
+   提示词模板弹窗 — createPortal 挂到 body，脱离 app-shell 上下文，
+   必须在此独立注入 Graphite token 并覆写各元素。
+   ============================================================ */
+
+/* 在 .tpl-dialog 根上注入暗色 token，dark 主题用 :where([data-theme="dark"]) 提权 */
+html[data-theme="dark"] .tpl-dialog,
+html[data-theme="dark"] .studio-lightbox-backdrop:has(.tpl-dialog) {
+  --t-accent:      #7c86ff;
+  --t-accent-hot:  #a5a9ff;
+  --t-line:        rgba(255, 255, 255, 0.09);
+  --t-line-soft:   rgba(255, 255, 255, 0.055);
+  --t-glow:        rgba(91, 109, 255, 0.2);
+  --t-panel:       #151922;
+}
+
+html[data-theme="light"] .tpl-dialog,
+html[data-theme="light"] .studio-lightbox-backdrop:has(.tpl-dialog) {
+  --t-accent:      #515fd7;
+  --t-accent-hot:  #303fae;
+  --t-line:        rgba(15, 23, 42, 0.11);
+  --t-line-soft:   rgba(15, 23, 42, 0.065);
+  --t-glow:        rgba(76, 92, 225, 0.12);
+  --t-panel:       #ffffff;
+}
+
+/* 面板本体 */
+.tpl-dialog {
+  border: 1px solid var(--t-line, rgba(255,255,255,0.09));
+  border-radius: 20px;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, 0.48);
+}
+
+/* 按钮：999px 胶囊 → 9px 方角 */
+.tpl-dialog .btn {
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 700;
+  min-height: 32px;
+  padding: 0 13px;
+}
+
+.tpl-dialog .btn-sm {
+  min-height: 28px;
+  padding: 0 10px;
+  font-size: 11px;
+}
+
+.tpl-dialog .btn-primary {
+  background: linear-gradient(135deg, var(--t-accent, #7c86ff) 0%, #6572eb 60%, #526ad9 100%);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--t-accent, #7c86ff) 28%, transparent);
+  color: #fff;
+  border: none;
+}
+
+.tpl-dialog .btn-primary:hover:not(:disabled) {
+  box-shadow: 0 10px 28px color-mix(in srgb, var(--t-accent, #7c86ff) 38%, transparent);
+  transform: translateY(-1px);
+}
+
+.tpl-dialog .btn-secondary {
+  background: transparent;
+  border: 1px solid var(--t-line, rgba(255,255,255,0.09));
+  color: var(--text-secondary);
+}
+
+.tpl-dialog .btn-secondary:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 40%, transparent);
+  color: var(--text);
+}
+
+/* 分类侧栏 active 态：从 ios26 蓝色 → Graphite 紫蓝 */
+.tpl-dialog .tpl-cat.active {
+  background: color-mix(in srgb, var(--t-accent, #7c86ff) 14%, transparent);
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 30%, transparent);
+  color: var(--t-accent-hot, #a5a9ff);
+}
+
+.tpl-dialog .tpl-cat:hover {
+  color: var(--text);
+}
+
+/* 词库按钮 active 态 */
+.tpl-dialog .tpl-chip-on {
+  color: var(--t-accent-hot, #a5a9ff);
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 30%, transparent);
+  background: color-mix(in srgb, var(--t-accent, #7c86ff) 14%, transparent);
+}
+
+/* 条目 chip active 态 */
+.tpl-dialog .chip.active {
+  background: color-mix(in srgb, var(--t-accent, #7c86ff) 15%, transparent);
+  color: var(--t-accent-hot, #a5a9ff);
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 35%, transparent);
+}
+
+/* 清除链接 */
+.tpl-dialog .tpl-link {
+  color: var(--t-accent, #7c86ff);
+}
+
+/* 关闭按钮：圆形改为方角，风格收敛 */
+.tpl-dialog .studio-lightbox-close {
+  border-radius: 8px;
+  border-color: var(--t-line, rgba(255,255,255,0.09));
+  font-size: 18px;
+}
+
+/* 内部面板区：圆角与边框对齐创作台的 14px / studio-line-soft */
+.tpl-dialog .tpl-manage,
+.tpl-dialog .tpl-cats,
+.tpl-dialog .tpl-preview,
+.tpl-dialog .tpl-empty {
+  border-radius: 14px;
+  border-color: var(--t-line-soft, rgba(255,255,255,0.055));
+}
+
+/* 输入框：focus 环从 ios26 蓝改为 Graphite glow */
+.tpl-dialog .textarea,
+.tpl-dialog .control {
+  border-radius: 11px;
+  border: 1px solid var(--t-line, rgba(255,255,255,0.09));
+}
+
+.tpl-dialog .textarea:focus,
+.tpl-dialog .control:focus {
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--t-glow, rgba(91,109,255,0.2));
+  outline: none;
+}
+
+/* hall-chip 在弹窗里复用：对齐大厅的 8px 方角 */
+.tpl-dialog .hall-chip {
+  border-radius: 8px;
+  border: 1px solid var(--t-line-soft, rgba(255,255,255,0.055));
+  font-size: 11px;
+}
+
+.tpl-dialog .hall-chip:hover {
+  border-color: color-mix(in srgb, var(--t-accent, #7c86ff) 34%, transparent);
+}
+
+/* 模型下拉 / 提示词历史也是 portal 到 body：补选中态高亮，
+   ios26 只定义了 hover，aria-selected 当前项看不出来。 */
+.prompt-history-item[aria-selected="true"] {
+  background: color-mix(in srgb, #7c86ff 15%, transparent);
+  color: #a5a9ff;
+}
+
+html[data-theme="light"] .prompt-history-item[aria-selected="true"] {
+  background: color-mix(in srgb, #515fd7 12%, transparent);
+  color: #303fae;
+}
+
+/* ============================================================
+   大厅 / 管理的剩余部件收敛 — ios26 遗留的大圆角与胶囊
+   ============================================================ */
+
+/* 大厅：卡片上的「详情 / 展开」浮层按钮，999px → 8px */
+.app-shell-hall .hall-media-open:not(.hall-media-open-full) {
+  border-radius: 8px;
+  font-size: 10.5px;
+  padding: 3px 9px;
+}
+
+/* 大厅：抽屉内的评论列表与输入区，18px → 14px */
+.app-shell-hall .hall-composer,
+.app-shell-hall .hall-comment-list {
+  border-radius: 14px;
+  border-color: var(--studio-line-soft);
+}
+
+/* 大厅 / 管理：空态卡片 20px → 14px，虚线边框跟随 studio-line */
+.app-shell-hall .empty,
+.app-shell-settings .empty {
+  border-radius: 14px;
+  border-color: var(--studio-line);
+}
+
+/* 管理：状态卡与日志条目 18px → 12px */
+.app-shell-settings .admin-status-card,
+.app-shell-settings .log-item {
+  border-radius: 12px;
+  border-color: var(--studio-line-soft);
+}
+
+/* 管理：分区切换按钮 14px → 9px，active 态换 Graphite 紫蓝 */
+.app-shell-settings .admin-section-switch-btn {
+  border-radius: 9px;
+  font-size: 12px;
+}
+
+.app-shell-settings .admin-section-switch-btn.active {
+  background: color-mix(in srgb, var(--studio-accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--studio-accent) 35%, transparent);
+  color: var(--studio-accent-hot);
+}
+
+/* 管理：版本区图标钮 999px → 8px */
+.app-shell-settings .build-version-icon {
+  border-radius: 8px;
+  border-color: var(--studio-line);
+}
+
+/* 管理：用户池行、冷却卡 16px → 12px */
+.app-shell-settings .user-row,
+.app-shell-settings .user-cooldown-card {
+  border-radius: 12px;
+  border-color: var(--studio-line-soft);
+  background: var(--bg-soft-2);
+}
+
+.app-shell-settings .user-policy-switch-row {
+  border-radius: 12px;
+  border-color: var(--studio-line-soft);
+}
+
+/* 管理：用户徽章与角色切换器保留胶囊会跟方角面板冲突，收成小方角 */
+.app-shell-settings .user-badge {
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.app-shell-settings .user-role-segmented,
+.app-shell-settings .admin-task-concurrency {
+  border-radius: 9px;
+}
+
+/* 管理：任务缩略图 12px → 10px，与行圆角成层次 */
+.app-shell-settings .admin-task-thumb,
+.app-shell-settings .admin-task-thumb-empty {
+  border-radius: 10px;
+}
+
+/* 大厅 / 管理：input / textarea 的 focus 边框仍是 ios26 蓝，
+   .control 已在上方覆写过，这里补 textarea 与大厅的 input。 */
+.app-shell-hall .control,
+.app-shell-hall .textarea,
+.app-shell-settings .textarea {
+  border-radius: 11px;
+  border: 1px solid var(--studio-line);
+}
+
+.app-shell-hall .control:focus,
+.app-shell-hall .textarea:focus,
+.app-shell-settings .textarea:focus {
+  border-color: color-mix(in srgb, var(--studio-accent) 55%, transparent);
+  box-shadow: 0 0 0 3px var(--studio-glow);
+  outline: none;
+}
+
+/* 大图预览（创作台与大厅共用 .studio-lightbox-*，都在 shell 内非 portal）：
+   关闭钮与左右导航钮统一收成方角，跟弹窗保持同一套语言。 */
+.app-shell-studio .studio-lightbox-close,
+.app-shell-studio .studio-lightbox-nav,
+.app-shell-hall .studio-lightbox-close,
+.app-shell-hall .studio-lightbox-nav {
+  border-radius: 10px;
+  border-color: var(--studio-line);
+}
+
+.app-shell-studio .studio-lightbox,
+.app-shell-hall .studio-lightbox {
+  border-radius: 18px;
+  border: 1px solid var(--studio-line);
+}
+
+/* 大厅详情抽屉的顶部关闭区已用 .btn-ghost，这里只收边框线色 */
+.app-shell-hall .hall-drawer-top {
+  border-bottom-color: var(--studio-line-soft);
+}

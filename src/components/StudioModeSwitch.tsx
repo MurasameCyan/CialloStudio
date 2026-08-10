@@ -7,7 +7,7 @@ type Props = {
 
 export function StudioModeSwitch({ mode, onChange }: Props) {
   return (
-    <div className="studio-mode-switch" role="tablist" aria-label="创作工作台模式">
+    <div className="studio-mode-switch studio-view-switch" role="tablist" aria-label="创作工作台模式">
       <button
         type="button"
         role="tab"

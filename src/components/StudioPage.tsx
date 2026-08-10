@@ -437,7 +437,7 @@ export function StudioPage({
   /** 只有一种模式可用时不显示切换器（没什么可切） */
   const genModeSwitch =
     availableGenModes.length > 1 ? (
-      <div className="studio-mode-switch" role="group" aria-label="生成模式">
+      <div className="studio-mode-switch studio-generation-switch" role="group" aria-label="生成模式">
         {availableGenModes.map(({ key, label, tip, Icon }) => (
           <button
             key={key}
@@ -464,7 +464,7 @@ export function StudioPage({
   const modelCap = useMemo(() => getImageModelCapability(activeImageModel), [activeImageModel]);
   /** 高级开关：与模式切换器同风格的图标按钮，并排在「开始生成 · 停止」右侧 */
   const advancedSwitch = (
-    <div className="studio-mode-switch" role="group" aria-label="高级">
+    <div className="studio-mode-switch studio-advanced-switch" role="group" aria-label="高级">
       <button
         type="button"
         className="studio-mode-btn"
@@ -1891,8 +1891,8 @@ export function StudioPage({
 
   if (mode === "chat") {
     return (
-      <div className="page studio-chat-layout">
-        <section className="panel studio-chat-card">
+      <div className="page studio-chat-layout studio-workbench">
+        <section className="panel studio-chat-card studio-canvas">
           <div className="studio-chat-header">
             <div className="results-toolbar">
               <div>
@@ -2135,13 +2135,20 @@ export function StudioPage({
           </div>
         </section>
         {previewLightbox}
+        <PromptTemplateDialog
+          open={templateOpen}
+          library={templateLibrary}
+          onLibraryChange={setTemplateLibrary}
+          onApply={handleApplyTemplate}
+          onClose={() => setTemplateOpen(false)}
+        />
       </div>
     );
   }
 
   return (
-    <div className="page studio-console-layout">
-      <section className="panel studio-console-controls studio-stage">
+    <div className="page studio-console-layout studio-workbench">
+      <section className="panel studio-console-controls studio-stage studio-composer-panel">
         <div className="results-toolbar studio-console-head">
           <div>
             <div className="panel-kicker">Console</div>
@@ -2278,7 +2285,7 @@ export function StudioPage({
         <div className="studio-options">
           {/* 操作 + 参数 + 参考图合并为一张卡片 */}
           <div className="option-block option-block-studio">
-            <div className="studio-toolbar">
+            <div className="studio-toolbar studio-primary-actions">
               <div className="btn-row studio-toolbar-actions">
                 <button
                   type="button"
@@ -2314,7 +2321,7 @@ export function StudioPage({
         </div>
       </section>
 
-      <section className="panel results-panel studio-wall studio-console-wall">
+      <section className="panel results-panel studio-wall studio-console-wall studio-canvas">
         <div className="results-toolbar">
           <div>
             <div className="panel-kicker">Results</div>

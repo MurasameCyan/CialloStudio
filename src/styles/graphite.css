@@ -1899,6 +1899,31 @@ html[data-theme="light"] .prompt-history-item[aria-selected="true"] {
   border-radius: 10px;
 }
 
+/* 翻页条：按钮有 min-height 而页码是裸文本，align-items:center 下
+   两者视觉重心不齐。给文本同高的行盒并收紧间距。 */
+.app-shell-settings .admin-task-pager {
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--studio-line-soft);
+  margin-top: 12px;
+}
+
+.app-shell-settings .admin-task-pager .footer-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 翻页按钮定宽，上一页/下一页不因字数差错位 */
+.app-shell-settings .admin-task-pager .btn {
+  min-width: 66px;
+}
+
 /* 大厅 / 管理：input / textarea 的 focus 边框仍是 ios26 蓝，
    .control 已在上方覆写过，这里补 textarea 与大厅的 input。 */
 .app-shell-hall .control,

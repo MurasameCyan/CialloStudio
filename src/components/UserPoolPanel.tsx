@@ -12,7 +12,11 @@ import {
   roleLabel,
 } from "@/lib/community/types";
 import { log } from "@/lib/logger";
+import { paginate } from "@/lib/pagination";
 import { getMasterUsername, isMasterConfigured } from "@/lib/runtimeConfig";
+
+/** 与后台任务页一致的每页条数。listUsers 一次拉全量，这里做客户端分页 */
+const PAGE_SIZE = 20;
 
 type Props = {
   /** 社区登录用户；管理员可管用户池，非管理员显示引导 */
@@ -40,6 +44,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
   const [usersError, setUsersError] = useState("");
   const [userQuery, setUserQuery] = useState("");
   const [filter, setFilter] = useState<"all" | "active" | "banned">("all");
+  const [page, setPage] = useState(0);
   const [banBusyId, setBanBusyId] = useState<string | null>(null);
   const [deleteBusyId, setDeleteBusyId] = useState<string | null>(null);
   const [roleBusyId, setRoleBusyId] = useState<string | null>(null);
@@ -104,6 +109,23 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
       );
     });
   }, [users, userQuery, filter]);
+
+  /** 删除用户或改筛选后当前页可能越界，paginate 内部先钳页码再切片 */
+  const {
+    page: safePage,
+    pageCount,
+    items: pagedUsers,
+  } = useMemo(() => paginate(filteredUsers, page, PAGE_SIZE), [filteredUsers, page]);
+
+  // 搜索 / 筛选变化后回到第一页，否则会停在一个空页上
+  useEffect(() => {
+    setPage(0);
+  }, [userQuery, filter]);
+
+  // 越界时同步真实页码，避免 UI 与 state 不一致
+  useEffect(() => {
+    if (page !== safePage) setPage(safePage);
+  }, [page, safePage]);
 
   const userStats = useMemo(() => {
     const total = users.length;
@@ -661,7 +683,7 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         <p className="footer-note">{users.length === 0 ? "暂无用户" : "没有匹配的用户"}</p>
       ) : (
         <div className="user-table" role="list">
-          {filteredUsers.map((u) => {
+          {pagedUsers.map((u) => {
             const isSelf = u.id === communityUser.id;
             const canManage = u.role !== "admin" && !isSelf;
             const rowBusy =
@@ -741,6 +763,31 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
           })}
         </div>
       )}
+
+      {/* 只有超过一页才显示翻页，条数少时不占版面 */}
+      {filteredUsers.length > PAGE_SIZE ? (
+        <div className="admin-task-pager">
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={safePage === 0 || usersLoading}
+            onClick={() => setPage((p) => Math.max(0, p - 1))}
+          >
+            上一页
+          </button>
+          <span className="footer-note">
+            第 {safePage + 1} / {pageCount} 页 · 共 {filteredUsers.length} 条
+          </span>
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={safePage >= pageCount - 1 || usersLoading}
+            onClick={() => setPage((p) => p + 1)}
+          >
+            下一页
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 }

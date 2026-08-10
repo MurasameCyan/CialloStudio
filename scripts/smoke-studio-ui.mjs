@@ -153,6 +153,39 @@ assert.ok(!mobile.columns.includes(" "), `390px 作品墙应为单列，实际 $
 assert.equal(mobile.overlayPosition, "static", "390px 卡片操作条应常驻而非绝对定位覆盖");
 assert.equal(mobile.overlayOpacity, "1", "390px 卡片操作条不应依赖 hover 才显示");
 
+// 「开始生成 · N」是单个字符串，· 前的空格在窄容器里会折成两行。
+// 量实际高度与行高的比值，比断言 white-space 更贴近用户看到的结果。
+const generateButton = await send("Runtime.evaluate", {
+  expression: `(() => {
+    const btn = [...document.querySelectorAll('.studio-toolbar-actions .btn')]
+      .find((node) => /^(开始生成|入队生成|入队)\\s·/.test(node.textContent.trim()));
+    if (!btn) return null;
+    const style = getComputedStyle(btn);
+    // 按钮有 min-height，不能用 clientHeight 反推行数。
+    // Range 量文本节点的实际渲染矩形，一行文字只会产生一个 rect。
+    const range = document.createRange();
+    range.selectNodeContents(btn);
+    return {
+      text: btn.textContent.trim(),
+      whiteSpace: style.whiteSpace,
+      lines: range.getClientRects().length,
+    };
+  })()`,
+  returnByValue: true,
+});
+const genBtn = generateButton.result.value;
+if (genBtn) {
+  assert.equal(
+    genBtn.whiteSpace,
+    "nowrap",
+    `390px「${genBtn.text}」按钮应禁止换行，实际 white-space: ${genBtn.whiteSpace}`,
+  );
+  assert.ok(
+    genBtn.lines <= 1,
+    `390px「${genBtn.text}」按钮应单行显示，实测占 ${genBtn.lines} 行`,
+  );
+}
+
 const templateButton = await send("Runtime.evaluate", {
   expression: `(() => {
     const button = [...document.querySelectorAll('button')].find((node) => node.textContent.trim() === '模板');

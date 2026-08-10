@@ -764,30 +764,28 @@ export function UserPoolPanel({ communityUser, communityLoading, onNeedLogin }: 
         </div>
       )}
 
-      {/* 只有超过一页才显示翻页，条数少时不占版面 */}
-      {filteredUsers.length > PAGE_SIZE ? (
-        <div className="admin-task-pager">
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={safePage === 0 || usersLoading}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >
-            上一页
-          </button>
-          <span className="footer-note">
-            第 {safePage + 1} / {pageCount} 页 · 共 {filteredUsers.length} 条
-          </span>
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            disabled={safePage >= pageCount - 1 || usersLoading}
-            onClick={() => setPage((p) => p + 1)}
-          >
-            下一页
-          </button>
-        </div>
-      ) : null}
+      {/* 与后台任务页一致：翻页条常驻，不足一页时按钮禁用但页码/条数仍可见 */}
+      <div className="admin-task-pager">
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={safePage === 0 || usersLoading}
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
+        >
+          上一页
+        </button>
+        <span className="footer-note">
+          第 {safePage + 1} / {pageCount} 页 · 共 {filteredUsers.length} 条
+        </span>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          disabled={safePage >= pageCount - 1 || usersLoading}
+          onClick={() => setPage((p) => p + 1)}
+        >
+          下一页
+        </button>
+      </div>
     </section>
   );
 }

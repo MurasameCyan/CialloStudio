@@ -12,6 +12,7 @@ import { normalizeResolutionForModel, resolveGenerationTarget } from "@/lib/imag
 import { log } from "@/lib/logger";
 import {
   getQueueStorageConfig,
+  isLoopbackUrl,
   rewriteMediaUrlToSiteBase,
 } from "@/lib/media/client";
 import { runPool } from "@/lib/runPool";
@@ -101,11 +102,15 @@ type QueueApi = {
   clear: () => void;
 };
 
-function resolveServerTaskImageUrl(raw?: string): string | undefined {
+export function resolveServerTaskImageUrl(raw?: string): string | undefined {
   if (typeof raw !== "string" || !raw.trim()) return undefined;
   const value = raw.trim();
   if (value.startsWith("data:") || value.startsWith("blob:")) return value;
-  // 服务端已按 storageMode 固化；若仍是 loopback，前端用 Site Base 再兜一次
+  // 服务端已按 storageMode 固化成可访问地址（Media 模式是 Worker 公网链），
+  // 这里只给「仍是 loopback」的地址兜底：浏览器打不开 127.0.0.1。
+  // 不能按 media 路径一律改写——那会把 Worker 链的域名换成 Site Base，
+  // TG file_id 被拿去问图片站必然 404。
+  if (!isLoopbackUrl(value)) return value;
   const rewritten = rewriteMediaUrlToSiteBase(value);
   return rewritten || value;
 }

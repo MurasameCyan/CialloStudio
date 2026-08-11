@@ -146,6 +146,20 @@ export function isMediaConfigured(): boolean {
 }
 
 /**
+ * 是否是浏览器打不开的内网回环地址。
+ * 用来区分「需要兜底改写」和「已经是公网可访问地址」。
+ */
+export function isLoopbackUrl(rawUrl: string): boolean {
+  const value = String(rawUrl || "").trim();
+  if (!value || value.startsWith("data:") || value.startsWith("blob:")) return false;
+  try {
+    return LOOPBACK_HOSTS.has(new URL(value, "http://placeholder.invalid").hostname);
+  } catch {
+    return /^(https?:)?\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|\[?::1\]?)(:\d+)?/i.test(value);
+  }
+}
+
+/**
  * 把上游内网媒体 URL 改写成 Site Base 公网地址。
  * 例：http://127.0.0.1:8000/v1/media/images/img_xxx
  *   → https://img.example.com/v1/media/images/img_xxx

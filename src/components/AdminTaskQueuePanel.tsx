@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { communityApi } from "@/lib/community/client";
 import type { CommunityUser } from "@/lib/community/types";
 import { DEFAULT_QUEUE_POLICY } from "@/lib/community/types";
-import { rewriteMediaUrlToSiteBase } from "@/lib/media/client";
+import { isLoopbackUrl, rewriteMediaUrlToSiteBase } from "@/lib/media/client";
 import { log } from "@/lib/logger";
 import {
   cancelServerTask,
@@ -58,6 +58,9 @@ function formatTime(ts?: number): string {
 
 function resolveImage(url?: string): string | undefined {
   if (!url) return undefined;
+  // 与 useStudioQueue 的 resolveServerTaskImageUrl 同源：服务端已固化好地址，
+  // 只给 loopback 兜底。按 media 路径一律改写会把 Worker 链换成 Site Base 而 404。
+  if (!isLoopbackUrl(url)) return url;
   const rewritten = rewriteMediaUrlToSiteBase(url);
   return rewritten || url;
 }

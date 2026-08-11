@@ -754,6 +754,17 @@ export function StudioPage({
               return (
                 <li key={item.id} className={`studio-server-queue-item is-${item.status}`}>
                   <div className="studio-server-queue-row">
+                    {item.status === "done" && item.imageUrl ? (
+                      <a
+                        className="studio-server-queue-thumb"
+                        href={item.imageUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="在新标签打开原图"
+                      >
+                        <img src={item.imageUrl} alt="" loading="lazy" />
+                      </a>
+                    ) : null}
                     <div className="studio-server-queue-main">
                       <span className={`studio-server-queue-badge is-${item.status}`}>{statusLabel}</span>
                       <span className="studio-server-queue-prompt" title={item.prompt}>
@@ -783,6 +794,16 @@ export function StudioPage({
                         >
                           {cancelingServerId === item.id ? "取消中…" : "取消"}
                         </button>
+                      ) : item.status === "done" && item.imageUrl ? (
+                        <a
+                          className="btn btn-ghost btn-sm"
+                          href={item.imageUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="在新标签打开原图"
+                        >
+                          打开
+                        </a>
                       ) : (
                         <span className="studio-server-queue-action-spacer" aria-hidden>
                           —

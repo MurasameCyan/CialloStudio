@@ -95,27 +95,46 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function readError(payload: unknown): { code?: string; message?: string } {
+/**
+ * 解析上游错误体。除 OpenAI 的 { error: { code, message } } 外，
+ * 还要认 grok2api 的顶层平铺格式（error 是字符串）：
+ *   {"code":"imagine:content-moderated","error":"Generated image rejected..."}
+ * 否则 code 被吞成 upstream_error、message 回退成整段原始 JSON。
+ */
+export function readUpstreamError(payload: unknown): { code?: string; message?: string } {
   if (!isRecord(payload)) return {};
   const error = isRecord(payload.error) ? payload.error : payload;
   const code =
-    typeof error.code === "string"
-      ? error.code
-      : typeof error.error_code === "number"
-        ? String(error.error_code)
-        : typeof error.error_code === "string"
-          ? error.error_code
-          : typeof payload.status === "number"
-            ? String(payload.status)
-            : undefined;
+    (typeof error.code === "string" && error.code) ||
+    (typeof error.error_code === "number" && String(error.error_code)) ||
+    (typeof error.error_code === "string" && error.error_code) ||
+    // error 是对象但没带 code 时，回落到顶层 code（grok2api 就是顶层平铺）
+    (typeof payload.code === "string" && payload.code) ||
+    (typeof payload.status === "number" && String(payload.status)) ||
+    undefined;
   const message =
     (typeof error.message === "string" && error.message) ||
     (typeof error.detail === "string" && error.detail) ||
     (typeof error.title === "string" && error.title) ||
+    (typeof payload.error === "string" && payload.error) ||
     (typeof payload.detail === "string" && payload.detail) ||
     (typeof payload.title === "string" && payload.title) ||
     undefined;
   return { code, message };
+}
+
+/** 上游图片审核拦截的 code：grokb 用 imagine:content-moderated */
+export function isContentModerationCode(code?: string): boolean {
+  if (!code) return false;
+  return /content[-_]?moderat/i.test(code);
+}
+
+/** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
+export function describeUpstreamError(code: string | undefined, message: string): string {
+  if (isContentModerationCode(code)) {
+    return "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+  }
+  return message;
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
@@ -355,9 +374,9 @@ async function apiRequest(
     }
 
     if (!response.ok) {
-      const err = readError(payload);
+      const err = readUpstreamError(payload);
       const fallback = text.trim() || response.statusText || `HTTP ${response.status}`;
-      const message = err.message ?? fallback;
+      const message = describeUpstreamError(err.code, err.message ?? fallback);
       const retryable = response.status === 502 || response.status === 503 || response.status === 504;
       log("error", `HTTP ${response.status} ${method} ${url} (attempt ${attempt}/${maxAttempts})`, {
         code: err.code,
@@ -791,7 +810,7 @@ export async function generateVideo(input: {
       // 是否继续由自动重试开关和停止按钮决定。
       throw new ApiError(
         200,
-        status.error?.message || "视频生成失败",
+        describeUpstreamError(status.error?.code, status.error?.message || "视频生成失败"),
         status.error?.code || "video_failed",
       );
     }

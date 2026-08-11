@@ -518,13 +518,66 @@ async function drainQueue() {
   }
 }
 
-/** 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致 */
-function isRetryableError(err) {
+/**
+ * 解析上游错误体。除 OpenAI 的 { error: { code, message } } 外，
+ * 还要认 grok2api 的顶层平铺格式（error 是字符串）：
+ *   {"code":"imagine:content-moderated","error":"Generated image rejected..."}
+ * 否则 code 被吞成 upstream_error、message 回退成整段原始 JSON。
+ * 须与浏览器端 src/lib/api.ts 的 readUpstreamError 保持一致。
+ */
+function readUpstreamErrorBody(json, raw, status, fallback) {
+  const isRecord = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  const payload = isRecord(json) ? json : null;
+  const nested = payload && isRecord(payload.error) ? payload.error : payload;
+  const code =
+    (nested && typeof nested.code === "string" && nested.code) ||
+    (nested && typeof nested.error_code === "string" && nested.error_code) ||
+    (nested && typeof nested.error_code === "number" && String(nested.error_code)) ||
+    // error 是对象但没带 code 时，回落到顶层 code（grok2api 就是顶层平铺）
+    (payload && typeof payload.code === "string" && payload.code) ||
+    undefined;
+  const message =
+    (nested && typeof nested.message === "string" && nested.message) ||
+    (nested && typeof nested.detail === "string" && nested.detail) ||
+    (payload && typeof payload.error === "string" && payload.error) ||
+    (payload && typeof payload.message === "string" && payload.message) ||
+    (typeof raw === "string" && raw.trim() ? raw.slice(0, 200) : "") ||
+    fallback ||
+    `上游 HTTP ${status}`;
+  return { code, message };
+}
+
+/** 上游图片审核拦截的 code：grokb 用 imagine:content-moderated */
+function isContentModerationCode(code) {
+  return /content[-_]?moderat/i.test(String(code || ""));
+}
+
+/** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
+function describeUpstreamErrorMessage(code, message) {
+  if (isContentModerationCode(code)) {
+    return "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+  }
+  return message;
+}
+
+/**
+ * 审核类失败的重试上限。
+ * 上游审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
+ * （实测边缘提示词 8 次里 5 拦 3 过），所以值得重试；但明确违规的提示词是
+ * 稳定被拦（6/6），没有上限就会一直刷上游。
+ * 须与 src/hooks/useStudioQueue.ts 的同名常量一致。
+ */
+const MODERATION_MAX_ATTEMPTS = 4;
+
+/**
+ * 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致。
+ * attempt 是「已失败的次数」，仅审核类错误需要它来收敛。
+ */
+function isRetryableError(err, attempt = 1) {
   if (!err) return true;
   // 显式终态优先（调用方可对确定性失败标记 terminal，无论它带什么 code）
   if (err.terminal === true) return false;
   const status = Number(err.status || err.statusCode || 0);
-  if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   const code = String(err.code || "");
   if (
     code === "missing_reference_image" ||
@@ -534,6 +587,9 @@ function isRetryableError(err) {
   ) {
     return false;
   }
+  // 审核拦截：结果随 seed 变化，重试有意义，但必须有上限
+  if (isContentModerationCode(code)) return attempt < MODERATION_MAX_ATTEMPTS;
+  if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   return true;
 }
 
@@ -957,14 +1013,10 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
     signal: task.abortSignal,
   });
   if (createRes.status < 200 || createRes.status >= 300) {
-    const msg =
-      createRes.json?.error?.message ||
-      createRes.json?.message ||
-      createRes.raw?.slice(0, 200) ||
-      `上游 HTTP ${createRes.status}`;
-    throw Object.assign(new Error(msg), {
+    const parsed = readUpstreamErrorBody(createRes.json, createRes.raw, createRes.status);
+    throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
       status: createRes.status,
-      code: createRes.json?.error?.code || "upstream_error",
+      code: parsed.code || "upstream_error",
     });
   }
   const requestId = String(createRes.json?.request_id || "").trim();
@@ -984,14 +1036,10 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
       signal: task.abortSignal,
     });
     if (res.status < 200 || res.status >= 300) {
-      const msg =
-        res.json?.error?.message ||
-        res.json?.message ||
-        res.raw?.slice(0, 200) ||
-        `上游 HTTP ${res.status}`;
-      throw Object.assign(new Error(msg), {
+      const parsed = readUpstreamErrorBody(res.json, res.raw, res.status);
+      throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
         status: res.status,
-        code: res.json?.error?.code || "upstream_error",
+        code: parsed.code || "upstream_error",
       });
     }
 
@@ -999,9 +1047,10 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
     if (status === "failed") {
       // 不标 terminal：入队成功后才 failed 的多是审核/基建抖动，重试常能过。
       // 与浏览器本地路径（src/lib/api.ts 的 generateVideo）保持同一套判定。
-      throw Object.assign(new Error(res.json?.error?.message || "视频生成失败"), {
+      const parsed = readUpstreamErrorBody(res.json, "", 200, "视频生成失败");
+      throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
         status: 200,
-        code: res.json?.error?.code || "video_failed",
+        code: parsed.code || "video_failed",
       });
     }
     if (status === "done") {
@@ -1082,14 +1131,10 @@ async function callUpstreamGenerate(task) {
   });
 
   if (res.status < 200 || res.status >= 300) {
-    const msg =
-      res.json?.error?.message ||
-      res.json?.message ||
-      res.raw?.slice(0, 200) ||
-      `上游 HTTP ${res.status}`;
-    throw Object.assign(new Error(msg), {
+    const parsed = readUpstreamErrorBody(res.json, res.raw, res.status);
+    throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
       status: res.status,
-      code: res.json?.error?.code || "upstream_error",
+      code: parsed.code || "upstream_error",
     });
   }
 
@@ -1214,7 +1259,7 @@ async function runOne(taskId) {
           }
           return;
         }
-        const retry = task.autoRetry === true && isRetryableError(err);
+        const retry = task.autoRetry === true && isRetryableError(err, attempt);
         console.warn(`[task-queue] fail ${taskId} attempt=${attempt} retry=${retry}`, message);
         if (!retry) {
           const latest = tasks.get(taskId);

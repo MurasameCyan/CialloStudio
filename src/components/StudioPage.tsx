@@ -755,15 +755,14 @@ export function StudioPage({
                 <li key={item.id} className={`studio-server-queue-item is-${item.status}`}>
                   <div className="studio-server-queue-row">
                     {item.status === "done" && item.imageUrl ? (
-                      <a
+                      <button
+                        type="button"
                         className="studio-server-queue-thumb"
-                        href={item.imageUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        title="在新标签打开原图"
+                        title="查看大图，可选择分享到大厅"
+                        onClick={() => handlePreviewServerItem(item)}
                       >
                         <img src={item.imageUrl} alt="" loading="lazy" />
-                      </a>
+                      </button>
                     ) : null}
                     <div className="studio-server-queue-main">
                       <span className={`studio-server-queue-badge is-${item.status}`}>{statusLabel}</span>
@@ -795,15 +794,14 @@ export function StudioPage({
                           {cancelingServerId === item.id ? "取消中…" : "取消"}
                         </button>
                       ) : item.status === "done" && item.imageUrl ? (
-                        <a
+                        <button
+                          type="button"
                           className="btn btn-ghost btn-sm"
-                          href={item.imageUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          title="在新标签打开原图"
+                          title="查看大图，可选择分享到大厅"
+                          onClick={() => handlePreviewServerItem(item)}
                         >
-                          打开
-                        </a>
+                          详情
+                        </button>
                       ) : (
                         <span className="studio-server-queue-action-spacer" aria-hidden>
                           —
@@ -974,6 +972,32 @@ export function StudioPage({
 
   const handlePreviewJob = useCallback((job: StudioJob) => {
     setPreviewJob(job);
+  }, []);
+
+  /**
+   * 后台队列项转成 StudioJob 复用同一个大图弹窗（含分享）。
+   * 队列项不在 previewableJobs 里，所以弹窗的前后切换会自动禁用——
+   * 队列是任务视图而非作品墙，这里只看单张。
+   */
+  const handlePreviewServerItem = useCallback((item: ServerQueueItem) => {
+    if (item.status !== "done" || !item.imageUrl) return;
+    setPreviewJob({
+      id: item.clientJobId || item.id,
+      batchId: item.batchId || item.id,
+      variant: item.variant,
+      variants: item.variants,
+      prompt: item.prompt,
+      status: "done",
+      kind: item.kind === "video" ? "video" : "image",
+      duration: item.duration,
+      aspectRatio: item.aspectRatio,
+      resolution: item.resolution,
+      imageUrl: item.imageUrl,
+      openUrl: item.imageUrl,
+      createdAt: item.createdAt,
+      finishedAt: item.updatedAt,
+      serverTaskId: item.id,
+    });
   }, []);
 
   const closePreview = useCallback(() => {

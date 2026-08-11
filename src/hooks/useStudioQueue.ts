@@ -63,6 +63,11 @@ export type ServerQueueItem = {
   createdAt: number;
   updatedAt: number;
   imageUrl?: string;
+  /** image=生图；video=文生/图生视频。大图预览要靠它决定用 img 还是 video */
+  kind?: "image" | "video";
+  duration?: number;
+  aspectRatio?: string;
+  resolution?: string;
 };
 
 type QueueApi = {
@@ -129,6 +134,10 @@ function toServerQueueItem(task: ServerTask): ServerQueueItem {
     createdAt: task.createdAt,
     updatedAt: task.updatedAt,
     imageUrl: resolveServerTaskImageUrl(task.imageUrl),
+    kind: task.kind === "video" ? "video" : "image",
+    duration: task.duration,
+    aspectRatio: task.aspectRatio,
+    resolution: task.resolution,
   };
 }
 

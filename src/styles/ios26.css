@@ -3031,6 +3031,21 @@ a {
   border: 1px solid var(--separator);
   display: grid;
   place-items: center;
+  /* button 元素：清掉默认内边距/字号，纯当容器用 */
+  padding: 0;
+  cursor: pointer;
+  appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
+.studio-server-queue-thumb:hover {
+  border-color: var(--accent, #4c8dff);
+}
+
+.studio-server-queue-thumb:focus-visible {
+  outline: 2px solid var(--accent, #4c8dff);
+  outline-offset: 2px;
 }
 
 .studio-server-queue-thumb img {

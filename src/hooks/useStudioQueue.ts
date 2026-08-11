@@ -137,29 +137,21 @@ function isAbortError(error: unknown): boolean {
 }
 
 /**
- * 审核类失败的重试上限。
- * 上游审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
- * （实测边缘提示词 8 次里 5 拦 3 过），所以值得重试；但明确违规的提示词是
- * 稳定被拦（6/6），没有上限就会一直刷上游。
- * 须与 server/task-queue.mjs 的同名常量一致。
- */
-export const MODERATION_MAX_ATTEMPTS = 4;
-
-/**
  * 配置类 / 确定性错误重试无意义；其余（网络、5xx、审核抖动、空图、视频 failed）可自动重试。
- * attempt 是「已失败的次数」，仅审核类错误需要它来收敛。
  * 判定须与服务端 task-queue.mjs 的 isRetryableError 保持一致，否则同一次失败在
  * 本地和后台队列会有两种结果。
  */
-export function isAutoRetryableError(error: unknown, attempt = 1): boolean {
+export function isAutoRetryableError(error: unknown): boolean {
   if (isAbortError(error)) return false;
   if (error instanceof ApiError) {
     // 显式终态优先：上游带自己的 code 时，靠 code 名字判断会漏
     if (error.terminal) return false;
     if (error.code === "missing_reference_image" || error.code === "missing_api_key") return false;
     if (error.code === "missing_video_model" || error.code === "empty_prompt") return false;
-    // 审核拦截：结果随 seed 变化，重试有意义，但必须有上限
-    if (isContentModerationCode(error.code)) return attempt < MODERATION_MAX_ATTEMPTS;
+    // 审核拦截：审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
+    // （实测边缘提示词 8 次里 5 拦 3 过），所以开着自动重试就一直重试，
+    // 不设次数上限——何时收手由停止按钮和任务超时决定。
+    if (isContentModerationCode(error.code)) return true;
     // 400 是确定性请求错误（参数不合法 / 提示词过长）：同一 payload 重试必然同样失败
     if (error.status === 400 || error.status === 401 || error.status === 403) return false;
   }
@@ -1086,11 +1078,7 @@ export function useStudioQueue(
             } catch (error) {
               // 运行中也可关掉开关，立即停止后续重试
               const retryEnabled = draftRef.current.autoRetry === true;
-              if (
-                !retryEnabled ||
-                !isAutoRetryableError(error, attempt) ||
-                controller.signal.aborted
-              ) {
+              if (!retryEnabled || !isAutoRetryableError(error) || controller.signal.aborted) {
                 throw error;
               }
               const waitMs = Math.min(8000, 1000 * 2 ** Math.min(attempt - 1, 3));

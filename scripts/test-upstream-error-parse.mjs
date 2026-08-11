@@ -7,7 +7,8 @@
  * message 则回退成整段原始 JSON 甩给用户。
  *
  * 审核发生在出图之后，同一 prompt 不同 seed 结果不同（实测 8 次 5 拦 3 过），
- * 所以属于可重试；但明确违规的 prompt 是稳定拦（6/6），必须有次数上限兜底。
+ * 所以开着自动重试就无条件重试；何时收手由停止按钮和任务超时决定，
+ * 不用写死的次数上限——否则自动重试开关对审核这种最需要它的场景形同虚设。
  *
  * Run: node scripts/test-upstream-error-parse.mjs
  */
@@ -23,7 +24,7 @@ await writeFile(
   entry,
   [
     'export { ApiError, readUpstreamError, describeUpstreamError, isContentModerationCode } from "@/lib/api";',
-    'export { isAutoRetryableError, MODERATION_MAX_ATTEMPTS } from "@/hooks/useStudioQueue";',
+    'export { isAutoRetryableError } from "@/hooks/useStudioQueue";',
   ].join("\n"),
 );
 
@@ -46,7 +47,6 @@ try {
     describeUpstreamError,
     isContentModerationCode,
     isAutoRetryableError,
-    MODERATION_MAX_ATTEMPTS,
   } = await import(`${outfile.href}?t=${Date.now()}`);
 
   // —— grokb 实测错误体：顶层 code + error 是字符串 ——
@@ -95,50 +95,52 @@ try {
   assert.equal(describeUpstreamError("invalid_request", "prompt too long"), "prompt too long");
   assert.equal(describeUpstreamError(undefined, "boom"), "boom");
 
-  // —— 审核类失败：开着自动重试就该重试，但有上限 ——
+  // —— 审核类失败：开着自动重试就无条件重试，不设次数上限 ——
+  // 审核查的是出图结果，换 seed 常能过；何时收手由停止按钮和任务超时决定，
+  // 而不是一个写死的次数——否则自动重试开关对审核这种最需要它的场景形同虚设。
   const modErr = new ApiError(400, zh, "imagine:content-moderated");
-  assert.ok(MODERATION_MAX_ATTEMPTS >= 2, "审核重试上限至少要允许重试一次");
-  for (let attempt = 1; attempt < MODERATION_MAX_ATTEMPTS; attempt += 1) {
-    assert.equal(
-      isAutoRetryableError(modErr, attempt),
-      true,
-      `第 ${attempt} 次审核失败应重试：审核查的是出图结果，换 seed 常能过`,
-    );
-  }
+  assert.equal(isAutoRetryableError(modErr), true, "审核失败必须可重试");
   assert.equal(
-    isAutoRetryableError(modErr, MODERATION_MAX_ATTEMPTS),
-    false,
-    "达到上限必须停：明确违规的 prompt 是稳定被拦，否则无上限循环刷上游",
+    isAutoRetryableError(new ApiError(400, zh, "content_moderation")),
+    true,
+    "其它写法的审核 code 同样可重试",
   );
 
   // 其它 400 依旧一次都不重试
   assert.equal(
-    isAutoRetryableError(new ApiError(400, "prompt 过长", "invalid_request"), 1),
+    isAutoRetryableError(new ApiError(400, "prompt 过长", "invalid_request")),
     false,
     "非审核的 400 仍是确定性错误",
   );
   // terminal 逃生口优先于审核放行
   assert.equal(
-    isAutoRetryableError(new ApiError(400, "x", "imagine:content-moderated", true), 1),
+    isAutoRetryableError(new ApiError(400, "x", "imagine:content-moderated", true)),
     false,
     "terminal=true 应优先",
   );
-  // 不传 attempt 时按首次处理，保持旧调用点行为
-  assert.equal(isAutoRetryableError(modErr), true);
 
   // —— 服务端须与浏览器端一致：import 会起 HTTP 服务，改为静态核对源码 ——
   const serverSrc = await readFile(new URL("../server/task-queue.mjs", import.meta.url), "utf8");
   assert.ok(
-    serverSrc.includes("MODERATION_MAX_ATTEMPTS"),
-    "服务端缺少审核重试上限，后台任务与本地行为会不一致",
-  );
-  assert.ok(
-    new RegExp(`MODERATION_MAX_ATTEMPTS\\s*=\\s*${MODERATION_MAX_ATTEMPTS}\\b`).test(serverSrc),
-    `服务端审核重试上限应与浏览器端一致（${MODERATION_MAX_ATTEMPTS}）`,
-  );
-  assert.ok(
     serverSrc.includes("isContentModerationCode"),
     "服务端应识别审核 code 才能放行重试",
+  );
+  const predicate = serverSrc.slice(
+    serverSrc.indexOf("function isRetryableError"),
+    serverSrc.indexOf("/** 可中断 sleep"),
+  );
+  assert.ok(predicate.length > 0, "未能定位服务端 isRetryableError");
+  assert.ok(
+    /isContentModerationCode\(code\)\)\s*return true;/.test(predicate),
+    "服务端审核类失败必须无条件放行重试，否则后台任务与本地行为不一致",
+  );
+  assert.ok(
+    !predicate.includes("MODERATION_MAX_ATTEMPTS"),
+    "服务端不应再有审核重试次数上限",
+  );
+  assert.ok(
+    predicate.indexOf("isContentModerationCode") < predicate.indexOf("status === 400"),
+    "审核判断必须排在 400 之前，否则审核拦截会先被 400 规则截掉",
   );
   assert.ok(
     /typeof\s+\w+\??\.?\w*\s*===\s*"string"/.test(serverSrc) &&
@@ -146,7 +148,7 @@ try {
     "服务端应有统一的错误体解析（含 error 为字符串的情况）",
   );
 
-  console.log("PASS: upstream error parsing + bounded moderation retry");
+  console.log("PASS: upstream error parsing + unbounded moderation retry");
 } finally {
   await unlink(outfile).catch(() => undefined);
   await unlink(entry).catch(() => undefined);

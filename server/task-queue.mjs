@@ -560,20 +560,8 @@ function describeUpstreamErrorMessage(code, message) {
   return message;
 }
 
-/**
- * 审核类失败的重试上限。
- * 上游审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
- * （实测边缘提示词 8 次里 5 拦 3 过），所以值得重试；但明确违规的提示词是
- * 稳定被拦（6/6），没有上限就会一直刷上游。
- * 须与 src/hooks/useStudioQueue.ts 的同名常量一致。
- */
-const MODERATION_MAX_ATTEMPTS = 4;
-
-/**
- * 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致。
- * attempt 是「已失败的次数」，仅审核类错误需要它来收敛。
- */
-function isRetryableError(err, attempt = 1) {
+/** 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致 */
+function isRetryableError(err) {
   if (!err) return true;
   // 显式终态优先（调用方可对确定性失败标记 terminal，无论它带什么 code）
   if (err.terminal === true) return false;
@@ -587,8 +575,10 @@ function isRetryableError(err, attempt = 1) {
   ) {
     return false;
   }
-  // 审核拦截：结果随 seed 变化，重试有意义，但必须有上限
-  if (isContentModerationCode(code)) return attempt < MODERATION_MAX_ATTEMPTS;
+  // 审核拦截：审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
+  // （实测边缘提示词 8 次里 5 拦 3 过），所以开着自动重试就一直重试，
+  // 不设次数上限——何时收手由取消和任务超时（taskTimeoutMsForRole）决定。
+  if (isContentModerationCode(code)) return true;
   if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   return true;
 }
@@ -1259,7 +1249,7 @@ async function runOne(taskId) {
           }
           return;
         }
-        const retry = task.autoRetry === true && isRetryableError(err, attempt);
+        const retry = task.autoRetry === true && isRetryableError(err);
         console.warn(`[task-queue] fail ${taskId} attempt=${attempt} retry=${retry}`, message);
         if (!retry) {
           const latest = tasks.get(taskId);

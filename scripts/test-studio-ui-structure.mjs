@@ -100,4 +100,22 @@ assert.doesNotMatch(
 );
 assert.match(studioPage, /previewShareLabel/, "详情弹窗应渲染分享按钮");
 
+/* 图生图 / 视频默认「源」比例：两条路径都要设——切模式时，以及在这两个模式下传参考图时
+   （先点模式再传图是常见顺序）。没参考图时「源」是 disabled 项，必须回落。 */
+assert.match(
+  studioPage,
+  /sourceRatioEnabled \? SOURCE_ASPECT_RATIO : settings\.videoAspectRatio/,
+  "切到视频应默认「源」，无参考图时回落到管理页默认",
+);
+assert.match(
+  studioPage,
+  /next === "edit" && sourceRatioEnabled\s*\?\s*SOURCE_ASPECT_RATIO/,
+  "切到图生图应默认「源」",
+);
+assert.match(
+  studioPage,
+  /\(imageEditMode \|\| videoMode\) &&\s*resolveGenerationAspectRatio\(SOURCE_ASPECT_RATIO, width, height\)/,
+  "图生图/视频下加载参考图应把宽高比切到「源」",
+);
+
 console.log("studio ui structure ok");

@@ -392,21 +392,27 @@ export function StudioPage({
 
   /**
    * 模式切换：只要图标，名字走 hover 提示（data-tip）。
-   * 切到/离开视频时套用管理页对应的默认宽高比（图片与视频常用比例不同）。
+   * 图生图/视频默认跟参考图比例（「源」）；没参考图时「源」这一项是 disabled，
+   * 回落到管理页默认比例（图片与视频常用比例不同）。切回文生图则丢掉「源」。
    */
   const pickGenMode = (next: GenMode) => {
     if (next === genMode) return;
     if (next === "video") {
-      setDraft({ videoMode: true, aspectRatio: settings.videoAspectRatio });
+      setDraft({
+        videoMode: true,
+        aspectRatio: sourceRatioEnabled ? SOURCE_ASPECT_RATIO : settings.videoAspectRatio,
+      });
       return;
     }
     setDraft({
       videoMode: false,
       imageEditMode: next === "edit",
       aspectRatio:
-        videoMode || draft.aspectRatio === SOURCE_ASPECT_RATIO
-          ? settings.aspectRatio
-          : draft.aspectRatio,
+        next === "edit" && sourceRatioEnabled
+          ? SOURCE_ASPECT_RATIO
+          : videoMode || draft.aspectRatio === SOURCE_ASPECT_RATIO
+            ? settings.aspectRatio
+            : draft.aspectRatio,
     });
   };
 
@@ -1416,6 +1422,24 @@ export function StudioPage({
     </button>
   );
 
+  /**
+   * 参考图落草稿。图生图/视频下顺带把宽高比切到「源」——用户传了图就是想按这张图的
+   * 比例出片；先点模式再传图是常见顺序，只在 pickGenMode 里设默认会漏掉这条路径。
+   */
+  function applyReferenceImage(url: string, name: string, width: number, height: number) {
+    setDraft({
+      referenceImageUrl: url,
+      referenceImageName: name,
+      referenceImageWidth: width,
+      referenceImageHeight: height,
+      aspectRatio:
+        (imageEditMode || videoMode) &&
+        resolveGenerationAspectRatio(SOURCE_ASPECT_RATIO, width, height)
+          ? SOURCE_ASPECT_RATIO
+          : draft.aspectRatio,
+    });
+  }
+
   function clearReferenceImage() {
     referenceLoadIdRef.current += 1;
     setDraft({
@@ -1456,12 +1480,7 @@ export function StudioPage({
         result,
         ({ width, height }) => {
           if (loadId !== referenceLoadIdRef.current) return;
-          setDraft({
-            referenceImageUrl: result,
-            referenceImageName: file.name || "reference.png",
-            referenceImageWidth: width,
-            referenceImageHeight: height,
-          });
+          applyReferenceImage(result, file.name || "reference.png", width, height);
           log("ok", "已加载参考图", {
             name: file.name,
             size: file.size,
@@ -1501,12 +1520,7 @@ export function StudioPage({
       src,
       ({ width, height }) => {
         if (loadId !== referenceLoadIdRef.current) return;
-        setDraft({
-          referenceImageUrl: src,
-          referenceImageName: `job-${job.id.slice(0, 8)}.jpg`,
-          referenceImageWidth: width,
-          referenceImageHeight: height,
-        });
+        applyReferenceImage(src, `job-${job.id.slice(0, 8)}.jpg`, width, height);
         log("ok", "已用结果图作为参考图", { jobId: job.id, width, height });
       },
       () => {

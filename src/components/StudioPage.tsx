@@ -758,10 +758,15 @@ export function StudioPage({
                       <button
                         type="button"
                         className="studio-server-queue-thumb"
-                        title="查看大图，可选择分享到大厅"
+                        title={`查看${item.kind === "video" ? "视频" : "大图"}，可选择分享到大厅`}
                         onClick={() => handlePreviewServerItem(item)}
                       >
-                        <img src={item.imageUrl} alt="" loading="lazy" />
+                        {/* 视频用 <img> 是空白：走 <video> 取首帧（preload="metadata" 只拉元数据） */}
+                        {item.kind === "video" ? (
+                          <video src={item.imageUrl} muted playsInline preload="metadata" />
+                        ) : (
+                          <img src={item.imageUrl} alt="" loading="lazy" />
+                        )}
                       </button>
                     ) : null}
                     <div className="studio-server-queue-main">

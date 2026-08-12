@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [app, studioPage, hallPage, settingsPage, modeSwitch, main, graphite] = await Promise.all([
-  readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/components/StudioPage.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/components/HallPage.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/components/SettingsPage.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/components/StudioModeSwitch.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/main.tsx", import.meta.url), "utf8"),
-  readFile(new URL("../src/styles/graphite.css", import.meta.url), "utf8"),
-]);
+const [app, studioPage, hallPage, settingsPage, modeSwitch, main, graphite, adminQueue, ios26] =
+  await Promise.all([
+    readFile(new URL("../src/App.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/StudioPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/HallPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/SettingsPage.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/StudioModeSwitch.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/main.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/styles/graphite.css", import.meta.url), "utf8"),
+    readFile(new URL("../src/components/AdminTaskQueuePanel.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../src/styles/ios26.css", import.meta.url), "utf8"),
+  ]);
 
 assert.match(app, /app-shell-\$\{tab\}/, "App 外壳应带当前页面作用域");
 assert.match(app, /className="header-status"/, "头部应区分连接状态区");
@@ -66,5 +69,26 @@ assert.match(
   /@media \(max-width: 560px\)[^]*?\.app-shell-hall \.hall-grid \{\s*grid-template-columns: 1fr;/,
   "大厅作品墙在 560px 以下应收成单列",
 );
+
+/* 视频缩略图：<img src=".mp4"> 渲染出来是空白，队列列表必须按 kind 走 <video>。
+   作品墙一直是对的（HallPage 有分支），坏的只有这两个队列列表。 */
+for (const [name, src] of [
+  ["StudioPage", studioPage],
+  ["AdminTaskQueuePanel", adminQueue],
+]) {
+  assert.match(
+    src,
+    /kind === "video" \? \(\s*<video/,
+    `${name} 队列缩略图应按 kind 渲染 <video>，否则视频预览是空白`,
+  );
+}
+/* CSS 只写 img 的话 <video> 撑不出缩略图尺寸，等于换了个方式看不见。 */
+for (const cls of ["studio-server-queue-thumb", "admin-task-thumb"]) {
+  assert.match(
+    ios26,
+    new RegExp(`\\.${cls} img,\\s*\\.${cls} video \\{`),
+    `.${cls} 的尺寸规则应同时覆盖 video`,
+  );
+}
 
 console.log("studio ui structure ok");

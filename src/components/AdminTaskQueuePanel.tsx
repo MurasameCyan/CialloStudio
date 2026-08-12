@@ -513,8 +513,18 @@ export function AdminTaskQueuePanel({
               <div key={t.id} className="user-row admin-task-row" role="listitem">
                 <div className="admin-task-thumb" aria-hidden>
                   {img && t.status === "done" ? (
-                    <a href={img} target="_blank" rel="noreferrer" title="打开图片">
-                      <img src={img} alt="" loading="lazy" />
+                    <a
+                      href={img}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={t.kind === "video" ? "打开视频" : "打开图片"}
+                    >
+                      {/* 视频用 <img> 是空白：走 <video> 取首帧 */}
+                      {t.kind === "video" ? (
+                        <video src={img} muted playsInline preload="metadata" />
+                      ) : (
+                        <img src={img} alt="" loading="lazy" />
+                      )}
                     </a>
                   ) : (
                     <span className="admin-task-thumb-empty">{statusLabel(t.status)}</span>

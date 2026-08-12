@@ -1813,7 +1813,7 @@ export function StudioPage({
         ? "冷却中"
         : "分享到大厅";
   const previewShareTitle = previewAlreadyShared
-    ? "该图已分享，不可重复分享"
+    ? `该${previewIsVideo ? "视频" : "图"}已分享，不可重复分享`
     : shareCooldownLocked
       ? "分享冷却中"
       : "分享到大厅";
@@ -1911,19 +1911,17 @@ export function StudioPage({
             >
               {previewJob.kind === "video" ? "打开视频" : "打开原图"}
             </button>
-            {previewJob.kind === "video" ? null : (
-              <button
-                type="button"
-                className={`btn btn-sm ${previewAlreadyShared ? "btn-shared" : "btn-primary"}`}
-                disabled={previewShareDisabled}
-                title={previewShareTitle}
-                onClick={() => {
-                  if (!previewAlreadyShared) void handleShareToHall(previewJob);
-                }}
-              >
-                {previewShareLabel}
-              </button>
-            )}
+            <button
+              type="button"
+              className={`btn btn-sm ${previewAlreadyShared ? "btn-shared" : "btn-primary"}`}
+              disabled={previewShareDisabled}
+              title={previewShareTitle}
+              onClick={() => {
+                if (!previewAlreadyShared) void handleShareToHall(previewJob);
+              }}
+            >
+              {previewShareLabel}
+            </button>
             <button
               type="button"
               className="studio-lightbox-close"

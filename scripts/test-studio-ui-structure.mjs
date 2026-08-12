@@ -91,4 +91,13 @@ for (const cls of ["studio-server-queue-thumb", "admin-task-thumb"]) {
   );
 }
 
+/* 详情弹窗：视频也要能分享到大厅。这里曾写死 kind === "video" ? null，
+   而 handleShareToHall / POST /posts / 大厅渲染早就支持视频了，只有这个门没开。 */
+assert.doesNotMatch(
+  studioPage,
+  /previewJob\.kind === "video" \? null/,
+  "详情弹窗不应屏蔽视频的分享按钮",
+);
+assert.match(studioPage, /previewShareLabel/, "详情弹窗应渲染分享按钮");
+
 console.log("studio ui structure ok");

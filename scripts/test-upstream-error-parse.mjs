@@ -119,6 +119,45 @@ try {
     "terminal=true 应优先",
   );
 
+  /* —— 视频审核：实测上游把 code 写成 internal_error，审核信息只在 message 里 ——
+     GET /videos/{id} 返回：
+       {"error":{"code":"internal_error","message":"Console 媒体上游返回 400: Generated video rejected by content moderation."},"status":"failed"}
+     只看 code 的话这条永远翻不成中文，用户会看到一句中英混杂的上游原文。 */
+  const videoModerated = {
+    error: {
+      code: "internal_error",
+      message: "Console 媒体上游返回 400: Generated video rejected by content moderation.",
+    },
+    status: "failed",
+  };
+  const videoParsed = readUpstreamError(videoModerated);
+  assert.equal(videoParsed.code, "internal_error");
+  assert.equal(
+    isContentModerationCode(videoParsed.code, videoParsed.message),
+    true,
+    "审核信息只在 message 里时也必须识别为审核拦截",
+  );
+  const videoZh = describeUpstreamError(videoParsed.code, videoParsed.message);
+  assert.ok(/审核/.test(videoZh), `视频审核错误应映射为中文提示，实际：${videoZh}`);
+  assert.ok(
+    !/rejected by content moderation/.test(videoZh),
+    "映射后不应再包含上游英文原文",
+  );
+  // message 不含审核字样的 internal_error 是真基建错误，别误判成审核、也别吃掉原文
+  assert.equal(isContentModerationCode("internal_error", "upstream timeout"), false);
+  assert.equal(describeUpstreamError("internal_error", "upstream timeout"), "upstream timeout");
+  // 翻译后的中文提示要仍被认作审核，否则重试判定在映射后失效
+  assert.equal(
+    isContentModerationCode(undefined, videoZh),
+    true,
+    "已映射的中文提示也要认，否则翻译后重试判定失效",
+  );
+  assert.equal(
+    isAutoRetryableError(new ApiError(200, videoZh, "internal_error")),
+    true,
+    "视频审核失败必须可重试",
+  );
+
   // —— 服务端须与浏览器端一致：import 会起 HTTP 服务，改为静态核对源码 ——
   const serverSrc = await readFile(new URL("../server/task-queue.mjs", import.meta.url), "utf8");
   assert.ok(
@@ -131,8 +170,8 @@ try {
   );
   assert.ok(predicate.length > 0, "未能定位服务端 isRetryableError");
   assert.ok(
-    /isContentModerationCode\(code\)\)\s*return true;/.test(predicate),
-    "服务端审核类失败必须无条件放行重试，否则后台任务与本地行为不一致",
+    /isContentModerationCode\(code, err\.message\)\)\s*return true;/.test(predicate),
+    "服务端审核类失败必须无条件放行重试，且要看 message（视频审核的 code 是 internal_error）",
   );
   assert.ok(
     !predicate.includes("MODERATION_MAX_ATTEMPTS"),
@@ -147,6 +186,13 @@ try {
       serverSrc.includes("readUpstreamErrorBody"),
     "服务端应有统一的错误体解析（含 error 为字符串的情况）",
   );
+  // 判定实现本身也要同步：两边都得看 code + message，否则视频审核在某一端漏判
+  assert.ok(
+    /function isContentModerationCode\(code, message\)/.test(serverSrc),
+    "服务端审核判定应同时接收 code 和 message，与浏览器端保持一致",
+  );
+  const serverNotice = serverSrc.match(/const MODERATION_NOTICE = "(.+?)";/)?.[1];
+  assert.equal(serverNotice, videoZh, "两端的中文审核提示必须一字不差，否则去重/判定会漏");
 
   console.log("PASS: upstream error parsing + unbounded moderation retry");
 } finally {

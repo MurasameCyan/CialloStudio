@@ -165,7 +165,7 @@ export function isAutoRetryableError(error: unknown): boolean {
     // 审核拦截：审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
     // （实测边缘提示词 8 次里 5 拦 3 过），所以开着自动重试就一直重试，
     // 不设次数上限——何时收手由停止按钮和任务超时决定。
-    if (isContentModerationCode(error.code)) return true;
+    if (isContentModerationCode(error.code, error.message)) return true;
     // 400 是确定性请求错误（参数不合法 / 提示词过长）：同一 payload 重试必然同样失败
     if (error.status === 400 || error.status === 401 || error.status === 403) return false;
   }

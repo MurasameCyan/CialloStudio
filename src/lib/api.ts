@@ -123,16 +123,24 @@ export function readUpstreamError(payload: unknown): { code?: string; message?: 
   return { code, message };
 }
 
-/** 上游图片审核拦截的 code：grokb 用 imagine:content-moderated */
-export function isContentModerationCode(code?: string): boolean {
-  if (!code) return false;
-  return /content[-_]?moderat/i.test(code);
+const MODERATION_NOTICE = "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+
+/**
+ * 审核拦截识别。图片走 code（grokb 用 imagine:content-moderated），
+ * 但视频异步失败时上游把 code 写成 internal_error，审核信息只在 message 里：
+ *   {"error":{"code":"internal_error","message":"Console 媒体上游返回 400: Generated video rejected by content moderation."}}
+ * 所以两边都要看。已映射成中文的提示也要认，否则翻译后重试判定会失效。
+ */
+export function isContentModerationCode(code?: string, message?: string): boolean {
+  const text = `${code || ""} ${message || ""}`;
+  if (!text.trim()) return false;
+  return /content[-_\s]?moderat/i.test(text) || text.includes(MODERATION_NOTICE);
 }
 
 /** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
 export function describeUpstreamError(code: string | undefined, message: string): string {
-  if (isContentModerationCode(code)) {
-    return "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+  if (isContentModerationCode(code, message)) {
+    return MODERATION_NOTICE;
   }
   return message;
 }

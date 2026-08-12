@@ -547,15 +547,24 @@ function readUpstreamErrorBody(json, raw, status, fallback) {
   return { code, message };
 }
 
-/** 上游图片审核拦截的 code：grokb 用 imagine:content-moderated */
-function isContentModerationCode(code) {
-  return /content[-_]?moderat/i.test(String(code || ""));
+const MODERATION_NOTICE = "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+
+/**
+ * 审核拦截识别。图片走 code（grokb 用 imagine:content-moderated），
+ * 但视频异步失败时上游把 code 写成 internal_error，审核信息只在 message 里：
+ *   {"error":{"code":"internal_error","message":"Console 媒体上游返回 400: Generated video rejected by content moderation."}}
+ * 所以两边都要看。已映射成中文的提示也要认，否则翻译后重试判定会失效。
+ * 须与浏览器端 src/lib/api.ts 的 isContentModerationCode 保持一致。
+ */
+function isContentModerationCode(code, message) {
+  const text = `${code || ""} ${message || ""}`;
+  return /content[-_\s]?moderat/i.test(text) || text.includes(MODERATION_NOTICE);
 }
 
 /** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
 function describeUpstreamErrorMessage(code, message) {
-  if (isContentModerationCode(code)) {
-    return "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
+  if (isContentModerationCode(code, message)) {
+    return MODERATION_NOTICE;
   }
   return message;
 }
@@ -578,7 +587,7 @@ function isRetryableError(err) {
   // 审核拦截：审核查的是「出图结果」而非提示词，同一 payload 换 seed 结果会变
   // （实测边缘提示词 8 次里 5 拦 3 过），所以开着自动重试就一直重试，
   // 不设次数上限——何时收手由取消和任务超时（taskTimeoutMsForRole）决定。
-  if (isContentModerationCode(code)) return true;
+  if (isContentModerationCode(code, err.message)) return true;
   if (status === 401 || status === 403 || status === 400 || status === 499) return false;
   return true;
 }

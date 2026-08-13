@@ -2136,7 +2136,7 @@ export function StudioPage({
               />
               {optimizeNotice ? (
                 <div
-                  className={`studio-feedback ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+                  className={`studio-feedback studio-feedback-wrap ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
                   role="status"
                   style={{ marginTop: 10, marginBottom: 0 }}
                 >
@@ -2297,7 +2297,7 @@ export function StudioPage({
           />
           {optimizeNotice ? (
             <div
-              className={`studio-feedback ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
+              className={`studio-feedback studio-feedback-wrap ${optimizeNotice.ok ? "studio-feedback-ok" : "studio-feedback-warn"}`}
               role="status"
               style={{ marginTop: 10, marginBottom: 0 }}
             >

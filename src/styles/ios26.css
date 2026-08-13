@@ -480,6 +480,9 @@ a {
   position: relative;
   z-index: 1;
   display: grid;
+  /* 默认的 auto 轨道会被子元素的 min-content 撑开（长报错 + nowrap 就是这么把
+     面板顶变形的）。minmax(0, 1fr) 把轨道钉在容器宽度内，溢出交给子元素自己处理。 */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -800,6 +803,24 @@ a {
 .studio-feedback-muted {
   background: rgba(255, 255, 255, 0.36);
   color: var(--text-secondary);
+}
+
+/* 承载上游原文的长报错：单行省略号会把信息藏掉，这里换行显示。
+   overflow-wrap: anywhere 让 min-content 退到单字符宽，长 URL / token 也撑不开容器。 */
+.studio-feedback-wrap {
+  align-items: flex-start;
+  border-radius: var(--radius-md);
+  line-height: 1.5;
+}
+
+.studio-feedback-wrap .studio-feedback-text {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.studio-feedback-wrap .studio-feedback-dot {
+  margin-top: 6px;
 }
 
 @media (prefers-color-scheme: dark) {

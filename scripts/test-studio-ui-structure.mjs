@@ -118,4 +118,23 @@ assert.match(
   "图生图/视频下加载参考图应把宽高比切到「源」",
 );
 
+/* 优化提示词的报错会带上游原文，可能很长。它渲染在 .field 这个 grid 容器里，
+   默认 auto 轨道 + nowrap 文本的 min-content 会把整块面板顶变形。修复分两层，
+   任一层被改掉都会让长报错重新撑破布局，这里都钉死。 */
+assert.equal(
+  studioPage.match(/studio-feedback studio-feedback-wrap \$\{optimizeNotice\.ok/g)?.length,
+  2,
+  "控制台和对话模式的 optimizeNotice 都应带 studio-feedback-wrap，否则长报错单行不换行会顶变形",
+);
+assert.match(
+  ios26,
+  /\.field \{[^}]*grid-template-columns: minmax\(0, 1fr\)/,
+  ".field 的 grid 轨道应钉在 minmax(0, 1fr)，否则子元素 min-content 会把面板撑变形",
+);
+assert.match(
+  ios26,
+  /\.studio-feedback-wrap \.studio-feedback-text \{[^}]*overflow-wrap: anywhere/,
+  "长报错文本应 overflow-wrap: anywhere，让 min-content 退到单字符宽",
+);
+
 console.log("studio ui structure ok");

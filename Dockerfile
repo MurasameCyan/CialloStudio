@@ -20,8 +20,10 @@ RUN npm ci
 COPY index.html vite.config.ts tsconfig.json tsconfig.app.json tsconfig.node.json ./
 COPY src ./src
 COPY public ./public
-# vite.config.ts 开发代理依赖 SSRF guard（tsc -b 会解析该 import）
+# vite.config.ts 开发代理依赖 SSRF guard（tsc -b 会解析该 import）；
+# src/lib/api.ts 依赖上游错误中文映射表（与后台队列共用一份）
 COPY server/upstream-guard.mjs server/upstream-guard.d.mts ./server/
+COPY server/upstream-errors.mjs server/upstream-errors.d.mts ./server/
 RUN npm run build
 
 
@@ -40,6 +42,7 @@ COPY nginx.conf /etc/nginx/nginx.conf.template
 COPY docker/entrypoint.sh /entrypoint.sh
 COPY server/community-api.mjs /opt/ciallo/community-api.mjs
 COPY server/upstream-guard.mjs /opt/ciallo/upstream-guard.mjs
+COPY server/upstream-errors.mjs /opt/ciallo/upstream-errors.mjs
 COPY server/v1-proxy.mjs /opt/ciallo/v1-proxy.mjs
 COPY server/task-queue.mjs /opt/ciallo/task-queue.mjs
 RUN chmod +x /entrypoint.sh \

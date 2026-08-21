@@ -18,6 +18,10 @@ import crypto from "node:crypto";
 import { URL } from "node:url";
 import { fileURLToPath } from "node:url";
 import { validateUpstreamOrigin } from "./upstream-guard.mjs";
+import {
+  describeUpstreamError,
+  isContentModerationCode,
+} from "./upstream-errors.mjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.CIALLO_TASK_QUEUE_PORT || 8092);
@@ -547,28 +551,6 @@ function readUpstreamErrorBody(json, raw, status, fallback) {
   return { code, message };
 }
 
-const MODERATION_NOTICE = "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
-
-/**
- * 审核拦截识别。图片走 code（grokb 用 imagine:content-moderated），
- * 但视频异步失败时上游把 code 写成 internal_error，审核信息只在 message 里：
- *   {"error":{"code":"internal_error","message":"Console 媒体上游返回 400: Generated video rejected by content moderation."}}
- * 所以两边都要看。已映射成中文的提示也要认，否则翻译后重试判定会失效。
- * 须与浏览器端 src/lib/api.ts 的 isContentModerationCode 保持一致。
- */
-function isContentModerationCode(code, message) {
-  const text = `${code || ""} ${message || ""}`;
-  return /content[-_\s]?moderat/i.test(text) || text.includes(MODERATION_NOTICE);
-}
-
-/** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
-function describeUpstreamErrorMessage(code, message) {
-  if (isContentModerationCode(code, message)) {
-    return MODERATION_NOTICE;
-  }
-  return message;
-}
-
 /** 须与浏览器端 useStudioQueue.ts 的 isAutoRetryableError 保持一致 */
 function isRetryableError(err) {
   if (!err) return true;
@@ -858,6 +840,7 @@ function httpRequestJson(
       return;
     }
     const lib = parsed.protocol === "https:" ? https : http;
+    const startedAt = Date.now();
     const payload =
       rawBody != null
         ? Buffer.isBuffer(rawBody)
@@ -901,6 +884,8 @@ function httpRequestJson(
             headers: res.headers,
             json,
             raw,
+            // 给 describeUpstreamError 分流用：上游 502 是秒败还是吊死一分多钟
+            elapsedMs: Date.now() - startedAt,
           });
         });
       },
@@ -1013,10 +998,13 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
   });
   if (createRes.status < 200 || createRes.status >= 300) {
     const parsed = readUpstreamErrorBody(createRes.json, createRes.raw, createRes.status);
-    throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
-      status: createRes.status,
-      code: parsed.code || "upstream_error",
-    });
+    throw Object.assign(
+      new Error(describeUpstreamError(parsed.code, parsed.message, createRes.status, createRes.elapsedMs)),
+      {
+        status: createRes.status,
+        code: parsed.code || "upstream_error",
+      },
+    );
   }
   const requestId = String(createRes.json?.request_id || "").trim();
   if (!requestId) {
@@ -1036,10 +1024,13 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
     });
     if (res.status < 200 || res.status >= 300) {
       const parsed = readUpstreamErrorBody(res.json, res.raw, res.status);
-      throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
-        status: res.status,
-        code: parsed.code || "upstream_error",
-      });
+      throw Object.assign(
+        new Error(describeUpstreamError(parsed.code, parsed.message, res.status, res.elapsedMs)),
+        {
+          status: res.status,
+          code: parsed.code || "upstream_error",
+        },
+      );
     }
 
     const status = String(res.json?.status || "").trim();
@@ -1047,7 +1038,7 @@ async function callUpstreamGenerateVideo(task, base, apiKey) {
       // 不标 terminal：入队成功后才 failed 的多是审核/基建抖动，重试常能过。
       // 与浏览器本地路径（src/lib/api.ts 的 generateVideo）保持同一套判定。
       const parsed = readUpstreamErrorBody(res.json, "", 200, "视频生成失败");
-      throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
+      throw Object.assign(new Error(describeUpstreamError(parsed.code, parsed.message)), {
         status: 200,
         code: parsed.code || "video_failed",
       });
@@ -1131,10 +1122,13 @@ async function callUpstreamGenerate(task) {
 
   if (res.status < 200 || res.status >= 300) {
     const parsed = readUpstreamErrorBody(res.json, res.raw, res.status);
-    throw Object.assign(new Error(describeUpstreamErrorMessage(parsed.code, parsed.message)), {
-      status: res.status,
-      code: parsed.code || "upstream_error",
-    });
+    throw Object.assign(
+      new Error(describeUpstreamError(parsed.code, parsed.message, res.status, res.elapsedMs)),
+      {
+        status: res.status,
+        code: parsed.code || "upstream_error",
+      },
+    );
   }
 
   const data = res.json?.data;

@@ -1,5 +1,10 @@
 import { log } from "./logger";
 import { normalizeBaseUrl, upstreamOrigin } from "./settings";
+import {
+  MODERATION_NOTICE,
+  describeUpstreamError,
+  isContentModerationCode,
+} from "../../server/upstream-errors.mjs";
 
 export type OpenAIModel = {
   id: string;
@@ -123,27 +128,9 @@ export function readUpstreamError(payload: unknown): { code?: string; message?: 
   return { code, message };
 }
 
-const MODERATION_NOTICE = "提示词或生成结果被上游内容审核拦截，请改写提示词后重试";
-
-/**
- * 审核拦截识别。图片走 code（grokb 用 imagine:content-moderated），
- * 但视频异步失败时上游把 code 写成 internal_error，审核信息只在 message 里：
- *   {"error":{"code":"internal_error","message":"Console 媒体上游返回 400: Generated video rejected by content moderation."}}
- * 所以两边都要看。已映射成中文的提示也要认，否则翻译后重试判定会失效。
- */
-export function isContentModerationCode(code?: string, message?: string): boolean {
-  const text = `${code || ""} ${message || ""}`;
-  if (!text.trim()) return false;
-  return /content[-_\s]?moderat/i.test(text) || text.includes(MODERATION_NOTICE);
-}
-
-/** 审核类失败换成中文提示；其它错误保持上游原文，别吃掉信息 */
-export function describeUpstreamError(code: string | undefined, message: string): string {
-  if (isContentModerationCode(code, message)) {
-    return MODERATION_NOTICE;
-  }
-  return message;
-}
+// 上游错误 → 中文的映射表在 server/upstream-errors.mjs，浏览器和后台队列共用一份，
+// 免得两边各写一套后漂移（纯字符串逻辑，无 node 依赖，Vite 能直接打包）
+export { MODERATION_NOTICE, describeUpstreamError, isContentModerationCode };
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -358,6 +345,7 @@ async function apiRequest(
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     let response: Response;
+    const startedAt = Date.now();
     try {
       response = await fetch(url, {
         method,
@@ -384,20 +372,21 @@ async function apiRequest(
     if (!response.ok) {
       const err = readUpstreamError(payload);
       const fallback = text.trim() || response.statusText || `HTTP ${response.status}`;
-      const message = describeUpstreamError(err.code, err.message ?? fallback);
+      // status 交给映射表：502/503/504 这类本身就有中文说明，不必再套一层前缀
+      // 耗时也交出去：上游 502 秒败是基建故障，吊死一分多钟是静默审核
+      const message = describeUpstreamError(
+        err.code,
+        err.message ?? fallback,
+        response.status,
+        Date.now() - startedAt,
+      );
       const retryable = response.status === 502 || response.status === 503 || response.status === 504;
       log("error", `HTTP ${response.status} ${method} ${url} (attempt ${attempt}/${maxAttempts})`, {
         code: err.code,
         message,
         bodyPreview: text.slice(0, 500),
       });
-      lastError = new ApiError(
-        response.status,
-        retryable
-          ? `上游暂时不可用 (${response.status}): ${message}`
-          : message,
-        err.code,
-      );
+      lastError = new ApiError(response.status, message, err.code);
       if (retryable && attempt < maxAttempts) {
         const waitMs = attempt * 2000;
         log("warn", `将在 ${waitMs}ms 后重试…`);

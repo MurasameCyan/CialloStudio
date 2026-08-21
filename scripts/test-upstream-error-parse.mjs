@@ -91,7 +91,7 @@ try {
     !/Generated image rejected/.test(zh),
     "映射后不应再包含英文原文",
   );
-  // 非审核错误保持原样，不要吃掉上游信息
+  // 规则没命中、也没给 status 的错误保持原样，不要吃掉上游信息
   assert.equal(describeUpstreamError("invalid_request", "prompt too long"), "prompt too long");
   assert.equal(describeUpstreamError(undefined, "boom"), "boom");
 
@@ -143,9 +143,12 @@ try {
     !/rejected by content moderation/.test(videoZh),
     "映射后不应再包含上游英文原文",
   );
-  // message 不含审核字样的 internal_error 是真基建错误，别误判成审核、也别吃掉原文
+  // message 不含审核字样的 internal_error 是真基建错误，别误判成审核
   assert.equal(isContentModerationCode("internal_error", "upstream timeout"), false);
-  assert.equal(describeUpstreamError("internal_error", "upstream timeout"), "upstream timeout");
+  assert.ok(
+    !/审核/.test(describeUpstreamError("internal_error", "upstream timeout")),
+    "超时不该被当成审核拦截",
+  );
   // 翻译后的中文提示要仍被认作审核，否则重试判定在映射后失效
   assert.equal(
     isContentModerationCode(undefined, videoZh),
@@ -158,8 +161,204 @@ try {
     "视频审核失败必须可重试",
   );
 
-  // —— 服务端须与浏览器端一致：import 会起 HTTP 服务，改为静态核对源码 ——
+  /* —— 线上真实错误体的中文映射 ——
+     取自容器 10 天日志的去重统计（次数见 server/upstream-errors.mjs 头注释）。
+     这些原文要么全英文、要么长到能把面板顶变形，映射后不该再残留原文。 */
+  const cases = [
+    {
+      name: "Cloudflare 纯文本 502（本次排查的那条）",
+      code: undefined,
+      message: "error code: 502",
+      status: 502,
+      want: [/502/, /Cloudflare/, /网关/],
+      deny: [/error code/i, /审核/],
+    },
+    {
+      name: "Cloudflare 520",
+      code: undefined,
+      message: "error code: 520",
+      status: 502,
+      want: [/520/, /Cloudflare/],
+      deny: [/error code/i],
+    },
+    {
+      name: "x.ai 免费额度用尽",
+      code: undefined,
+      message:
+        "Free usage quota exceeded. Purchase credits or provision an API key at https://console.x.ai",
+      status: 400,
+      want: [/额度/, /充值|换/],
+      deny: [/Free usage quota/i, /审核/],
+    },
+    {
+      name: "x.ai 每秒限流：要留下 实际/上限 两个数",
+      code: undefined,
+      message:
+        "Too many requests for team 00000000-0000-0000-0000-000000000014 and model grok-imagine-image-quality. Your team's rate limit is — Requests per Second (actual/limit): 2/2. Your rate limit tier is determined based on your historical API spend.",
+      status: 429,
+      want: [/限流/, /每秒/, /2\/2/],
+      deny: [/Too many requests/i, /console\.x\.ai/, /00000000-/],
+    },
+    {
+      name: "x.ai 每分钟限流",
+      code: undefined,
+      message:
+        "Too many requests for team 00000000-0000-0000-0000-000000000014 and model grok-imagine-image-quality. Your team's rate limit is — Requests per Minute (actual/limit): 354/60.",
+      status: 429,
+      want: [/限流/, /每分钟/, /354\/60/],
+      deny: [/Too many requests/i],
+    },
+    {
+      name: "Envoy 连不上后端",
+      code: undefined,
+      message:
+        "upstream connect error or disconnect/reset before headers. reset reason: remote connection failure, transport failure reason: delayed connect error: Connection refused",
+      status: 503,
+      want: [/上游/, /连接|连不上/],
+      deny: [/upstream connect error/i],
+    },
+    {
+      name: "只回了状态短语：按状态码给中文",
+      code: undefined,
+      message: "Bad Gateway",
+      status: 502,
+      want: [/网关/, /HTTP 502/],
+      deny: [/Bad Gateway/],
+    },
+    {
+      name: "空 body + 401：提示去查 Key",
+      code: undefined,
+      message: "",
+      status: 401,
+      want: [/API Key/, /HTTP 401/],
+      deny: [],
+    },
+    /* —— 按耗时分流上游 502：响应体完全一样，只有耗时能区分 ——
+       2026-08-22 受控实验：16 次成功都在 11–20s；静默审核（Grok 的 Imagine
+       WebSocket 不回 content-moderated，挂 ~75s 后 close 1006）三次复现是
+       75.6s / 74.1s / 80.1s。所以秒败＝基建故障（重试有意义），
+       过一分钟＝静默审核（重试永远不会过，只会一轮烧 75 秒）。 */
+    {
+      name: "上游 502 吊死 75s：静默审核，别让人守着等重试",
+      code: "upstream_unavailable",
+      message: "上游服务暂不可用",
+      status: 502,
+      elapsedMs: 75600,
+      want: [/静默拦截/, /76 秒/, /改写提示词/],
+      deny: [/暂不可用/, /自动重试即可/, /审核拦截，请改写提示词后重试/],
+    },
+    {
+      name: "经 Cloudflare 换壳的同一个错误，吊死 80s 也要认出来",
+      code: undefined,
+      message: "error code: 502",
+      status: 502,
+      elapsedMs: 80100,
+      want: [/静默拦截/, /80 秒/],
+      deny: [/Cloudflare/, /自动重试即可/],
+    },
+    {
+      name: "上游 502 秒败：基建故障，文案不变",
+      code: "upstream_unavailable",
+      message: "上游服务暂不可用",
+      status: 502,
+      elapsedMs: 180,
+      want: [/暂不可用/],
+      deny: [/静默/, /改写/],
+    },
+  ];
+  for (const c of cases) {
+    const got = describeUpstreamError(c.code, c.message, c.status, c.elapsedMs);
+    for (const re of c.want) {
+      assert.ok(re.test(got), `${c.name}：结果应含 ${re}，实际：${got}`);
+    }
+    for (const re of c.deny) {
+      assert.ok(!re.test(got), `${c.name}：结果不该含 ${re}，实际：${got}`);
+    }
+    assert.ok(got.length <= 80, `${c.name}：映射后的提示要短到能进面板，实际 ${got.length} 字`);
+  }
+
+  // 没命中规则、但上游原文有内容时：补中文说明 + 保留原文，别吃掉信息
+  const unknown400 = describeUpstreamError("invalid_request", "prompt too long", 400);
+  assert.ok(/HTTP 400/.test(unknown400) && /prompt too long/.test(unknown400), unknown400);
+
+  // 上游自己给的中文原样透出：按状态码猜的原因经常是错的，别硬加
+  // （"模型不存在" 是 404 但问题不在 Base URL；"额度等待恢复" 是 400 但跟参数无关）
+  assert.equal(describeUpstreamError(undefined, "上游账号额度等待恢复", 400), "上游账号额度等待恢复");
+  assert.equal(describeUpstreamError("model_not_found", "模型不存在", 404), "模型不存在");
+  assert.equal(
+    describeUpstreamError("invalid_api_key", "客户端 API Key 无效", 401),
+    "客户端 API Key 无效",
+  );
+
+  // 映射结果不能反过来被当成审核，否则重试判定错位
+  for (const c of cases) {
+    const got = describeUpstreamError(c.code, c.message, c.status, c.elapsedMs);
+    assert.equal(
+      isContentModerationCode(undefined, got),
+      false,
+      `${c.name}：不该被判成审核拦截（${got}）`,
+    );
+  }
+
+  // 不传耗时 = 老行为，别因为新加的分支改了既有调用点的文案
+  assert.equal(
+    describeUpstreamError("upstream_unavailable", "上游服务暂不可用", 502),
+    "上游服务暂不可用",
+  );
+  assert.equal(
+    describeUpstreamError("upstream_unavailable", "上游服务暂不可用", 502, 180),
+    "上游服务暂不可用",
+    "秒败是基建故障，文案必须保持原样",
+  );
+  // 阈值边界：正好 60s 算静默审核，59.9s 还不算
+  assert.ok(
+    /静默拦截/.test(describeUpstreamError(undefined, "上游服务暂不可用", 502, 60000)),
+    "60s 应判为静默审核",
+  );
+  assert.ok(
+    !/静默拦截/.test(describeUpstreamError(undefined, "上游服务暂不可用", 502, 59900)),
+    "59.9s 还不到阈值",
+  );
+  // 只有 502 这一类才按耗时分流：慢的 429/超时不能被说成静默审核
+  assert.ok(
+    !/静默拦截/.test(describeUpstreamError(undefined, "error code: 524", 502, 100000)),
+    "CF 524 是网关超时，不是静默审核",
+  );
+  assert.ok(
+    !/静默拦截/.test(describeUpstreamError(undefined, "上游超时", 504, 240000)),
+    "超时不该被当成静默审核",
+  );
+
+  // —— 两端共用同一份映射：以前是各写一份 + 静态扒源码比字符串，必然漂 ——
   const serverSrc = await readFile(new URL("../server/task-queue.mjs", import.meta.url), "utf8");
+  const browserSrc = await readFile(new URL("../src/lib/api.ts", import.meta.url), "utf8");
+  assert.ok(
+    /from "\.\/upstream-errors\.mjs"/.test(serverSrc),
+    "服务端必须从共用模块取中文映射，别再本地复制一份",
+  );
+  assert.ok(
+    /from "\.\.\/\.\.\/server\/upstream-errors\.mjs"/.test(browserSrc),
+    "浏览器端必须从共用模块取中文映射，别再本地复制一份",
+  );
+
+  // 耗时要真的透到映射函数里，否则上面那几条按耗时分流的分支永远不会触发
+  assert.ok(
+    /elapsedMs: Date\.now\(\) - startedAt/.test(serverSrc) &&
+      /describeUpstreamError\([^)]*res\.elapsedMs\)/.test(serverSrc),
+    "服务端要把 httpRequestJson 的耗时透给映射函数",
+  );
+  assert.ok(
+    /Date\.now\(\) - startedAt/.test(browserSrc),
+    "浏览器端要把 fetch 耗时透给映射函数",
+  );
+  const dockerfile = await readFile(new URL("../Dockerfile", import.meta.url), "utf8");
+  assert.ok(
+    /COPY[^\n]*upstream-errors\.mjs[^\n]*\.\/server\//.test(dockerfile) &&
+      /COPY[^\n]*upstream-errors\.mjs[^\n]*\/opt\/ciallo\//.test(dockerfile),
+    "共用模块要同时进构建阶段和运行阶段镜像，否则容器一启动就 ERR_MODULE_NOT_FOUND",
+  );
+
+  // —— 服务端重试判定不受映射影响 ——
   assert.ok(
     serverSrc.includes("isContentModerationCode"),
     "服务端应识别审核 code 才能放行重试",
@@ -186,13 +385,6 @@ try {
       serverSrc.includes("readUpstreamErrorBody"),
     "服务端应有统一的错误体解析（含 error 为字符串的情况）",
   );
-  // 判定实现本身也要同步：两边都得看 code + message，否则视频审核在某一端漏判
-  assert.ok(
-    /function isContentModerationCode\(code, message\)/.test(serverSrc),
-    "服务端审核判定应同时接收 code 和 message，与浏览器端保持一致",
-  );
-  const serverNotice = serverSrc.match(/const MODERATION_NOTICE = "(.+?)";/)?.[1];
-  assert.equal(serverNotice, videoZh, "两端的中文审核提示必须一字不差，否则去重/判定会漏");
 
   console.log("PASS: upstream error parsing + unbounded moderation retry");
 } finally {

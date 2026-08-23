@@ -102,8 +102,10 @@ const RULES = [
  * **只有耗时能区分**：2026-08-22 受控实验里 16 次成功都在 11–20s，静默审核三次
  * 复现是 75.6s / 74.1s / 80.1s，60s 阈值正好落在两者中间。
  *
- * 只换文案、不动重试（无上限重试是需求）：这里的意义是别让人守着一个
- * 永远不会过的任务等下去，而不是替他决定停。
+ * 只换文案、不动重试（无上限重试是需求，开着自动重试就一直重试）：文案只点出
+ * 大概率是静默审核、并提示「改写更快出图」，不写「重试不会通过」这类劝退话——
+ * 那会和前端「自动重试中 · 第 N 次」的前缀自相矛盾，让重试开关看着没意义。
+ * 何时收手由停止按钮和任务超时决定，不由这句提示替用户拍板。
  */
 const SILENT_MODERATION_MS = 60000;
 
@@ -144,7 +146,7 @@ export function describeUpstreamError(code, message, status, elapsedMs) {
   const text = `${code ?? ""} ${raw}`;
   const took = Number(elapsedMs) || 0;
   if (took >= SILENT_MODERATION_MS && UPSTREAM_502.test(text)) {
-    return `疑似提示词被上游静默拦截：上游挂起 ${Math.round(took / 1000)} 秒后断开连接，重试不会通过，请改写提示词（照片级真人全身、年龄或身材描述最容易触发）`;
+    return `疑似提示词被上游静默拦截：上游挂起 ${Math.round(took / 1000)} 秒后断开连接，改写提示词可更快出图（照片级真人全身、年龄或身材描述最容易触发）`;
   }
   for (const rule of RULES) {
     const m = rule.match.exec(text);

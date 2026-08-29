@@ -14,9 +14,16 @@ const STORAGE_KEY = "ciallo-studio.prompt-templates.v1";
 const FETCHED_KEY = "ciallo-studio.prompt-templates.fetched.v1";
 const SEPARATOR = ", ";
 
-/** 导入是信任边界：用户粘贴的 JSON 要限幅，否则一次大 paste 就撑爆 localStorage 配额 */
-const MAX_CATEGORIES = 40;
-const MAX_ITEMS = 500;
+/**
+ * 导入是信任边界：用户粘贴的 JSON 要限幅，否则一次大 paste 就撑爆 localStorage 配额。
+ * 上限按「整本词库」而不是「凭感觉的小数字」定：法典 + 魔导书这类完整词库是
+ * 200+ 分类 / 12000+ 条，旧的 40/500 会把大半内容静默截掉。
+ * 真正的护栏是 MAX_TOTAL_ITEMS（总量）和 saveTemplateLibrary 的配额兜底。
+ */
+const MAX_CATEGORIES = 400;
+const MAX_ITEMS = 1000;
+/** 总条目上限：分类数 × 单类上限会放得太宽，用总量兜住 localStorage */
+const MAX_TOTAL_ITEMS = 20000;
 const MAX_TEXT_LEN = 2000;
 const MAX_NAME_LEN = 40;
 
@@ -69,15 +76,18 @@ export function normalizeTemplateLibrary(raw: unknown): TemplateLibrary {
 
   const categories: TemplateCategory[] = [];
   const catIds = new Set<string>();
+  /** 总量护栏：撞上后停止收录，避免超大词库把 localStorage 顶爆 */
+  let budget = MAX_TOTAL_ITEMS;
 
   source.slice(0, MAX_CATEGORIES).forEach((rawCat, catIndex) => {
     if (!rawCat || typeof rawCat !== "object") return;
+    if (budget <= 0) return;
     const cat = rawCat as Record<string, unknown>;
     const rawItems = Array.isArray(cat.items) ? cat.items : [];
 
     const items: TemplateItem[] = [];
     const itemIds = new Set<string>();
-    rawItems.slice(0, MAX_ITEMS).forEach((entry, itemIndex) => {
+    rawItems.slice(0, Math.min(MAX_ITEMS, budget)).forEach((entry, itemIndex) => {
       const rec: Record<string, unknown> =
         typeof entry === "string"
           ? { name: entry, text: entry }
@@ -93,6 +103,7 @@ export function normalizeTemplateLibrary(raw: unknown): TemplateLibrary {
       });
     });
     if (!items.length) return;
+    budget -= items.length;
 
     categories.push({
       id: uniqueId(str(cat.id) || `c${catIndex}`, catIds),
@@ -115,11 +126,16 @@ export function loadTemplateLibrary(): TemplateLibrary {
   }
 }
 
-export function saveTemplateLibrary(library: TemplateLibrary): void {
+/**
+ * 落盘词库。返回 false 表示配额写不下——调用方要把这事告诉用户，
+ * 否则下次打开又是空库，而用户以为已经导入成功了。
+ */
+export function saveTemplateLibrary(library: TemplateLibrary): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(library));
+    return true;
   } catch {
-    /* ignore quota */
+    return false;
   }
 }
 
@@ -148,9 +164,16 @@ export type DefaultLibraryResult =
   | { ok: true; library: TemplateLibrary }
   | { ok: false; error: string; definitive: boolean };
 
-/** 站长提供的默认词库是外部输入，限幅后再交给 normalize */
-const MAX_FETCH_BYTES = 512 * 1024;
-const FETCH_TIMEOUT_MS = 8000;
+/**
+ * 站长提供的默认词库是外部输入，限幅后再交给 normalize。
+ * 4 MB 是为了装得下整本词库（法典 + 魔导书 合计 ~2.1 MB），
+ * 同时仍拦住明显异常的响应。
+ */
+const MAX_FETCH_BYTES = 4 * 1024 * 1024;
+/** 提示语跟着上限走，改上限不用改文案，也不会和测试里的字面值对不上 */
+const MAX_FETCH_LABEL = `${(MAX_FETCH_BYTES / 1024 / 1024).toFixed(0)} MB`;
+/** 词库有 MB 级，8s 在慢网下不够；放宽到 20s */
+const FETCH_TIMEOUT_MS = 20000;
 
 /**
  * 从站长配置的 URL 拉取默认词库。
@@ -191,7 +214,7 @@ export async function fetchDefaultTemplateLibrary(
 
   const declared = Number(resp.headers.get("content-length") || "");
   if (Number.isFinite(declared) && declared > MAX_FETCH_BYTES) {
-    return { ok: false, error: "默认词库超过 512 KB", definitive: true };
+    return { ok: false, error: `默认词库超过 ${MAX_FETCH_LABEL}`, definitive: true };
   }
 
   let text: string;
@@ -207,7 +230,7 @@ export async function fetchDefaultTemplateLibrary(
   // ponytail: 分块响应没有 content-length，只能读完再判；上限内网小文件足够，
   //   真要防超大响应得改用 ReadableStream 边读边计数。
   if (text.length > MAX_FETCH_BYTES) {
-    return { ok: false, error: "默认词库超过 512 KB", definitive: true };
+    return { ok: false, error: `默认词库超过 ${MAX_FETCH_LABEL}`, definitive: true };
   }
 
   let parsed: unknown;

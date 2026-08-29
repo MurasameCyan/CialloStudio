@@ -3,6 +3,8 @@
  * Run: node --experimental-strip-types --no-warnings scripts/test-prompt-templates.mjs
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   buildTemplatePrompt,
   countTemplateItems,
@@ -56,16 +58,44 @@ const dup = normalizeTemplateLibrary([
 assert.deepEqual(dup.categories.map((c) => c.id), ["c", "c-2"], "分类 id 去重");
 assert.deepEqual(dup.categories[0].items.map((i) => i.id), ["x", "x-2"], "条目 id 去重");
 
-// 限幅：文本 2000 / 名称 40 / 条目 500
+// 限幅：文本 2000 / 名称 40 / 单类 1000
 const huge = normalizeTemplateLibrary([
   {
     name: "n".repeat(80),
-    items: Array.from({ length: 600 }, (_, i) => ({ text: `t${i}`.padEnd(3000, "x") })),
+    items: Array.from({ length: 1200 }, (_, i) => ({ text: `t${i}`.padEnd(3000, "x") })),
   },
 ]);
 assert.equal(huge.categories[0].name.length, 40, "名称截断到 40");
-assert.equal(huge.categories[0].items.length, 500, "条目截断到 500");
+assert.equal(huge.categories[0].items.length, 1000, "条目截断到 1000");
 assert.equal(huge.categories[0].items[0].text.length, 2000, "内容截断到 2000");
+
+// 整本词库（法典 + 魔导书）是 200+ 分类 / 12000+ 条，必须能整本进来不被截。
+// 这两条钉住的是「装得下真实词库」这个承诺，收紧上限会立刻在这里失败。
+const realistic = normalizeTemplateLibrary(
+  Array.from({ length: 291 }, (_, c) => ({
+    id: `c${c}`,
+    name: `分类${c}`,
+    items: Array.from({ length: 42 }, (_, i) => ({ text: `c${c}i${i}` })),
+  })),
+);
+assert.equal(realistic.categories.length, 291, "291 个分类应全部保留");
+assert.equal(countTemplateItems(realistic), 291 * 42, "12000+ 条应全部保留");
+
+// 总量护栏：单类上限 × 分类数会放得太宽，靠总量兜住 localStorage
+const overBudget = normalizeTemplateLibrary(
+  Array.from({ length: 40 }, (_, c) => ({
+    id: `b${c}`,
+    name: `超${c}`,
+    items: Array.from({ length: 1000 }, (_, i) => ({ text: `b${c}i${i}` })),
+  })),
+);
+assert.equal(countTemplateItems(overBudget), 20000, "总量应停在 20000");
+assert.ok(
+  overBudget.categories.length < 40,
+  "撞上总量上限后应停止收录后续分类，而不是继续塞",
+);
+// 截断只发生在尾部，前面的分类必须完整
+assert.equal(overBudget.categories[0].items.length, 1000, "首个分类不受总量截断影响");
 
 // --- 存取往返 ---
 const lib = normalizeTemplateLibrary([
@@ -182,13 +212,23 @@ assert.equal(offline.definitive, false, "网络错误 → 可重试");
 assert.match(offline.error, /Failed to fetch/);
 
 // 限幅：声明的 content-length 超限就不读 body
-const tooBig = await fetchDefaultTemplateLibrary("/x.json", reply(GOOD, { length: 999 * 1024 }));
+// 上限是 4 MB（要装得下法典 + 魔导书整本 ~2.1 MB），所以用 5 MB 来触发
+const tooBig = await fetchDefaultTemplateLibrary("/x.json", reply(GOOD, { length: 5 * 1024 * 1024 }));
 assert.equal(tooBig.ok, false);
 assert.equal(tooBig.definitive, true, "超限 → 终态");
+// 整本词库（~2.1 MB）必须放得过去，否则默认词库根本载入不了
+const wholeCodex = await fetchDefaultTemplateLibrary(
+  "/x.json",
+  reply(GOOD, { length: 2.1 * 1024 * 1024 }),
+);
+assert.equal(wholeCodex.ok, true, "2.1 MB 的整本词库不该被限幅拦掉");
 // 没有 content-length（分块响应）时也要拦住
-const tooBigChunked = await fetchDefaultTemplateLibrary("/x.json", reply("x".repeat(600 * 1024)));
+const tooBigChunked = await fetchDefaultTemplateLibrary(
+  "/x.json",
+  reply("x".repeat(5 * 1024 * 1024)),
+);
 assert.equal(tooBigChunked.ok, false, "无 content-length 的超大响应也要拦");
-assert.match(tooBigChunked.error, /512 KB/);
+assert.match(tooBigChunked.error, /4 MB/, "提示语应跟着上限走");
 
 const badJson = await fetchDefaultTemplateLibrary("/x.json", reply("{ broken"));
 assert.equal(badJson.definitive, true, "坏 JSON → 终态");
@@ -243,5 +283,18 @@ assert.deepEqual(
 globalThis.window.__CIALLO_RUNTIME__ = { promptTemplatesUrl: DEFAULT_PROMPT_TEMPLATES_URL };
 assert.equal(getPromptTemplatesSource().explicit, true, "显式配约定路径仍算显式");
 delete globalThis.window;
+
+// --- 顺序护栏：词库有 MB 级，落盘可能被配额拒掉 ---
+// 必须「先落盘、成功了才打标记」。反过来的话：写不下 → 本地空库 + 标记拦住
+// 自动拉取 → 用户下次打开只剩空词库。运行时难覆盖，用静态断言钉住调用顺序。
+const dialogSrc = readFileSync(
+  fileURLToPath(new URL("../src/components/PromptTemplateDialog.tsx", import.meta.url)),
+  "utf8",
+);
+const persistAt = dialogSrc.indexOf("const persisted = saveTemplateLibrary(res.library)");
+const markAt = dialogSrc.indexOf("if (persisted) markTriedDefaultLibrary()");
+assert.ok(persistAt > 0, "默认词库落盘应接收 saveTemplateLibrary 的返回值");
+assert.ok(markAt > 0, "已尝试标记必须以落盘成功为前提");
+assert.ok(markAt > persistAt, "必须先落盘再打标记，否则写不下时会留下空词库");
 
 console.log("prompt templates ok");

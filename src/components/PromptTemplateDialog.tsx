@@ -81,14 +81,19 @@ export function PromptTemplateDialog({
       if (!mountedRef.current) return;
       setLoadingDefault(false);
       if (res.ok) {
-        markTriedDefaultLibrary();
-        saveTemplateLibrary(res.library);
+        const persisted = saveTemplateLibrary(res.library);
+        // 只有真的落盘了才打标记：写不下时留着自动路径，下次打开还能再拉一次，
+        // 否则本地是空库、标记又拦住自动拉取，用户就只剩一个空词库。
+        if (persisted) markTriedDefaultLibrary();
         onLibraryChange(res.library);
         setSelection({});
-        setNotice({
-          ok: true,
-          text: `已载入默认词库 ${res.library.categories.length} 个分类 / ${countTemplateItems(res.library)} 条`,
-        });
+        const summary = `${res.library.categories.length} 个分类 / ${countTemplateItems(res.library)} 条`;
+        // 写不进 localStorage 时本次仍可用，但下次打开会重新拉，得说清楚
+        setNotice(
+          persisted
+            ? { ok: true, text: `已载入默认词库 ${summary}` }
+            : { ok: false, text: `已载入 ${summary}，但浏览器存储写不下，下次打开会重新载入` },
+        );
         return;
       }
 
@@ -145,11 +150,16 @@ export function PromptTemplateDialog({
       setNotice({ ok: false, text: "没有解析出任何有效条目" });
       return;
     }
-    saveTemplateLibrary(next);
+    const persisted = saveTemplateLibrary(next);
     onLibraryChange(next);
     setSelection({});
     setImportText("");
-    setNotice({ ok: true, text: `已导入 ${next.categories.length} 个分类 / ${countTemplateItems(next)} 条` });
+    const summary = `${next.categories.length} 个分类 / ${countTemplateItems(next)} 条`;
+    setNotice(
+      persisted
+        ? { ok: true, text: `已导入 ${summary}` }
+        : { ok: false, text: `已导入 ${summary}，但浏览器存储写不下，下次打开需重新导入` },
+    );
   }
 
   function handleExport() {

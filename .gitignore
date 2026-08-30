@@ -37,6 +37,10 @@ docs/superpowers/plans/
 # Docker local overrides
 docker-compose.override.yml
 
+# 默认提示词词库是部署侧私有 artifact，不随公开仓库发布
+/prompt-templates.json
+/public/prompt-templates.json
+
 # Local community API test data
 .tmp-data/
 .data/
@@ -48,4 +52,3 @@ uploads/
 
 # Agent 工作区（git worktree），不进版本库
 .claude/worktrees/
-

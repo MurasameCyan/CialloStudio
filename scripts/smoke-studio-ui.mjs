@@ -7,6 +7,18 @@ import assert from "node:assert/strict";
 
 const DEBUG_PORT = 9223;
 const APP_URL = "http://127.0.0.1:5173/";
+const TEMPLATE_FIXTURE = {
+  categories: [
+    { id: "poses", name: "姿势", multi: false, items: [{ id: "p1", name: "站立", text: "standing" }] },
+    { id: "dx1", name: "法典·各种oc·单机角色", multi: false, items: [{ id: "d1", name: "角色", text: "hero" }] },
+    { id: "mx1", name: "魔导书·镜头·景别", multi: true, items: [{ id: "m1", name: "近景", text: "close-up" }] },
+    { id: "mx2", name: "魔导书·镜头·特写镜头", multi: true, items: [{ id: "m2", name: "眼睛", text: "eye focus" }] },
+    { id: "mx4", name: "魔导书·镜头2", multi: true, items: [{ id: "m4", name: "远景", text: "long shot" }] },
+    { id: "lx1", name: "Loli画风·第1组", multi: false, items: [{ id: "l1", name: "画风1", text: "artist:a" }] },
+    { id: "lx2", name: "Loli画风·第2组", multi: false, items: [{ id: "l2", name: "画风2", text: "artist:b" }] },
+    { id: "lx3", name: "Loli画风·第3组", multi: false, items: [{ id: "l3", name: "画风3", text: "artist:c" }] },
+  ],
+};
 
 async function openTarget() {
   // 开空白页：runtime-config.js 的拦截器必须在首次导航前装好
@@ -90,6 +102,11 @@ socket.addEventListener("message", (event) => {
 
 await send("Fetch.enable", {
   patterns: [{ urlPattern: "*runtime-config.js*", requestStage: "Response" }],
+});
+await send("Page.addScriptToEvaluateOnNewDocument", {
+  source: `localStorage.setItem("ciallo-studio.prompt-templates.v1", ${JSON.stringify(
+    JSON.stringify(TEMPLATE_FIXTURE),
+  )}); localStorage.setItem("ciallo-studio.prompt-templates.fetched.v1", "1");`,
 });
 await send("Page.navigate", { url: APP_URL });
 
@@ -198,9 +215,87 @@ const templateButton = await send("Runtime.evaluate", {
 assert.equal(templateButton.result.value, true, "创作台应存在模板按钮");
 await waitFor(send, `Boolean(document.querySelector('[role="dialog"][aria-label="提示词模板"]'))`);
 
+const mobileTemplateNav = await send("Runtime.evaluate", {
+  expression: `(() => {
+    const tree = document.querySelector('.tpl-cat-tree');
+    const mobile = document.querySelector('.tpl-cat-mobile');
+    const select = mobile.querySelector('select');
+    return {
+      treeDisplay: getComputedStyle(tree).display,
+      selectDisplay: getComputedStyle(mobile).display,
+      values: [...select.options].map((option) => option.value),
+      groups: [...select.querySelectorAll('optgroup')].map((group) => group.label),
+    };
+  })()`,
+  returnByValue: true,
+});
+assert.equal(mobileTemplateNav.result.value.treeDisplay, "none", "390px 应隐藏桌面分类树");
+assert.notEqual(mobileTemplateNav.result.value.selectDisplay, "none", "390px 应显示分类选择器");
+assert.deepEqual(
+  mobileTemplateNav.result.value.values,
+  ["poses", "dx1", "mx1", "mx2", "mx4", "lx1", "lx2", "lx3"],
+  "移动选择器不应漏分类",
+);
+assert.ok(
+  mobileTemplateNav.result.value.groups.includes("魔导书 / 镜头"),
+  "移动选择器应把同名主题合并为 optgroup",
+);
+
+await send("Runtime.evaluate", {
+  expression: `(() => {
+    const select = document.querySelector('.tpl-cat-mobile select');
+    select.value = 'mx1';
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`,
+});
+await waitFor(send, `document.querySelector('.tpl-current-title')?.textContent.includes('魔导书 / 镜头 / 景别')`);
+
+await send("Emulation.setDeviceMetricsOverride", {
+  width: 940,
+  height: 900,
+  deviceScaleFactor: 1,
+  mobile: false,
+});
+await new Promise((resolve) => setTimeout(resolve, 150));
+await send("Runtime.evaluate", {
+  expression: `document.querySelector('.tpl-items-grid .tpl-item').click()`,
+});
+await waitFor(send, `document.querySelector('.tpl-items-grid .tpl-item')?.getAttribute('aria-pressed') === 'true'`);
+await send("Runtime.evaluate", {
+  expression: `[...document.querySelectorAll('.tpl-cat-group-toggle')]
+    .find((button) => button.textContent.includes('魔导书'))?.click()`,
+});
+await waitFor(
+  send,
+  `[...document.querySelectorAll('.tpl-cat-group-toggle')]
+    .find((button) => button.textContent.includes('魔导书'))?.getAttribute('aria-expanded') === 'false'`,
+);
+const desktopTemplateNav = await send("Runtime.evaluate", {
+  expression: `(() => {
+    const tree = document.querySelector('.tpl-cat-tree');
+    const mobile = document.querySelector('.tpl-cat-mobile');
+    const source = [...document.querySelectorAll('.tpl-cat-group-toggle')]
+      .find((button) => button.textContent.includes('魔导书'));
+    const item = document.querySelector('.tpl-items-grid .tpl-item');
+    return {
+      treeDisplay: getComputedStyle(tree).display,
+      selectDisplay: getComputedStyle(mobile).display,
+      sourceExpanded: source.getAttribute('aria-expanded'),
+      selected: item.getAttribute('aria-pressed'),
+      currentTitle: document.querySelector('.tpl-current-title')?.textContent,
+    };
+  })()`,
+  returnByValue: true,
+});
+assert.notEqual(desktopTemplateNav.result.value.treeDisplay, "none", "940px 应显示桌面分类树");
+assert.equal(desktopTemplateNav.result.value.selectDisplay, "none", "940px 应隐藏移动分类选择器");
+assert.equal(desktopTemplateNav.result.value.sourceExpanded, "false", "来源组应能折叠");
+assert.equal(desktopTemplateNav.result.value.selected, "true", "折叠来源组不应清除选择");
+assert.match(desktopTemplateNav.result.value.currentTitle, /魔导书 \/ 镜头 \/ 景别/);
+
 // 关掉弹窗，避免它挡住后面要点的导航
 await send("Runtime.evaluate", {
-  expression: `document.querySelector('[role="dialog"][aria-label="提示词模板"] .tpl-close')?.click()`,
+  expression: `document.querySelector('[role="dialog"][aria-label="提示词模板"] [aria-label="关闭模板"]')?.click()`,
 });
 
 // 登录站长：管理页要求登录态，未登录点「管理」会被踢回大厅（App.tsx:144）。

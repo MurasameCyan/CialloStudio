@@ -4864,7 +4864,7 @@ a {
   cursor: pointer;
 }
 
-/* 分类列 + 条目区：仅条目区滚动，分类列跟随内容 */
+/* 分类树 + 条目区各自滚动，长词库不会把弹窗整体顶出视口 */
 .tpl-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -4873,11 +4873,12 @@ a {
   gap: 12px;
 }
 
-.tpl-cats {
+.tpl-cat-tree {
   min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
   padding: 6px;
   border-radius: var(--radius-md);
   border: var(--hairline);
@@ -4885,18 +4886,120 @@ a {
   overflow-y: auto;
 }
 
+.tpl-cat-mobile {
+  display: none;
+  min-width: 0;
+}
+
+.tpl-cat-select {
+  width: 100%;
+  min-height: 38px;
+}
+
+.tpl-cat-group + .tpl-cat-group {
+  margin-top: 3px;
+  padding-top: 3px;
+  border-top: 1px solid var(--separator);
+}
+
+.tpl-cat-group-toggle {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 7px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 620;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s var(--ease), color 0.16s var(--ease), border-color 0.16s var(--ease);
+}
+
+.tpl-cat-group-toggle[data-level="source"] {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.tpl-cat-group-toggle:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.tpl-cat-group-toggle[data-active="true"] {
+  color: var(--accent);
+}
+
+.tpl-cat-group-toggle:focus-visible,
+.tpl-cat:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 48%, transparent);
+  outline-offset: 1px;
+}
+
+.tpl-cat-group-chevron {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.16s var(--ease);
+}
+
+.tpl-cat-group-toggle[aria-expanded="true"] .tpl-cat-group-chevron {
+  transform: rotate(90deg);
+}
+
+.tpl-cat-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-cat-group-count {
+  color: var(--text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tpl-cat-group-list,
+.tpl-cat-leaves {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tpl-cat-group-list {
+  padding: 2px 0 2px 8px;
+}
+
+.tpl-cat-leaves {
+  padding: 2px 0 2px 12px;
+}
+
+.tpl-cat-subgroup {
+  min-width: 0;
+}
+
 .tpl-cat {
+  width: 100%;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 8px 10px;
+  padding: 7px 8px;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--text-secondary);
   font: inherit;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 620;
   text-align: left;
   cursor: pointer;
@@ -4945,6 +5048,27 @@ a {
   flex: 0 0 auto;
   color: var(--text-tertiary);
   font-size: 12px;
+}
+
+.tpl-items-head-main {
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.tpl-current-title {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpl-items-mode {
+  flex: 0 0 auto;
 }
 
 .tpl-link {
@@ -5077,20 +5201,18 @@ a {
     padding: 12px;
   }
 
-  /* 窄屏改上下排布：分类横向滚动，条目区拿走剩余高度 */
+  /* 窄屏改用原生分组选单，避免横向渲染数百个分类按钮 */
   .tpl-body {
     grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
-  .tpl-cats {
-    flex-direction: row;
-    gap: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
+  .tpl-cat-tree {
+    display: none;
   }
 
-  .tpl-cat {
-    flex: 0 0 auto;
+  .tpl-cat-mobile {
+    display: block;
   }
 
   .tpl-foot-actions {

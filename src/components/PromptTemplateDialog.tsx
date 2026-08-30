@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronRight } from "lucide-react";
 import {
   buildTemplatePrompt,
+  canApplyDefaultTemplate,
   countTemplateItems,
   fetchDefaultTemplateLibrary,
+  groupTemplateCategories,
   hasTriedDefaultLibrary,
   markTriedDefaultLibrary,
   normalizeTemplateLibrary,
   randomTemplateSelection,
   saveTemplateLibrary,
   toggleTemplateSelection,
+  type TemplateCategoryLeaf,
   type TemplateLibrary,
   type TemplateSelection,
 } from "@/lib/promptTemplates";
@@ -24,6 +28,21 @@ type Props = {
   onClose: () => void;
 };
 
+function sourceExpansionKey(sourceKey: string): string {
+  return `source:${sourceKey}`;
+}
+
+function subgroupExpansionKey(subgroupKey: string): string {
+  return `subgroup:${subgroupKey}`;
+}
+
+function selectedIds(selection: TemplateSelection, categoryId: string): string[] {
+  const ids = Object.prototype.hasOwnProperty.call(selection, categoryId)
+    ? selection[categoryId]
+    : undefined;
+  return Array.isArray(ids) ? ids : [];
+}
+
 export function PromptTemplateDialog({
   open,
   library,
@@ -33,6 +52,7 @@ export function PromptTemplateDialog({
 }: Props) {
   const [selection, setSelection] = useState<TemplateSelection>({});
   const [activeCat, setActiveCat] = useState<string | null>(null);
+  const [expandedCatGroups, setExpandedCatGroups] = useState<Set<string>>(() => new Set());
   const [manageOpen, setManageOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
@@ -43,8 +63,38 @@ export function PromptTemplateDialog({
   /** 同一次挂载内只自动拉一次；localStorage 标记跨刷新，这个 ref 防 StrictMode 双跑 */
   const fetchOnceRef = useRef(false);
   const mountedRef = useRef(true);
+  const defaultLoadTokenRef = useRef(0);
+  const libraryRef = useRef(library);
 
   const total = countTemplateItems(library);
+  const categoryGroups = useMemo(() => groupTemplateCategories(library), [library]);
+  const categoryLeafIndex = useMemo(() => {
+    const index = new Map<
+      string,
+      {
+        leaf: TemplateCategoryLeaf;
+        sourceKey: string;
+        subgroupKey: string | null;
+      }
+    >();
+    for (const source of categoryGroups) {
+      for (const leaf of source.categories) {
+        index.set(leaf.category.id, { leaf, sourceKey: source.key, subgroupKey: null });
+      }
+      for (const subgroup of source.subgroups) {
+        for (const leaf of subgroup.categories) {
+          index.set(leaf.category.id, {
+            leaf,
+            sourceKey: source.key,
+            subgroupKey: subgroup.key,
+          });
+        }
+      }
+    }
+    return index;
+  }, [categoryGroups]);
+  const currentLocation = activeCat ? categoryLeafIndex.get(activeCat) ?? null : null;
+  const currentLeaf = currentLocation?.leaf ?? null;
   const preview = useMemo(() => buildTemplatePrompt(library, selection), [library, selection]);
   const pickedCount = useMemo(
     () => Object.values(selection).reduce((sum, ids) => sum + ids.length, 0),
@@ -69,16 +119,41 @@ export function PromptTemplateDialog({
     else if (!activeCat || !ids.includes(activeCat)) setActiveCat(ids[0]!);
   }, [library, activeCat]);
 
+  // 切换分类或词库时展开当前路径；用户仍可手动收起当前组，右侧内容保持不变。
+  useEffect(() => {
+    if (!currentLocation) return;
+    const required = [sourceExpansionKey(currentLocation.sourceKey)];
+    if (currentLocation.subgroupKey) {
+      required.push(subgroupExpansionKey(currentLocation.subgroupKey));
+    }
+    setExpandedCatGroups((previous) => {
+      const next = new Set(previous);
+      let changed = false;
+      for (const key of required) {
+        if (next.has(key)) continue;
+        next.add(key);
+        changed = true;
+      }
+      return changed ? next : previous;
+    });
+  }, [activeCat, categoryLeafIndex, currentLocation]);
+
   /**
    * 拉取站长配置的默认词库。自动路径（首次打开且本地为空）尊重 FETCHED 标记，
    * 失败后不再反复烦用户；手动路径（空态按钮）无视标记，站长改好配置能立刻重试。
    */
   const loadDefault = useCallback(
     async (manual: boolean) => {
+      const requestToken = ++defaultLoadTokenRef.current;
+      const hadExistingLibrary = libraryRef.current.categories.length > 0;
       const { url, explicit } = getPromptTemplatesSource();
       setLoadingDefault(true);
       const res = await fetchDefaultTemplateLibrary(url);
       if (!mountedRef.current) return;
+      if (!canApplyDefaultTemplate(manual, requestToken, defaultLoadTokenRef.current, libraryRef.current)) {
+        if (requestToken === defaultLoadTokenRef.current) setLoadingDefault(false);
+        return;
+      }
       setLoadingDefault(false);
       if (res.ok) {
         const persisted = saveTemplateLibrary(res.library);
@@ -88,11 +163,12 @@ export function PromptTemplateDialog({
         onLibraryChange(res.library);
         setSelection({});
         const summary = `${res.library.categories.length} 个分类 / ${countTemplateItems(res.library)} 条`;
-        // 写不进 localStorage 时本次仍可用，但下次打开会重新拉，得说清楚
+        // 空库写不进时下次会重拉；已有库写不进时保留旧缓存，不能误报会自动更新
+        const persistenceHint = hadExistingLibrary ? "刷新后仍保留之前的词库" : "下次打开会重新载入";
         setNotice(
           persisted
             ? { ok: true, text: `已载入默认词库 ${summary}` }
-            : { ok: false, text: `已载入 ${summary}，但浏览器存储写不下，下次打开会重新载入` },
+            : { ok: false, text: `已载入 ${summary}，但浏览器存储写不下，${persistenceHint}` },
         );
         return;
       }
@@ -120,6 +196,10 @@ export function PromptTemplateDialog({
     };
   }, []);
 
+  useEffect(() => {
+    libraryRef.current = library;
+  }, [library]);
+
   /** 首次打开且本地词库为空时自动拉一次；用户导入过或主动清空过都不碰 */
   useEffect(() => {
     if (!open || library.categories.length || fetchOnceRef.current) return;
@@ -130,7 +210,7 @@ export function PromptTemplateDialog({
 
   if (!open) return null;
 
-  const current = library.categories.find((c) => c.id === activeCat) ?? null;
+  const current = currentLeaf?.category ?? null;
 
   function applyImport(raw: string) {
     const text = raw.trim();
@@ -150,6 +230,8 @@ export function PromptTemplateDialog({
       setNotice({ ok: false, text: "没有解析出任何有效条目" });
       return;
     }
+    defaultLoadTokenRef.current += 1;
+    setLoadingDefault(false);
     const persisted = saveTemplateLibrary(next);
     onLibraryChange(next);
     setSelection({});
@@ -181,6 +263,8 @@ export function PromptTemplateDialog({
 
   function handlePickFile(file: File | undefined) {
     if (!file) return;
+    defaultLoadTokenRef.current += 1;
+    setLoadingDefault(false);
     void file
       .text()
       .then(applyImport)
@@ -194,6 +278,34 @@ export function PromptTemplateDialog({
     }
     onApply(preview, mode);
     onClose();
+  }
+
+  function toggleCategoryGroup(key: string) {
+    setExpandedCatGroups((previous) => {
+      const next = new Set(previous);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  function renderCategoryLeaf(leaf: TemplateCategoryLeaf) {
+    const cat = leaf.category;
+    const selectedCount = selectedIds(selection, cat.id).length;
+    const active = cat.id === activeCat;
+    return (
+      <button
+        key={`category:${cat.id}`}
+        type="button"
+        aria-current={active ? "page" : undefined}
+        className={`tpl-cat ${active ? "active" : ""}`}
+        title={cat.name}
+        onClick={() => setActiveCat(cat.id)}
+      >
+        <span className="tpl-cat-name">{leaf.label}</span>
+        <span className="tpl-cat-count">{selectedCount > 0 ? selectedCount : cat.items.length}</span>
+      </button>
+    );
   }
 
   return createPortal(
@@ -266,6 +378,14 @@ export function PromptTemplateDialog({
               <button type="button" className="hall-chip" onClick={handleExport}>
                 导出
               </button>
+              <button
+                type="button"
+                className="hall-chip"
+                disabled={loadingDefault}
+                onClick={() => void loadDefault(true)}
+              >
+                {loadingDefault ? "载入中…" : "载入默认词库并覆盖"}
+              </button>
               <span className="tpl-manage-hint">
                 本地词库 HTML 可用 <code>scripts/convert-prompt-library.mjs</code> 转成此格式
               </span>
@@ -275,31 +395,112 @@ export function PromptTemplateDialog({
 
         {total ? (
           <div className="tpl-body">
-            <div className="tpl-cats" role="tablist" aria-label="模板分类">
-              {library.categories.map((cat) => {
-                const n = selection[cat.id]?.length ?? 0;
+            <nav className="tpl-cat-tree" aria-label="模板分类">
+              {categoryGroups.map((source) => {
+                const sourceStateKey = sourceExpansionKey(source.key);
+                const sourceOpen = expandedCatGroups.has(sourceStateKey);
+                const sourceActive = currentLocation?.sourceKey === source.key;
+                const sourcePanelId = `tpl-cat-source-${source.key}`;
+                const sourceCount =
+                  source.categories.length +
+                  source.subgroups.reduce((sum, subgroup) => sum + subgroup.categories.length, 0);
                 return (
-                  <button
-                    key={cat.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={cat.id === activeCat}
-                    className={`tpl-cat ${cat.id === activeCat ? "active" : ""}`}
-                    onClick={() => setActiveCat(cat.id)}
-                  >
-                    <span className="tpl-cat-name">{cat.name}</span>
-                    <span className="tpl-cat-count">{n > 0 ? n : cat.items.length}</span>
-                  </button>
+                  <section key={`source:${source.key}`} className="tpl-cat-group">
+                    <button
+                      type="button"
+                      className="tpl-cat-group-toggle"
+                      aria-expanded={sourceOpen}
+                      aria-controls={sourceOpen ? sourcePanelId : undefined}
+                      data-level="source"
+                      data-active={sourceActive ? "true" : undefined}
+                      onClick={() => toggleCategoryGroup(sourceStateKey)}
+                    >
+                      <ChevronRight className="tpl-cat-group-chevron" aria-hidden="true" />
+                      <span className="tpl-cat-group-label">{source.label}</span>
+                      <span className="tpl-cat-group-count">{sourceCount}</span>
+                    </button>
+                    {sourceOpen ? (
+                      <div id={sourcePanelId} className="tpl-cat-group-list">
+                        {source.subgroups.map((subgroup, subgroupIndex) => {
+                          const subgroupStateKey = subgroupExpansionKey(subgroup.key);
+                          const subgroupOpen = expandedCatGroups.has(subgroupStateKey);
+                          const subgroupActive = currentLocation?.subgroupKey === subgroup.key;
+                          const subgroupPanelId = `tpl-cat-subgroup-${source.key}-${subgroupIndex}`;
+                          return (
+                            <div key={`subgroup:${subgroup.key}`} className="tpl-cat-subgroup">
+                              <button
+                                type="button"
+                                className="tpl-cat-group-toggle"
+                                aria-expanded={subgroupOpen}
+                                aria-controls={subgroupOpen ? subgroupPanelId : undefined}
+                                data-level="topic"
+                                data-active={subgroupActive ? "true" : undefined}
+                                onClick={() => toggleCategoryGroup(subgroupStateKey)}
+                              >
+                                <ChevronRight className="tpl-cat-group-chevron" aria-hidden="true" />
+                                <span className="tpl-cat-group-label">{subgroup.label}</span>
+                                <span className="tpl-cat-group-count">{subgroup.categories.length}</span>
+                              </button>
+                              {subgroupOpen ? (
+                                <div id={subgroupPanelId} className="tpl-cat-leaves">
+                                  {subgroup.categories.map(renderCategoryLeaf)}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                        {source.categories.map(renderCategoryLeaf)}
+                      </div>
+                    ) : null}
+                  </section>
                 );
               })}
-            </div>
+            </nav>
+
+            <label className="tpl-cat-mobile">
+              <select
+                className="control tpl-cat-select"
+                aria-label="模板分类"
+                value={activeCat ?? ""}
+                onChange={(event) => setActiveCat(event.target.value)}
+              >
+                {categoryGroups.flatMap((source) => [
+                  ...source.subgroups.map((subgroup) => (
+                    <optgroup
+                      key={`subgroup:${subgroup.key}`}
+                      label={`${source.label} / ${subgroup.label}`}
+                    >
+                      {subgroup.categories.map((leaf) => (
+                        <option key={`category:${leaf.category.id}`} value={leaf.category.id}>
+                          {leaf.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  )),
+                  source.categories.length ? (
+                    <optgroup key={`direct:${source.key}`} label={source.label}>
+                      {source.categories.map((leaf) => (
+                        <option key={`category:${leaf.category.id}`} value={leaf.category.id}>
+                          {leaf.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : null,
+                ])}
+              </select>
+            </label>
 
             <div className="tpl-items">
               {current ? (
                 <>
                   <div className="tpl-items-head">
-                    <span>{current.multi ? "可多选" : "单选"}</span>
-                    {selection[current.id]?.length ? (
+                    <div className="tpl-items-head-main">
+                      <strong className="tpl-current-title" title={current.name}>
+                        {currentLeaf ? currentLeaf.path.join(" / ") : current.name}
+                      </strong>
+                      <span className="tpl-items-mode">{current.multi ? "可多选" : "单选"}</span>
+                    </div>
+                    {selectedIds(selection, current.id).length ? (
                       <button
                         type="button"
                         className="tpl-link"
@@ -317,7 +518,7 @@ export function PromptTemplateDialog({
                   </div>
                   <div className="tpl-items-grid">
                     {current.items.map((item) => {
-                      const on = selection[current.id]?.includes(item.id) ?? false;
+                      const on = selectedIds(selection, current.id).includes(item.id);
                       return (
                         <button
                           key={item.id}

@@ -1,0 +1,5 @@
+# 默认提示词词库是部署侧私有 artifact，不进入镜像构建上下文
+/prompt-templates.json
+/public/prompt-templates.json
+# 本地构建产物可能复制了私有词库，也不进入构建上下文
+/dist/

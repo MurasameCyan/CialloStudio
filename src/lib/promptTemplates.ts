@@ -1,11 +1,10 @@
 /**
  * 创作台提示词模板库。
  *
- * 内容不内置：分类与条目由用户自己维护，存在 localStorage，可 JSON 导入导出
+ * 默认词库不随公开镜像发布；站长可挂载 /prompt-templates.json，
+ * 或用 CIALLO_PROMPT_TEMPLATES_URL 指到受控地址。用户首次打开且本地为空时自动
+ * 拉取一次；之后词库存在 localStorage，可 JSON 导入导出并由用户自己维护
  * （见 scripts/convert-prompt-library.mjs，可把本地词库 HTML 转成导入用 JSON）。
- * 站长把 JSON 挂到 /prompt-templates.json 即可提供默认词库（或用
- * CIALLO_PROMPT_TEMPLATES_URL 指到别处），用户首次打开且本地为空时自动
- * 拉取一次（见 fetchDefaultTemplateLibrary 与 getPromptTemplatesSource）。
  * 这里只管存储与组装，UI 只负责勾选。
  */
 
@@ -26,6 +25,7 @@ const MAX_ITEMS = 1000;
 const MAX_TOTAL_ITEMS = 20000;
 const MAX_TEXT_LEN = 2000;
 const MAX_NAME_LEN = 40;
+const MAX_ID_LEN = 128;
 
 export type TemplateItem = { id: string; name: string; text: string };
 
@@ -44,6 +44,23 @@ export type TemplateSelection = Record<string, string[]>;
 
 export const EMPTY_TEMPLATE_LIBRARY: TemplateLibrary = { categories: [] };
 
+/** 普通对象上的原型属性不能直接作为词库 id，否则会污染选择状态。 */
+const UNSAFE_RECORD_KEYS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "toLocaleString",
+  "toString",
+  "valueOf",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+]);
+
 function str(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -52,15 +69,36 @@ function cut(value: string, max: number): string {
   return value.length <= max ? value : value.slice(0, max);
 }
 
-function uniqueId(base: string, seen: Set<string>): string {
+function uniqueId(base: string, seen: Set<string>, maxLength = Infinity): string {
   let id = base;
   let n = 2;
   while (seen.has(id)) {
-    id = `${base}-${n}`;
+    const suffix = `-${n}`;
+    id = maxLength === Infinity ? `${base}${suffix}` : `${base.slice(0, Math.max(0, maxLength - suffix.length))}${suffix}`;
     n += 1;
   }
   seen.add(id);
   return id;
+}
+
+function safeRecordId(raw: unknown, fallback: string, seen: Set<string>): string {
+  let base = cut(str(raw), MAX_ID_LEN) || fallback;
+  if (UNSAFE_RECORD_KEYS.has(base)) base = `id-${base}`;
+  return uniqueId(base, seen, MAX_ID_LEN);
+}
+
+function readSelectionIds(selection: TemplateSelection, key: string): string[] {
+  const value = Object.prototype.hasOwnProperty.call(selection, key) ? selection[key] : undefined;
+  return Array.isArray(value) ? value : [];
+}
+
+function writeSelectionIds(selection: TemplateSelection, key: string, ids: string[]): void {
+  Object.defineProperty(selection, key, {
+    configurable: true,
+    enumerable: true,
+    value: ids,
+    writable: true,
+  });
 }
 
 /**
@@ -97,7 +135,7 @@ export function normalizeTemplateLibrary(raw: unknown): TemplateLibrary {
       const text = cut(str(rec.text) || str(rec.core), MAX_TEXT_LEN);
       if (!text) return;
       items.push({
-        id: uniqueId(str(rec.id) || `i${itemIndex}`, itemIds),
+        id: safeRecordId(rec.id, `i${itemIndex}`, itemIds),
         name: cut(str(rec.name) || text, MAX_NAME_LEN),
         text,
       });
@@ -106,7 +144,7 @@ export function normalizeTemplateLibrary(raw: unknown): TemplateLibrary {
     budget -= items.length;
 
     categories.push({
-      id: uniqueId(str(cat.id) || `c${catIndex}`, catIds),
+      id: safeRecordId(cat.id, `c${catIndex}`, catIds),
       name: cut(str(cat.name) || `分类 ${catIndex + 1}`, MAX_NAME_LEN),
       multi: cat.multi === true,
       items,
@@ -141,6 +179,185 @@ export function saveTemplateLibrary(library: TemplateLibrary): boolean {
 
 export function countTemplateItems(library: TemplateLibrary): number {
   return library.categories.reduce((sum, cat) => sum + cat.items.length, 0);
+}
+
+/** 默认响应只有在请求仍属当前代际且自动路径下词库仍为空时才能应用。 */
+export function canApplyDefaultTemplate(
+  manual: boolean,
+  requestToken: number,
+  currentToken: number,
+  currentLibrary: TemplateLibrary,
+): boolean {
+  return requestToken === currentToken && (manual || currentLibrary.categories.length === 0);
+}
+
+export type TemplateCategoryLeaf = {
+  category: TemplateCategory;
+  /** 导航里显示的短名称，不重复来源/主题前缀 */
+  label: string;
+  /** 右侧标题与移动端选单使用的完整路径 */
+  path: string[];
+};
+
+export type TemplateCategorySubgroup = {
+  key: string;
+  label: string;
+  categories: TemplateCategoryLeaf[];
+};
+
+export type TemplateCategorySourceGroup = {
+  key: "base" | "codex" | "grimoire" | "loli" | "other";
+  label: string;
+  categories: TemplateCategoryLeaf[];
+  subgroups: TemplateCategorySubgroup[];
+};
+
+const BASE_CATEGORY_IDS = new Set([
+  "poses",
+  "clothings",
+  "motions",
+  "cameras",
+  "expressions",
+  "characters",
+  "bodyHot",
+  "tightHot",
+  "atmosphere",
+  "erotic",
+]);
+
+const TEMPLATE_SOURCE_GROUPS: Array<Pick<TemplateCategorySourceGroup, "key" | "label">> = [
+  { key: "base", label: "基础" },
+  { key: "codex", label: "法典" },
+  { key: "grimoire", label: "魔导书" },
+  { key: "loli", label: "Loli画风" },
+  { key: "other", label: "其他" },
+];
+
+function baseCategoryId(id: string, knownIds: ReadonlySet<string>): string {
+  let base = id;
+  while (/-\d+$/.test(base)) {
+    const suffix = Number(base.match(/-(\d+)$/)?.[1] ?? NaN);
+    // uniqueId 只会从 -2 递增；更大的数字通常是用户自己的业务后缀。
+    if (!Number.isInteger(suffix) || suffix < 2 || suffix > MAX_CATEGORIES) break;
+    const candidate = base.replace(/-\d+$/, "");
+    if (!knownIds.has(candidate)) break;
+    base = candidate;
+  }
+  return base;
+}
+
+function hasSourcePrefix(name: string, source: "法典" | "魔导书" | "L画风" | "Loli画风"): boolean {
+  return name === source || name.startsWith(`${source}·`);
+}
+
+function templateSourceKey(
+  category: TemplateCategory,
+  knownIds: ReadonlySet<string>,
+): TemplateCategorySourceGroup["key"] {
+  const baseId = baseCategoryId(category.id, knownIds);
+  const canonicalId = baseId === category.id || knownIds.has(baseId);
+  const name = category.name.trim();
+  if (BASE_CATEGORY_IDS.has(baseId) && canonicalId) return "base";
+  if (/^dx\d+$/.test(baseId) && (canonicalId || hasSourcePrefix(name, "法典"))) return "codex";
+  if (/^mx\d+$/.test(baseId) && (canonicalId || hasSourcePrefix(name, "魔导书"))) return "grimoire";
+  if (/^lx\d+$/.test(baseId) && (canonicalId || hasSourcePrefix(name, "L画风") || hasSourcePrefix(name, "Loli画风"))) {
+    return "loli";
+  }
+  if (hasSourcePrefix(name, "法典")) return "codex";
+  if (hasSourcePrefix(name, "魔导书")) return "grimoire";
+  if (hasSourcePrefix(name, "L画风") || hasSourcePrefix(name, "Loli画风")) return "loli";
+  return "other";
+}
+
+function categoryNameSegments(
+  category: TemplateCategory,
+  source: TemplateCategorySourceGroup["key"],
+): string[] {
+  if (source === "base" || source === "other") return [category.name];
+
+  const parts = category.name.split("·").map((part) => part.trim()).filter(Boolean);
+  const expected =
+    source === "codex"
+      ? new Set(["法典"])
+      : source === "grimoire"
+        ? new Set(["魔导书"])
+        : new Set(["L画风", "Loli画风"]);
+  if (!expected.has(parts[0] ?? "")) return [category.name];
+  return parts.slice(1).length ? parts.slice(1) : [category.name];
+}
+
+/**
+ * 由现有 id/name 推导「来源 → 同名主题 → 叶分类」，不改变词库 schema。
+ * 直接分类与同名主题并存时，直接分类显示为「综合」。
+ */
+export function groupTemplateCategories(
+  library: TemplateLibrary,
+): TemplateCategorySourceGroup[] {
+  const buckets = new Map<
+    TemplateCategorySourceGroup["key"],
+    Array<{ category: TemplateCategory; segments: string[] }>
+  >();
+  const knownIds = new Set(library.categories.map((category) => category.id));
+  for (const category of library.categories) {
+    const source = templateSourceKey(category, knownIds);
+    const entries = buckets.get(source) ?? [];
+    entries.push({ category, segments: categoryNameSegments(category, source) });
+    buckets.set(source, entries);
+  }
+
+  const groups: TemplateCategorySourceGroup[] = [];
+  for (const source of TEMPLATE_SOURCE_GROUPS) {
+    const entries = buckets.get(source.key);
+    if (!entries?.length) continue;
+
+    const nestedTopics = new Set(
+      entries.filter(({ segments }) => segments.length > 1).map(({ segments }) => segments[0]!),
+    );
+    const direct: TemplateCategoryLeaf[] = [];
+    const subgroupMap = new Map<string, TemplateCategorySubgroup>();
+
+    for (const { category, segments } of entries) {
+      const topic = segments[0] ?? category.name;
+      const nested = segments.length > 1 || nestedTopics.has(topic);
+      if (!nested) {
+        direct.push({ category, label: topic, path: [source.label, topic] });
+        continue;
+      }
+
+      let subgroup = subgroupMap.get(topic);
+      if (!subgroup) {
+        subgroup = { key: `${source.key}:${topic}`, label: topic, categories: [] };
+        subgroupMap.set(topic, subgroup);
+      }
+      const label = segments.length > 1 ? segments.slice(1).join("·") : "综合";
+      subgroup.categories.push({
+        category,
+        label,
+        path: [source.label, topic, label],
+      });
+    }
+
+    // 主题本身与显式「…·综合」同时存在时，给自动归入的总览项加后缀，
+    // 保留原分类名的可辨识性。
+    for (const subgroup of subgroupMap.values()) {
+      const hasExplicitGeneral = subgroup.categories.some(
+        (leaf) => leaf.label === "综合" && categoryNameSegments(leaf.category, source.key).length > 1,
+      );
+      if (!hasExplicitGeneral) continue;
+      for (const leaf of subgroup.categories) {
+        if (leaf.label !== "综合" || categoryNameSegments(leaf.category, source.key).length > 1) continue;
+        leaf.label = "综合（总览）";
+        leaf.path = [source.label, subgroup.label, leaf.label];
+      }
+    }
+
+    groups.push({
+      ...source,
+      categories: direct,
+      subgroups: [...subgroupMap.values()],
+    });
+  }
+  return groups;
 }
 
 export function hasTriedDefaultLibrary(): boolean {
@@ -190,6 +407,7 @@ export async function fetchDefaultTemplateLibrary(
   try {
     resp = await fetchImpl(target, {
       headers: { Accept: "application/json" },
+      cache: "no-store",
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
     });
   } catch (exc) {
@@ -229,7 +447,7 @@ export async function fetchDefaultTemplateLibrary(
   }
   // ponytail: 分块响应没有 content-length，只能读完再判；上限内网小文件足够，
   //   真要防超大响应得改用 ReadableStream 边读边计数。
-  if (text.length > MAX_FETCH_BYTES) {
+  if (new TextEncoder().encode(text).byteLength > MAX_FETCH_BYTES) {
     return { ok: false, error: `默认词库超过 ${MAX_FETCH_LABEL}`, definitive: true };
   }
 
@@ -253,7 +471,7 @@ export function toggleTemplateSelection(
   category: TemplateCategory,
   itemId: string,
 ): TemplateSelection {
-  const current = selection[category.id] ?? [];
+  const current = readSelectionIds(selection, category.id);
   const next = current.includes(itemId)
     ? current.filter((id) => id !== itemId)
     : category.multi
@@ -261,7 +479,7 @@ export function toggleTemplateSelection(
       : [itemId];
 
   const out = { ...selection };
-  if (next.length) out[category.id] = next;
+  if (next.length) writeSelectionIds(out, category.id, next);
   else delete out[category.id];
   return out;
 }
@@ -274,7 +492,7 @@ export function buildTemplatePrompt(
   const parts: string[] = [];
   const seen = new Set<string>();
   for (const cat of library.categories) {
-    const picked = selection[cat.id];
+    const picked = readSelectionIds(selection, cat.id);
     if (!picked?.length) continue;
     for (const item of cat.items) {
       if (!picked.includes(item.id)) continue;
@@ -305,7 +523,7 @@ export function randomTemplateSelection(
     while (picked.length < take && pool.length) {
       picked.push(pool.splice(pickIndex(pool.length, rand), 1)[0]!);
     }
-    selection[cat.id] = picked;
+    writeSelectionIds(selection, cat.id, picked);
   }
   return selection;
 }

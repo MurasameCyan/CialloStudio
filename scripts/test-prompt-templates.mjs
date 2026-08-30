@@ -7,8 +7,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   buildTemplatePrompt,
+  canApplyDefaultTemplate,
   countTemplateItems,
   fetchDefaultTemplateLibrary,
+  groupTemplateCategories,
   hasTriedDefaultLibrary,
   loadTemplateLibrary,
   markTriedDefaultLibrary,
@@ -58,6 +60,44 @@ const dup = normalizeTemplateLibrary([
 assert.deepEqual(dup.categories.map((c) => c.id), ["c", "c-2"], "分类 id 去重");
 assert.deepEqual(dup.categories[0].items.map((i) => i.id), ["x", "x-2"], "条目 id 去重");
 
+// 原型属性不能成为选择状态的 key，否则读取会拿到继承函数或改写对象原型。
+const hostile = normalizeTemplateLibrary([
+  { id: "__proto__", name: "危险分类", items: [{ id: "constructor", text: "安全文本" }] },
+]);
+assert.equal(hostile.categories[0].id, "id-__proto__", "危险分类 id 应改写");
+assert.equal(hostile.categories[0].items[0].id, "id-constructor", "危险条目 id 应改写");
+assert.equal(
+  buildTemplatePrompt(hostile, randomTemplateSelection(hostile)),
+  "安全文本",
+  "危险 id 归一化后仍应可选择",
+);
+const hostileCategory = {
+  id: "__proto__",
+  name: "危险分类",
+  multi: false,
+  items: [{ id: "item", name: "条目", text: "安全文本" }],
+};
+const hostileSelection = toggleTemplateSelection({}, hostileCategory, "item");
+assert.deepEqual(Object.keys(hostileSelection), ["__proto__"], "危险 key 应作为自有属性保存");
+assert.equal(buildTemplatePrompt({ categories: [hostileCategory] }, hostileSelection), "安全文本");
+
+const longId = "x".repeat(1000);
+const boundedId = normalizeTemplateLibrary([
+  {
+    id: longId,
+    name: "长 id",
+    items: [
+      { id: longId, text: "内容" },
+      { id: longId, text: "内容2" },
+    ],
+  },
+  { id: longId, name: "长 id2", items: [{ id: longId, text: "内容3" }] },
+]);
+assert.ok(boundedId.categories[0].id.length <= 128, "分类 id 应限制长度");
+assert.ok(boundedId.categories[0].items[0].id.length <= 128, "条目 id 应限制长度");
+assert.ok(boundedId.categories[1].id.endsWith("-2") && boundedId.categories[1].id.length <= 128, "重复分类 id 后缀也应受限");
+assert.ok(boundedId.categories[0].items[1].id.endsWith("-2") && boundedId.categories[0].items[1].id.length <= 128, "重复条目 id 后缀也应受限");
+
 // 限幅：文本 2000 / 名称 40 / 单类 1000
 const huge = normalizeTemplateLibrary([
   {
@@ -96,6 +136,85 @@ assert.ok(
 );
 // 截断只发生在尾部，前面的分类必须完整
 assert.equal(overBudget.categories[0].items.length, 1000, "首个分类不受总量截断影响");
+
+// --- 分类树：来源 → 同名主题 → 叶分类 ---
+const grouped = groupTemplateCategories(
+  normalizeTemplateLibrary([
+    { id: "mx1", name: "魔导书·镜头·景别", items: ["a"] },
+    { id: "dx2", name: "法典·各种oc·单机角色", items: ["b"] },
+    { id: "poses", name: "姿势", items: ["c"] },
+    { id: "mx2", name: "魔导书·镜头·特写镜头", items: ["d"] },
+    { id: "mx3", name: "魔导书·镜头", items: ["e"] },
+    { id: "mx5", name: "魔导书·镜头·综合", items: ["e2"] },
+    { id: "mx4", name: "魔导书·镜头2", items: ["f"] },
+    { id: "lx1", name: "Loli画风·第1组", items: ["g"] },
+    { id: "mystery", name: "自定义·分类", items: ["h"] },
+    { id: "dx9-2", name: "法典·场景·室内", items: ["i"] },
+    { id: "poses-2", name: "姿势副本", items: ["j"] },
+  ]),
+);
+assert.deepEqual(
+  grouped.map((source) => source.label),
+  ["基础", "法典", "魔导书", "Loli画风", "其他"],
+  "来源应按固定顺序展示，不受词库原始顺序影响",
+);
+const baseGroup = grouped.find((source) => source.key === "base");
+assert.deepEqual(
+  baseGroup.categories.map((leaf) => leaf.label),
+  ["姿势", "姿势副本"],
+  "基础白名单应兼容 normalize 产生的 -2 id 后缀",
+);
+const codexGroup = grouped.find((source) => source.key === "codex");
+assert.deepEqual(
+  codexGroup.subgroups.map((topic) => topic.label),
+  ["各种oc", "场景"],
+  "法典应按来源后的第一个同名段形成次级分类",
+);
+assert.deepEqual(
+  codexGroup.subgroups[0].categories.map((leaf) => leaf.label),
+  ["单机角色"],
+);
+const grimoireGroup = grouped.find((source) => source.key === "grimoire");
+assert.deepEqual(
+  grimoireGroup.subgroups.map((topic) => topic.label),
+  ["镜头"],
+  "相同主题段应合并为一个次级分类",
+);
+assert.deepEqual(
+  grimoireGroup.subgroups[0].categories.map((leaf) => leaf.label),
+  ["景别", "特写镜头", "综合（总览）", "综合"],
+  "主题本身也有分类时，应放进主题组并与显式综合区分",
+);
+assert.deepEqual(
+  grimoireGroup.categories.map((leaf) => leaf.label),
+  ["镜头2"],
+  "带数字的不同名称不应猜测式合并",
+);
+assert.deepEqual(
+  grouped.find((source) => source.key === "loli").categories.map((leaf) => leaf.label),
+  ["第1组"],
+  "Loli 画风不应再增加无意义的中间层",
+);
+assert.deepEqual(
+  grouped.find((source) => source.key === "other").categories[0].path,
+  ["其他", "自定义·分类"],
+  "未知 id 应归入其他，并保留完整名称",
+);
+const isolatedSuffix = groupTemplateCategories(
+  normalizeTemplateLibrary([
+    { id: "mx12-2026", name: "自定义·版本", items: ["x"] },
+    { id: "poses-2024", name: "自定义姿势", items: ["y"] },
+  ]),
+);
+assert.equal(isolatedSuffix.find((source) => source.key === "other").categories.length, 2, "业务数字后缀不应误归来源组");
+
+// 默认词库请求竞态：旧请求不能覆盖用户后来导入的词库；手动覆盖可替换非空库。
+const emptyLibrary = { categories: [] };
+const customLibrary = normalizeTemplateLibrary([{ id: "custom", name: "自定义", items: ["x"] }]);
+assert.equal(canApplyDefaultTemplate(false, 4, 4, emptyLibrary), true, "空库且请求仍当前时可自动应用");
+assert.equal(canApplyDefaultTemplate(false, 4, 5, emptyLibrary), false, "过期自动请求不得应用");
+assert.equal(canApplyDefaultTemplate(false, 4, 4, customLibrary), false, "自动请求不得覆盖用户导入的非空库");
+assert.equal(canApplyDefaultTemplate(true, 4, 4, customLibrary), true, "手动覆盖允许替换非空库");
 
 // --- 存取往返 ---
 const lib = normalizeTemplateLibrary([
@@ -171,6 +290,14 @@ const okRes = await fetchDefaultTemplateLibrary("/x.json", reply(GOOD));
 assert.equal(okRes.ok, true, "合法 JSON 应成功");
 assert.equal(okRes.library.categories[0].items[0].text, "塌腰翘臀", "应经过 normalize");
 
+let capturedInit;
+const captureFetch = async (_url, init) => {
+  capturedInit = init;
+  return reply(GOOD)();
+};
+assert.equal((await fetchDefaultTemplateLibrary("/x.json", captureFetch)).ok, true);
+assert.equal(capturedInit.cache, "no-store", "默认词库不得命中浏览器旧缓存");
+
 // 空地址不该发请求
 const noUrl = await fetchDefaultTemplateLibrary("   ", () => {
   throw new Error("不该发起请求");
@@ -229,6 +356,12 @@ const tooBigChunked = await fetchDefaultTemplateLibrary(
 );
 assert.equal(tooBigChunked.ok, false, "无 content-length 的超大响应也要拦");
 assert.match(tooBigChunked.error, /4 MB/, "提示语应跟着上限走");
+const utf8TooBig = await fetchDefaultTemplateLibrary(
+  "/x.json",
+  reply(JSON.stringify("中".repeat(1_400_000))),
+);
+assert.equal(utf8TooBig.ok, false, "多字节响应应按 UTF-8 字节数拦截");
+assert.match(utf8TooBig.error, /4 MB/);
 
 const badJson = await fetchDefaultTemplateLibrary("/x.json", reply("{ broken"));
 assert.equal(badJson.definitive, true, "坏 JSON → 终态");
@@ -296,5 +429,50 @@ const markAt = dialogSrc.indexOf("if (persisted) markTriedDefaultLibrary()");
 assert.ok(persistAt > 0, "默认词库落盘应接收 saveTemplateLibrary 的返回值");
 assert.ok(markAt > 0, "已尝试标记必须以落盘成功为前提");
 assert.ok(markAt > persistAt, "必须先落盘再打标记，否则写不下时会留下空词库");
+assert.equal(
+  dialogSrc.includes("clearStoredTemplateLibrary"),
+  false,
+  "手动覆盖不得预清旧缓存，保存失败时应保留旧词库",
+);
+assert.match(dialogSrc, /defaultLoadTokenRef/, "默认词库请求应有代际标记，避免旧响应覆盖新导入");
+assert.match(dialogSrc, /canApplyDefaultTemplate\(manual, requestToken/, "自动响应应用前应确认请求仍有效且词库仍为空");
+assert.match(dialogSrc, /hadExistingLibrary/, "存储失败提示应区分旧库是否存在");
+assert.match(dialogSrc, /载入默认词库并覆盖/, "非空词库也应提供显式刷新入口");
+assert.match(
+  dialogSrc,
+  /groupTemplateCategories\(library\)/,
+  "分类导航应复用纯分组函数，不在组件里再写一套名称解析",
+);
+assert.match(
+  dialogSrc,
+  /className="tpl-cat-mobile"/,
+  "移动端应使用单个分类选择器，不再横向渲染数百按钮",
+);
+assert.match(
+  dialogSrc,
+  /className="tpl-cat-group-toggle"[\s\S]*?aria-expanded=/,
+  "桌面来源/主题组按钮应暴露折叠状态",
+);
+assert.match(dialogSrc, /currentLeaf\.path\.join\(" \/ "\)/, "条目区应显示当前分类面包屑");
+assert.match(dialogSrc, /key=\{`subgroup:\$\{subgroup\.key\}`\}/, "移动端主题 optgroup key 应有独立命名空间");
+assert.match(dialogSrc, /key=\{`direct:\$\{source\.key\}`\}/, "移动端直接分类 optgroup key 应有独立命名空间");
+assert.match(dialogSrc, /aria-controls=\{sourceOpen \? sourcePanelId : undefined\}/, "收起时不应指向不存在的面板");
+assert.ok(
+  dialogSrc.indexOf("source.subgroups.map") <
+    dialogSrc.indexOf("source.categories.map(renderCategoryLeaf)"),
+  "主题折叠组应排在散分类前，避免魔导书的主题被二十多个散分类推到侧栏底部",
+);
+
+const iosTemplateCss = readFileSync(
+  fileURLToPath(new URL("../src/styles/ios26.css", import.meta.url)),
+  "utf8",
+);
+assert.match(iosTemplateCss, /\.tpl-cat-tree\s*\{/, "桌面应有独立可滚动分类树");
+assert.match(iosTemplateCss, /\.tpl-cat-mobile\s*\{/, "移动分类选择器应有基础样式");
+assert.match(
+  iosTemplateCss,
+  /@media \(max-width: 720px\)[\s\S]*?\.tpl-cat-tree\s*\{[\s\S]*?display:\s*none/,
+  "720px 以下应隐藏桌面树",
+);
 
 console.log("prompt templates ok");

@@ -185,7 +185,7 @@ npm run pack:media-worker:pages
 
 ### 默认提示词词库
 
-可以给创作台的「模板」弹窗预置一份词库：用户**首次打开且本地词库为空**时拉取一次，存进浏览器 localStorage，之后归用户自己维护——之后换了词库也不会覆盖用户已有的。
+公开仓库和镜像不内置默认词库。站长提供词库后，创作台的「模板」弹窗会在用户**首次打开且本地词库为空**时拉取一次，存进浏览器 localStorage，之后归用户自己维护——之后换了词库也不会覆盖用户已有的。
 
 把 JSON 挂到约定路径 `/prompt-templates.json` 即生效，不用配环境变量：
 
@@ -194,9 +194,9 @@ volumes:
   - ./prompt-templates.json:/usr/share/nginx/html/prompt-templates.json:ro
 ```
 
-JSON 用 `node scripts/convert-prompt-library.mjs <词库.html> out.json` 生成，或从弹窗里「导出」一份。上限 512 KB、40 分类、500 条。
+JSON 用 `node scripts/convert-prompt-library.mjs <词库.html> out.json` 生成，或从弹窗里「导出」一份。拉取上限 4 MB；归一化上限为 400 分类、单类 1000 条、总计 20000 条。
 
-不挂也没关系：探测不到就当这个站点不提供词库，弹窗只在空态提一句挂载路径，不报错。
+若用空文件或自定义镜像，可继续通过挂载覆盖约定路径；探测不到时弹窗只在空态提一句挂载路径，不报错。
 
 词库放在别处时才需要 `CIALLO_PROMPT_TEMPLATES_URL`（外部地址须允许跨域）。显式配了地址就当成站长的承诺，拉不到会在弹窗里报错：路径不存在会被 nginx 回落成 `index.html`，前端按 content-type 判定为「返回的不是 JSON」。这类确定性错误只提示一次，网络超时则下次打开还会重试。
 

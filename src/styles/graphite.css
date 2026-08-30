@@ -1747,6 +1747,21 @@ html[data-theme="light"] .studio-lightbox-backdrop:has(.tpl-dialog) {
   color: var(--text);
 }
 
+.tpl-dialog .tpl-cat-group-toggle:hover {
+  background: color-mix(in srgb, var(--t-accent, #7c86ff) 9%, transparent);
+  color: var(--text);
+}
+
+.tpl-dialog .tpl-cat-group-toggle[data-active="true"] {
+  color: var(--t-accent-hot, #a5a9ff);
+}
+
+.tpl-dialog .tpl-cat-group-toggle:focus-visible,
+.tpl-dialog .tpl-cat:focus-visible {
+  outline-color: var(--t-accent, #7c86ff);
+  box-shadow: 0 0 0 3px var(--t-glow, rgba(91,109,255,0.2));
+}
+
 /* 词库按钮 active 态 */
 .tpl-dialog .tpl-chip-on {
   color: var(--t-accent-hot, #a5a9ff);
@@ -1775,7 +1790,7 @@ html[data-theme="light"] .studio-lightbox-backdrop:has(.tpl-dialog) {
 
 /* 内部面板区：圆角与边框对齐创作台的 14px / studio-line-soft */
 .tpl-dialog .tpl-manage,
-.tpl-dialog .tpl-cats,
+.tpl-dialog .tpl-cat-tree,
 .tpl-dialog .tpl-preview,
 .tpl-dialog .tpl-empty {
   border-radius: 14px;
